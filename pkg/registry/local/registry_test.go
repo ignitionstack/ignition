@@ -174,12 +174,12 @@ func TestPull(t *testing.T) {
 
 	t.Run("pull nonexistent reference", func(t *testing.T) {
 		_, _, err := setup.registry.Pull("test", "func1", "nonexistent")
-		assert.ErrorIs(t, err, registry.ErrInvalidReference)
+		assert.ErrorIs(t, err, registry.ErrTagNotFound)
 	})
 
 	t.Run("pull nonexistent function", func(t *testing.T) {
 		_, _, err := setup.registry.Pull("test", "nonexistent", "latest")
-		assert.ErrorIs(t, err, registry.ErrInvalidReference)
+		assert.ErrorIs(t, err, registry.ErrFunctionNotFound)
 	})
 }
 
