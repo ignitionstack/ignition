@@ -134,5 +134,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 - [GitHub Issues](https://github.com/ignitionstack/ignition/issues)
-- [Discord Community](https://discord.gg/ignition)
-- [Documentation](https://docs.ignition.dev)
+- [Discord Community](https://discord.gg/EQeZY5utHC)
