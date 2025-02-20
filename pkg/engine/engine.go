@@ -128,7 +128,7 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 	// Build the function
 	buildResult, err := service.BuildFunction(path, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build function: %w", err)
+		return nil, err
 	}
 
 	// Read the built wasm file

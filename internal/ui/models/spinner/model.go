@@ -102,7 +102,7 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the spinner model
 func (m SpinnerModel) View() string {
 	if m.err != nil {
-		return ui.ErrorStyle.Render(fmt.Sprintf("\n█ Error: %v\n", m.err))
+		return ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %v", m.err))
 	}
 	if m.done {
 		return ""
