@@ -1,5 +1,4 @@
 name: test
-
 on:
   push:
     branches:
@@ -12,38 +11,18 @@ permissions:
 
 jobs:
   test:
-    needs: lint
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04]
-        go: ["1.24"]
-        test-tags: ["", "-race"]
-        include:
-          - os: ubuntu-24.04
-            go-build: ~/.cache/go-build
-    name: ${{ matrix.os }} @ Go ${{ matrix.go }} ${{ matrix.test-tags }}
-    runs-on: ${{ matrix.os }}
-    env:
-      GO111MODULE: on
-      TESTTAGS: ${{ matrix.test-tags }}
-      GOPROXY: https://proxy.golang.org
+    runs-on: ubuntu-latest
     steps:
-      - name: Set up Go ${{ matrix.go }}
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go }}
+          go-version: "1.24"
           cache: true
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Tests
         run: go test ./... -coverprofile=coverage.out -covermode=atomic
 
-      - name: Format
-        if: matrix.go-version == '1.22.x'
+      - name: Check Format
         run: diff -u <(echo -n) <(gofmt -d .)
