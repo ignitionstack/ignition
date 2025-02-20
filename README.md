@@ -19,6 +19,12 @@ go build
 
 ## Quick Start
 
+### Start the engine
+
+```bash
+ignition engine start
+```
+
 ### Initialize a New Function
 ```bash
 # Create a new function (you'll be prompted to select a language)
