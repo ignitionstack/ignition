@@ -27,3 +27,4 @@ jobs:
         with:
           args: --timeout=10m
           version: v1.64.5
+      - run: diff -u <(echo -n) <(gofmt -d .)

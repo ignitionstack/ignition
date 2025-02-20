@@ -23,6 +23,3 @@ jobs:
 
       - name: Run Tests
         run: go test ./... -coverprofile=coverage.out -covermode=atomic
-
-      - name: Check Format
-        run: diff -u <(echo -n) <(gofmt -d .)
