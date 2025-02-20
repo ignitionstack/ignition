@@ -1,42 +1,25 @@
-name: Lint and Test
+name: test
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+      - master
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
 
 jobs:
-  lint:
-    name: lint
-    runs-on: ubuntu-latest
-    env:
-      GOPRIVATE: github.com/ignitionstack
-      GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
-        with:
-          go-version: "1.23"
-          cache: false
-      - run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
   test:
     needs: lint
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04]
-        go: ["1.23"]
-        test-tags:
-          ["", "-race"]
+        go: ["1.24"]
+        test-tags: ["", "-race"]
         include:
           - os: ubuntu-24.04
             go-build: ~/.cache/go-build
