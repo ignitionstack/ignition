@@ -17,6 +17,7 @@ type FunctionSettings struct {
 }
 
 type FunctionVersionSettings struct {
+	Wasi        bool     `yaml:"enable_wasi" toml:"enable_wasi" comment:"Whether WASI is enabled (default: true)"`
 	AllowedUrls []string `yaml:"allowed_urls" toml:"allowed_urls" comment:"Allowed URLs for the function"`
 }
 

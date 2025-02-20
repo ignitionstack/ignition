@@ -78,9 +78,11 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
 
 	var wasmBytes []byte
+	var versionInfo *registry.VersionInfo
 	var err error
 
-	wasmBytes, _, err = e.reg.Pull(namespace, name, identifier)
+	// Get both the WASM bytes and version info
+	wasmBytes, versionInfo, err = e.reg.Pull(namespace, name, identifier)
 	if err != nil {
 		e.logger.Errorf("Failed to fetch WASM file from registry: %v", err)
 		return fmt.Errorf("failed to fetch WASM file from registry: %w", err)
@@ -88,15 +90,19 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 
 	// Create the Extism manifest
 	manifest := extism.Manifest{
+		AllowedHosts: versionInfo.Settings.AllowedUrls,
 		Wasm: []extism.Wasm{
 			extism.WasmData{Data: wasmBytes},
 		},
 	}
 
-	// Initialize the plugin
-	plugin, err := extism.NewPlugin(context.Background(), manifest, extism.PluginConfig{
-		EnableWasi: true,
-	}, []extism.HostFunction{})
+	// Apply version settings to plugin config
+	config := extism.PluginConfig{
+		EnableWasi: versionInfo.Settings.Wasi,
+	}
+
+	// Initialize the plugin with version settings
+	plugin, err := extism.NewPlugin(context.Background(), manifest, config, []extism.HostFunction{})
 	if err != nil {
 		e.logger.Errorf("Failed to initialize plugin: %v", err)
 		return fmt.Errorf("failed to initialize plugin: %w", err)
@@ -141,11 +147,11 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 		namespace = "default"
 	}
 	if name == "" {
-		name = filepath.Base(path) // Use the directory name as the function name
+		name = filepath.Base(path)
 	}
 
-	// Store in registry
-	if err := e.reg.Push(namespace, name, wasmBytes, buildResult.Digest, tag); err != nil {
+	// Store in registry with version settings
+	if err := e.reg.Push(namespace, name, wasmBytes, buildResult.Digest, tag, config.FunctionSettings.VersionSettings); err != nil {
 		return nil, fmt.Errorf("failed to store in registry: %w", err)
 	}
 

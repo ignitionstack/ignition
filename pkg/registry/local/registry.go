@@ -7,6 +7,7 @@ import (
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
@@ -46,14 +47,14 @@ func (r *localRegistry) Get(namespace, name string) (*registry.FunctionMetadata,
 	return metadata, err
 }
 
-func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byte, string, error) {
+func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byte, *registry.VersionInfo, error) {
 	path := r.storage.BuildWASMPath(namespace, name, shortDigest)
 	wasmBytes, err := r.storage.ReadWASMFile(path)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
-	var fullDigest string
+	var versionInfo *registry.VersionInfo
 	err = r.db.View(func(txn *badger.Txn) error {
 		var metadata *registry.FunctionMetadata
 		if err := r.getFunctionMetadata(txn, namespace, name, &metadata); err != nil {
@@ -62,7 +63,9 @@ func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byt
 
 		for _, v := range metadata.Versions {
 			if v.Hash == shortDigest {
-				fullDigest = v.FullDigest
+				// Create a copy of the version info to avoid issues with the slice
+				versionInfoCopy := v
+				versionInfo = &versionInfoCopy
 				return nil
 			}
 		}
@@ -70,15 +73,15 @@ func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byt
 	})
 
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
-	return wasmBytes, fullDigest, nil
+	return wasmBytes, versionInfo, nil
 }
 
-func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, string, error) {
+func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, *registry.VersionInfo, error) {
 	var wasmBytes []byte
-	var fullDigest string
+	var versionInfo *registry.VersionInfo
 
 	err := r.db.View(func(txn *badger.Txn) error {
 		var metadata *registry.FunctionMetadata
@@ -88,7 +91,9 @@ func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, string, 
 
 		for _, v := range metadata.Versions {
 			if registry.HasTag(v.Tags, tag) {
-				fullDigest = v.FullDigest
+				// Create a copy of the version info to avoid issues with the slice
+				versionInfoCopy := v
+				versionInfo = &versionInfoCopy
 				path := r.storage.BuildWASMPath(namespace, name, v.Hash)
 				var err error
 				wasmBytes, err = r.storage.ReadWASMFile(path)
@@ -99,28 +104,28 @@ func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, string, 
 	})
 
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
-	return wasmBytes, fullDigest, nil
+	return wasmBytes, versionInfo, nil
 }
 
-func (r *localRegistry) Pull(namespace, name, reference string) ([]byte, string, error) {
-	wasmBytes, fullDigest, err := r.pullByDigest(namespace, name, reference)
+func (r *localRegistry) Pull(namespace, name, reference string) ([]byte, *registry.VersionInfo, error) {
+	wasmBytes, versionInfo, err := r.pullByDigest(namespace, name, reference)
 	if err == nil {
-		return wasmBytes, fullDigest, nil
+		return wasmBytes, versionInfo, nil
 	}
 
-	wasmBytes, fullDigest, tagErr := r.pullByTag(namespace, name, reference)
+	wasmBytes, versionInfo, tagErr := r.pullByTag(namespace, name, reference)
 	if tagErr == nil {
-		return wasmBytes, fullDigest, nil
+		return wasmBytes, versionInfo, nil
 	}
 
 	if errors.Is(tagErr, registry.ErrTagNotFound) && errors.Is(err, registry.ErrDigestNotFound) {
-		return nil, "", fmt.Errorf("%w: %s", registry.ErrInvalidReference, reference)
+		return nil, nil, fmt.Errorf("%w: %s", registry.ErrInvalidReference, reference)
 	}
 
-	return nil, "", tagErr
+	return nil, nil, tagErr
 }
 
 func (r *localRegistry) getOrCreateMetadata(txn *badger.Txn, namespace, name string) (*registry.FunctionMetadata, error) {
@@ -166,7 +171,7 @@ func (r *localRegistry) updateMetadata(txn *badger.Txn, namespace, name string, 
 	return txn.Set(key, val)
 }
 
-func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest, tag string) error {
+func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest, tag string, settings manifest.FunctionVersionSettings) error {
 	shortDigest := registry.TruncateDigest(fullDigest, 12)
 	path := r.storage.BuildWASMPath(namespace, name, shortDigest)
 
@@ -184,7 +189,7 @@ func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest,
 			if err := r.storage.WriteWASMFile(path, payload); err != nil {
 				return err
 			}
-			metadata.Versions = append(metadata.Versions, registry.CreateVersionInfo(shortDigest, fullDigest, payload, tag))
+			metadata.Versions = append(metadata.Versions, registry.CreateVersionInfo(shortDigest, fullDigest, payload, tag, settings))
 		} else if tag != "" {
 			registry.AddTagToVersion(&metadata.Versions, shortDigest, tag)
 		}
