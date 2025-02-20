@@ -26,10 +26,12 @@ var socketPath string
 
 func NewFunctionBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "build [path]",
-		Short: "Build an extism function",
-		Args:  cobra.ExactArgs(1),
-		RunE:  buildFunction,
+		Use:           "build [path]",
+		Short:         "Build an extism function",
+		Args:          cobra.ExactArgs(1),
+		RunE:          buildFunction,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
@@ -138,11 +140,12 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 
 			// Check response status and parse response
 			if resp.StatusCode != http.StatusOK {
-				var errorMsg string
+				var errorMsg engine.RequestError
 				if err := json.NewDecoder(resp.Body).Decode(&errorMsg); err != nil {
-					errorMsg = "unknown error"
+					p.Send(fmt.Errorf("failed to decode error response: %w", err))
+					return
 				}
-				p.Send(fmt.Errorf("build failed: %s", errorMsg))
+				p.Send(errorMsg)
 				return
 			}
 

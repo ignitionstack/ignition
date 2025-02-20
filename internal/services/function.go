@@ -79,6 +79,7 @@ func (f *functionService) InitFunction(name string, language string) error {
 			Name:     name,
 			Language: language,
 			VersionSettings: manifest.FunctionVersionSettings{
+				Wasi:        true,
 				AllowedUrls: []string{},
 			},
 		},

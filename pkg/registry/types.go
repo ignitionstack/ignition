@@ -1,6 +1,10 @@
 package registry
 
-import "time"
+import (
+	"time"
+
+	"github.com/ignitionstack/ignition/pkg/manifest"
+)
 
 type FunctionMetadata struct {
 	Namespace string                 `json:"namespace"`
@@ -12,9 +16,10 @@ type FunctionMetadata struct {
 }
 
 type VersionInfo struct {
-	Hash       string    `json:"hash"`
-	FullDigest string    `json:"full_digest"`
-	CreatedAt  time.Time `json:"created_at"`
-	Size       int64     `json:"size"`
-	Tags       []string  `json:"tags"`
+	Hash       string                           `json:"hash"`
+	FullDigest string                           `json:"full_digest"`
+	CreatedAt  time.Time                        `json:"created_at"`
+	Size       int64                            `json:"size"`
+	Tags       []string                         `json:"tags"`
+	Settings   manifest.FunctionVersionSettings `json:"settings"` // Add settings field
 }

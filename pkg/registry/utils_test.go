@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -217,6 +218,10 @@ func TestRemoveTag(t *testing.T) {
 
 func TestCreateVersionInfo(t *testing.T) {
 	payload := []byte("test payload")
+	defaultSettings := manifest.FunctionVersionSettings{
+		Wasi:        true,
+		AllowedUrls: []string{"https://api.example.com"},
+	}
 
 	tests := []struct {
 		name         string
@@ -224,32 +229,58 @@ func TestCreateVersionInfo(t *testing.T) {
 		fullDigest   string
 		payload      []byte
 		tag          string
+		settings     manifest.FunctionVersionSettings
 		expectedInfo VersionInfo
 	}{
 		{
-			name:        "with tag",
+			name:        "with tag and settings",
 			shortDigest: "abc123",
 			fullDigest:  "abcdef123456",
 			payload:     payload,
 			tag:         "latest",
+			settings:    defaultSettings,
 			expectedInfo: VersionInfo{
 				Hash:       "abc123",
 				FullDigest: "abcdef123456",
 				Size:       int64(len(payload)),
 				Tags:       []string{"latest"},
+				Settings:   defaultSettings,
 			},
 		},
 		{
-			name:        "without tag",
+			name:        "without tag, with settings",
 			shortDigest: "abc123",
 			fullDigest:  "abcdef123456",
 			payload:     payload,
 			tag:         "",
+			settings:    defaultSettings,
 			expectedInfo: VersionInfo{
 				Hash:       "abc123",
 				FullDigest: "abcdef123456",
 				Size:       int64(len(payload)),
 				Tags:       []string{},
+				Settings:   defaultSettings,
+			},
+		},
+		{
+			name:        "with custom settings",
+			shortDigest: "abc123",
+			fullDigest:  "abcdef123456",
+			payload:     payload,
+			tag:         "v1",
+			settings: manifest.FunctionVersionSettings{
+				Wasi:        false,
+				AllowedUrls: []string{"https://custom.example.com"},
+			},
+			expectedInfo: VersionInfo{
+				Hash:       "abc123",
+				FullDigest: "abcdef123456",
+				Size:       int64(len(payload)),
+				Tags:       []string{"v1"},
+				Settings: manifest.FunctionVersionSettings{
+					Wasi:        false,
+					AllowedUrls: []string{"https://custom.example.com"},
+				},
 			},
 		},
 	}
@@ -257,7 +288,7 @@ func TestCreateVersionInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the function
-			result := CreateVersionInfo(tt.shortDigest, tt.fullDigest, tt.payload, tt.tag)
+			result := CreateVersionInfo(tt.shortDigest, tt.fullDigest, tt.payload, tt.tag, tt.settings)
 
 			// Ensure the CreatedAt field is set to a recent time
 			assert.WithinDuration(t, time.Now(), result.CreatedAt, time.Second, "CreatedAt should be set to the current time")

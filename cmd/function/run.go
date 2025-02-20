@@ -18,23 +18,23 @@ import (
 
 func NewFunctionRunCommand() *cobra.Command {
 	var socketPath string
-
 	cmd := &cobra.Command{
-		Use:   "run [namespace/name:identifier]",
-		Short: "Load and optionally run a WASM file from the registry on the engine",
-		Args:  cobra.ExactArgs(1),
+		Use:           "run [namespace/name:identifier]",
+		Short:         "Load and optionally run a WASM file from the registry on the engine",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			namespace, name, identifier, err := parseNamespaceAndName(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid function name format: %w", err)
 			}
 
-			p := tea.NewProgram(spinner.NewSpinnerModelWithMessage("Loading..."))
+			spinnerModel := spinner.NewSpinnerModelWithMessage("Loading...")
+			p := tea.NewProgram(spinnerModel)
 
 			go func() {
 				loadStart := time.Now()
-
-				// Send a request to the engine to load the function
 				req := map[string]string{
 					"namespace": namespace,
 					"name":      name,
@@ -64,11 +64,12 @@ func NewFunctionRunCommand() *cobra.Command {
 				defer resp.Body.Close()
 
 				if resp.StatusCode != http.StatusOK {
-					var errorMsg string
-					if err := json.NewDecoder(resp.Body).Decode(&errorMsg); err != nil {
-						errorMsg = "unknown error"
+					var errResp engine.RequestError
+					if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+						p.Send(fmt.Errorf("failed to decode error response: %w", err))
+						return
 					}
-					p.Send(fmt.Errorf("engine returned error: %s", errorMsg))
+					p.Send(errResp)
 					return
 				}
 
@@ -88,7 +89,8 @@ func NewFunctionRunCommand() *cobra.Command {
 
 			finalModel := m.(spinner.SpinnerModel)
 			if finalModel.HasError() {
-				return finalModel.GetError()
+				err := finalModel.GetError()
+				return err
 			}
 
 			ui.PrintSuccess("Function loaded successfully")
@@ -97,6 +99,5 @@ func NewFunctionRunCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
-
 	return cmd
 }

@@ -1,6 +1,10 @@
 package registry
 
-import "time"
+import (
+	"time"
+
+	"github.com/ignitionstack/ignition/pkg/manifest"
+)
 
 func TruncateDigest(digest string, length int) string {
 	if len(digest) <= length {
@@ -43,8 +47,8 @@ func RemoveTag(tags []string, tagToRemove string) []string {
 	return result
 }
 
-func CreateVersionInfo(shortDigest, fullDigest string, payload []byte, tag string) VersionInfo {
-	tags := []string{}
+func CreateVersionInfo(shortDigest, fullDigest string, payload []byte, tag string, settings manifest.FunctionVersionSettings) VersionInfo {
+	tags := make([]string, 0)
 	if tag != "" {
 		tags = append(tags, tag)
 	}
@@ -52,8 +56,9 @@ func CreateVersionInfo(shortDigest, fullDigest string, payload []byte, tag strin
 	return VersionInfo{
 		Hash:       shortDigest,
 		FullDigest: fullDigest,
-		CreatedAt:  time.Now(),
 		Size:       int64(len(payload)),
+		CreatedAt:  time.Now(),
 		Tags:       tags,
+		Settings:   settings,
 	}
 }

@@ -65,7 +65,7 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 		req.Namespace, req.Name, req.Digest)
 
 	if err := h.engine.LoadFunction(req.Namespace, req.Name, req.Digest); err != nil {
-		return fmt.Errorf("failed to load function: %w", err)
+		return err
 	}
 
 	return h.writeJSONResponse(w, map[string]string{"message": "Function loaded successfully"})
@@ -136,7 +136,7 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 
 	resp, err := h.engine.BuildFunction(req.Namespace, req.Name, req.Path, req.Tag, req.Config)
 	if err != nil {
-		return fmt.Errorf("failed to build function: %w", err)
+		return err
 	}
 
 	return h.writeJSONResponse(w, resp)
@@ -170,7 +170,7 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 				StatusCode: http.StatusNotFound,
 			}
 		}
-		return fmt.Errorf("failed to call function: %w", err)
+		return err
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -195,7 +195,7 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 
 	wasmBytes, _, err := h.engine.reg.Pull(req.Namespace, req.Name, req.Reference)
 	if err != nil {
-		return fmt.Errorf("failed to fetch WASM file: %w", err)
+		return err
 	}
 
 	manifest := extism.Manifest{
@@ -206,13 +206,13 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 
 	plugin, err := extism.NewPlugin(context.Background(), manifest, extism.PluginConfig{EnableWasi: true}, []extism.HostFunction{})
 	if err != nil {
-		return fmt.Errorf("failed to initialize plugin: %w", err)
+		return err
 	}
 	defer plugin.Close(context.TODO())
 
 	_, output, err := plugin.Call(req.Entrypoint, []byte(req.Payload))
 	if err != nil {
-		return fmt.Errorf("failed to call function: %w", err)
+		return err
 	}
 
 	w.Header().Set("Content-Type", "application/json")

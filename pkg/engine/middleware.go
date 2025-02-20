@@ -1,6 +1,9 @@
 package engine
 
-import "net/http"
+import (
+	"encoding/json"
+	"net/http"
+)
 
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
@@ -44,7 +47,17 @@ func (h *Handlers) errorMiddleware() Middleware {
 					}
 				}
 				h.logger.Errorf("Handler error: %v", err)
-				http.Error(w, reqErr.Message, reqErr.StatusCode)
+
+				// Send structured error response
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(reqErr.StatusCode)
+				if err := json.NewEncoder(w).Encode(RequestError{
+					Message:    reqErr.Message,
+					StatusCode: reqErr.StatusCode,
+				}); err != nil {
+					h.logger.Errorf("Failed to encode error response: %v", err)
+				}
+				return nil
 			}
 			return nil
 		}
