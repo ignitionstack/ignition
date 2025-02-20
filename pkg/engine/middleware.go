@@ -51,10 +51,12 @@ func (h *Handlers) errorMiddleware() Middleware {
 				// Send structured error response
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(reqErr.StatusCode)
-				json.NewEncoder(w).Encode(RequestError{
+				if err := json.NewEncoder(w).Encode(RequestError{
 					Message:    reqErr.Message,
 					StatusCode: reqErr.StatusCode,
-				})
+				}); err != nil {
+					h.logger.Errorf("Failed to encode error response: %v", err)
+				}
 				return nil
 			}
 			return nil
