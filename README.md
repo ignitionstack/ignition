@@ -73,6 +73,7 @@ Note: The `run` command is only needed when you want to access the function thro
 
 ## Function Development
 Ignition functions are built using [Extism Plugin Development Kits (PDKs)](https://extism.org/docs/concepts/pdk/). Extism PDKs provide the foundation for writing WebAssembly plugins in your preferred programming language. Check out the Extism PDK documentation to learn about the programming model and available features.
+
 ### Configuration
 Functions are configured using `ignition.yml`:
 ```yaml
@@ -80,6 +81,7 @@ function:
   name: my_function
   language: rust
   settings:
+    enable_wasi: true
     allowed_urls:
       - "https://api.example.com"
 ```

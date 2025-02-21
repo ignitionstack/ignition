@@ -126,6 +126,11 @@ func (f *functionService) build(language string, dir string) (string, error) {
 
 	case "javascript":
 		builder := builders.NewJSBuilder()
+
+		if err := builder.VerifyDependencies(); err != nil {
+			return "", err
+		}
+
 		result, err := builder.Build(dir)
 		if err != nil {
 			return "", err
@@ -134,6 +139,11 @@ func (f *functionService) build(language string, dir string) (string, error) {
 		outputPath = result.OutputPath
 	case "golang":
 		builder := builders.NewGoBuilder()
+
+		if err := builder.VerifyDependencies(); err != nil {
+			return "", err
+		}
+
 		result, err := builder.Build(dir)
 		if err != nil {
 			return "", err

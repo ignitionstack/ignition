@@ -145,6 +145,7 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 					p.Send(fmt.Errorf("failed to decode error response: %w", err))
 					return
 				}
+
 				p.Send(errorMsg)
 				return
 			}

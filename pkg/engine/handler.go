@@ -136,7 +136,10 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 
 	resp, err := h.engine.BuildFunction(req.Namespace, req.Name, req.Path, req.Tag, req.Config)
 	if err != nil {
-		return err
+		return RequestError{
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 
 	return h.writeJSONResponse(w, resp)
