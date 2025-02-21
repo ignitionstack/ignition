@@ -1,4 +1,4 @@
-# Ignition CLI
+# Ignition
 
 Ignition is a powerful CLI tool for building, managing, and running WebAssembly functions using Extism. Think of it as "Docker for WebAssembly functions" - it provides a familiar workflow for developers to build, share, and execute WebAssembly modules.
 

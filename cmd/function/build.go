@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"net"
 	"net/http"
@@ -51,6 +52,13 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	log.Println(absPath)
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		ui.PrintError(fmt.Sprintf("path %s does not exist", absPath))
+		return err
 	}
 
 	// Read and parse the manifest file
