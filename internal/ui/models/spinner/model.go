@@ -2,6 +2,7 @@ package spinner
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,7 +10,6 @@ import (
 	"github.com/ignitionstack/ignition/internal/ui"
 )
 
-// SpinnerModel represents a reusable spinner component
 type SpinnerModel struct {
 	spinner spinner.Model
 	step    string
@@ -18,27 +18,22 @@ type SpinnerModel struct {
 	result  interface{}
 }
 
-// HasError returns whether the spinner has encountered an error
 func (m SpinnerModel) HasError() bool {
 	return m.err != nil
 }
 
-// SetResult sets the result for the spinner
 func (m *SpinnerModel) SetResult(result interface{}) {
 	m.result = result
 }
 
-// GetResult returns the current result
 func (m SpinnerModel) GetResult() interface{} {
 	return m.result
 }
 
-// GetError returns the current error if any
 func (m SpinnerModel) GetError() error {
 	return m.err
 }
 
-// NewSpinnerModel creates a new spinner model with default settings
 func NewSpinnerModel() SpinnerModel {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
@@ -49,7 +44,6 @@ func NewSpinnerModel() SpinnerModel {
 	}
 }
 
-// NewSpinnerModelWithMessage creates a new spinner model with a custom initial message
 func NewSpinnerModelWithMessage(message string) SpinnerModel {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
@@ -60,14 +54,12 @@ func NewSpinnerModelWithMessage(message string) SpinnerModel {
 	}
 }
 
-// Init initializes the spinner model
 func (m SpinnerModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 	)
 }
 
-// ResultMsg is used to pass the final result
 type ResultMsg struct {
 	Result interface{}
 }
@@ -80,11 +72,10 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case error:
 		m.err = msg
-		return m, tea.Batch(
-			tea.Printf("%s", ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %v", msg))),
-			tea.Sequence(
-				tea.Quit,
-			),
+		m.done = true
+		return m, tea.Sequence(
+			tea.Printf("%s", ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %v", strings.TrimSpace(msg.Error())))),
+			tea.Quit,
 		)
 	case ResultMsg:
 		m.result = msg.Result
@@ -103,12 +94,8 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the spinner model
 func (m SpinnerModel) View() string {
-	if m.err != nil {
-		return ""
-	}
-	if m.done {
+	if m.err != nil || m.done {
 		return ""
 	}
 	return fmt.Sprintf("%s %s", m.spinner.View(), m.step)
