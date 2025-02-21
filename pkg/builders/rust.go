@@ -1,6 +1,7 @@
 package builders
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +18,32 @@ type cargo struct {
 }
 
 type rustBuilder struct{}
+
+func (r *rustBuilder) VerifyDependencies() error {
+	// Check if cargo is installed
+	cargoCmd := exec.Command("cargo", "--version")
+	if err := cargoCmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("cargo verification failed: %v", exitErr.Error())
+		}
+		return fmt.Errorf("cargo is not installed. Please install Rust and Cargo from https://rustup.rs")
+	}
+
+	// Check if wasm32-wasi target is installed
+	targetCmd := exec.Command("rustup", "target", "list", "--installed")
+	var stdout bytes.Buffer
+	targetCmd.Stdout = &stdout
+
+	if err := targetCmd.Run(); err != nil {
+		return fmt.Errorf("failed to check installed targets: %v", err)
+	}
+
+	if !bytes.Contains(stdout.Bytes(), []byte("wasm32-unknown-unknown")) {
+		return fmt.Errorf("wasm32-wasi target is not installed. Please install it using 'rustup target add wasm32-unknown-unknown'")
+	}
+
+	return nil
+}
 
 func (r rustBuilder) Build(path string) (*BuildResult, error) {
 	// Read cargo.toml to get binary output

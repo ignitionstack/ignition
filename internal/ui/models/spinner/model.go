@@ -72,7 +72,6 @@ type ResultMsg struct {
 	Result interface{}
 }
 
-// Update handles messages for the spinner model
 func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -81,7 +80,12 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case error:
 		m.err = msg
-		return m, tea.Quit
+		return m, tea.Batch(
+			tea.Printf("%s", ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %v", msg))),
+			tea.Sequence(
+				tea.Quit,
+			),
+		)
 	case ResultMsg:
 		m.result = msg.Result
 		m.done = true
@@ -102,7 +106,7 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the spinner model
 func (m SpinnerModel) View() string {
 	if m.err != nil {
-		return ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %v", m.err))
+		return ""
 	}
 	if m.done {
 		return ""
@@ -110,7 +114,6 @@ func (m SpinnerModel) View() string {
 	return fmt.Sprintf("%s %s", m.spinner.View(), m.step)
 }
 
-// SetDone marks the spinner as complete
 func (m *SpinnerModel) SetDone() {
 	m.done = true
 }

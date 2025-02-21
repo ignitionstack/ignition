@@ -2,6 +2,7 @@ package builders
 
 type Builder interface {
 	Build(path string) (*BuildResult, error)
+	VerifyDependencies() error
 }
 
 type BuildResult struct {
