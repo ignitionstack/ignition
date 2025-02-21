@@ -72,10 +72,6 @@ type ResultMsg struct {
 	Result interface{}
 }
 
-// errorQuitMsg is a custom message type for handling error exits
-type errorQuitMsg struct{}
-
-// Update handles messages for the spinner model
 func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -110,7 +106,6 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the spinner model
 func (m SpinnerModel) View() string {
 	if m.err != nil {
-		// Don't render the error here since we're printing it directly
 		return ""
 	}
 	if m.done {
@@ -119,7 +114,6 @@ func (m SpinnerModel) View() string {
 	return fmt.Sprintf("%s %s", m.spinner.View(), m.step)
 }
 
-// SetDone marks the spinner as complete
 func (m *SpinnerModel) SetDone() {
 	m.done = true
 }
