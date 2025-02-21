@@ -91,6 +91,6 @@ func HighlightJSON(jsonStr string) string {
 }
 
 // PrintError prints an error message with the standard error style
-func PrintError(message string, err error) {
-	fmt.Printf(ErrorStyle.Render("❌ "+message), err)
+func PrintError(message string) {
+	fmt.Println(ErrorStyle.Render(fmt.Sprintf("█ Error: %s", message)))
 }
