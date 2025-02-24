@@ -5,10 +5,34 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ignitionstack/ignition/pkg/builders"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockBuilderFactory is a test implementation of BuilderFactory
+type mockBuilderFactory struct {
+	mockBuilder builders.Builder
+}
+
+func (f *mockBuilderFactory) GetBuilder(language string) (builders.Builder, error) {
+	return f.mockBuilder, nil
+}
+
+// mockBuilder is a test implementation of builders.Builder
+type mockBuilder struct {
+	buildFunc           func(path string) (*builders.BuildResult, error)
+	verifyDependenciesFunc func() error
+}
+
+func (b *mockBuilder) Build(path string) (*builders.BuildResult, error) {
+	return b.buildFunc(path)
+}
+
+func (b *mockBuilder) VerifyDependencies() error {
+	return b.verifyDependenciesFunc()
+}
 
 func TestInitFunction(t *testing.T) {
 	// Create a temporary directory for the test
@@ -95,91 +119,50 @@ func TestInitFunction(t *testing.T) {
 	}
 }
 
-func TestBuildFunction(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "build-test-*")
+func TestBuildFunction_WithMock(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "function-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tempDir)
 
-	tests := []struct {
-		name           string
-		language       string
-		setupFiles     func(string) error
-		shouldError    bool
-		expectedDigest string
-	}{
-		{
-			name:     "rust-build",
-			language: "rust",
-			setupFiles: func(dir string) error {
-				// Create minimal Rust project structure
-				if err := os.MkdirAll(filepath.Join(dir, "src"), 0755); err != nil {
-					return err
-				}
-				return os.WriteFile(filepath.Join(dir, "src", "lib.rs"), []byte(`
-					fn main() {
-						println!("Hello, World!");
-					}
-				`), 0644)
-			},
-			shouldError: true, // Will error without full Rust project setup
+	// Create a test WASM file
+	wasmPath := filepath.Join(tempDir, "test.wasm")
+	err = os.WriteFile(wasmPath, []byte("mock wasm content"), 0644)
+	require.NoError(t, err)
+
+	// Create a mock builder that returns our test WASM file
+	mockBuilder := &mockBuilder{
+		buildFunc: func(path string) (*builders.BuildResult, error) {
+			return &builders.BuildResult{
+				OutputPath: wasmPath,
+			}, nil
 		},
-		{
-			name:     "typescript-build",
-			language: "typescript",
-			setupFiles: func(dir string) error {
-				return os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`
-					console.log("Hello, World!");
-				`), 0644)
-			},
-			shouldError: true, // Will error without full TypeScript project setup
-		},
-		{
-			name:     "invalid-language",
-			language: "invalid",
-			setupFiles: func(dir string) error {
-				return nil
-			},
-			shouldError: true,
+		verifyDependenciesFunc: func() error {
+			return nil
 		},
 	}
 
-	service := NewFunctionService()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create test directory
-			testDir := filepath.Join(tmpDir, tt.name)
-			err := os.MkdirAll(testDir, 0755)
-			require.NoError(t, err)
-
-			// Setup test files
-			err = tt.setupFiles(testDir)
-			require.NoError(t, err)
-
-			config := manifest.FunctionManifest{
-				FunctionSettings: manifest.FunctionSettings{
-					Name:     tt.name,
-					Language: tt.language,
-					VersionSettings: manifest.FunctionVersionSettings{
-						AllowedUrls: []string{},
-					},
-				},
-			}
-
-			result, err := service.BuildFunction(testDir, config)
-			if tt.shouldError {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
-			assert.Equal(t, tt.name, result.Name)
-			if tt.expectedDigest != "" {
-				assert.Equal(t, tt.expectedDigest, result.Digest)
-			}
-		})
+	// Create a function service with our mock builder factory
+	service := &functionService{
+		builderFactory: &mockBuilderFactory{
+			mockBuilder: mockBuilder,
+		},
 	}
+
+	// Create a test function config
+	config := manifest.FunctionManifest{
+		FunctionSettings: manifest.FunctionSettings{
+			Name:     "test-function",
+			Language: "test-language",
+		},
+	}
+
+	// Test building a function
+	result, err := service.BuildFunction(tempDir, config)
+	require.NoError(t, err)
+	assert.Equal(t, "test-function", result.Name)
+	assert.Equal(t, wasmPath, result.Path)
+	assert.NotEmpty(t, result.Digest)
 }
 
 func TestCalculateHash(t *testing.T) {
@@ -258,6 +241,32 @@ func TestShouldSkipFile(t *testing.T) {
 		t.Run(tt.path, func(t *testing.T) {
 			result := shouldSkipFile(tt.path)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetTemplateURL(t *testing.T) {
+	tests := []struct {
+		language    string
+		expectedURL string
+		expectError bool
+	}{
+		{"golang", "https://github.com/extism/go-pdk-template", false},
+		{"javascript", "https://github.com/extism/js-pdk-template", false},
+		{"typescript", "https://github.com/extism/ts-pdk-template", false},
+		{"rust", "https://github.com/extism/rust-pdk-template", false},
+		{"unknown", "", true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.language, func(t *testing.T) {
+			url, err := getTemplateURL(test.language)
+			if test.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.expectedURL, url)
+			}
 		})
 	}
 }
