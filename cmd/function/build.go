@@ -64,6 +64,12 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	manifestPath := filepath.Join(absPath, "ignition.yml")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		ui.PrintError(fmt.Sprintf("directory %s not an ignition project", absPath))
+		return fmt.Errorf("not an ignition project: %s does not exist", manifestPath)
+	}
+
 	// Read and parse the manifest file
 	manifestFile, err := os.ReadFile(filepath.Join(absPath, "ignition.yml"))
 	if err != nil {
