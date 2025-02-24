@@ -1,13 +1,16 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/pkg/engine"
 	"github.com/spf13/cobra"
+	"go.uber.org/fx"
 )
 
 // NewEngineStartCommand creates a command to start the engine
@@ -39,32 +42,53 @@ func NewEngineStartCommand() *cobra.Command {
 				return err
 			}
 
-			// Create a simple logger
-			logger := engine.NewStdLogger(os.Stdout)
-			
-			// Create dependency injection container
-			container := di.NewContainer()
-			
-			// Create and configure the engine with DI container
-			engineInstance, err := container.CreateEngine(
-				config.socketPath,
-				config.httpAddr,
-				config.registryDir,
-				logger,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to initialize engine: %w", err)
-			}
-
 			// Print startup message
 			fmt.Println("Starting Ignition engine...")
 			
-			// Start the engine
-			if err := engineInstance.Start(); err != nil {
-				return fmt.Errorf("engine server failed: %w", err)
+			// Create app configuration for fx
+			appConfig := di.NewAppConfig(
+				config.socketPath,
+				config.httpAddr,
+				config.registryDir,
+			)
+			
+			// Setup the fx app with our module
+			app := fx.New(
+				// Provide app configuration
+				fx.Supply(appConfig),
+				
+				// Include all our dependency providers
+				di.Module,
+				
+				// Register the engine start as an fx invocation
+				fx.Invoke(func(engine *engine.Engine) {
+					// The engine's Start method will block, which is what we want
+					if err := engine.Start(); err != nil {
+						// Log the error - we can't return it here because fx.Invoke doesn't
+						// propagate errors up to RunE
+						fmt.Fprintf(os.Stderr, "Engine server failed: %v\n", err)
+						os.Exit(1)
+					}
+				}),
+				
+				// Configure fx options
+				fx.StartTimeout(30*time.Second),
+				fx.StopTimeout(30*time.Second),
+			)
+			
+			// Start the application and wait for it to finish
+			if err := app.Start(context.Background()); err != nil {
+				return fmt.Errorf("failed to start engine: %w", err)
 			}
-
-			// We should never reach here since Start() blocks
+			
+			// This allows for graceful shutdown on SIGINT/SIGTERM
+			<-app.Done()
+			
+			// Handle shutdown
+			if err := app.Stop(context.Background()); err != nil {
+				return fmt.Errorf("error during shutdown: %w", err)
+			}
+			
 			return nil
 		},
 	}
