@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/pkg/engine"
 	"github.com/spf13/cobra"
 )
@@ -41,8 +42,11 @@ func NewEngineStartCommand() *cobra.Command {
 			// Create a simple logger
 			logger := engine.NewStdLogger(os.Stdout)
 			
-			// Create and configure the engine
-			engineInstance, err := engine.NewEngineWithLogger(
+			// Create dependency injection container
+			container := di.NewContainer()
+			
+			// Create and configure the engine with DI container
+			engineInstance, err := container.CreateEngine(
 				config.socketPath,
 				config.httpAddr,
 				config.registryDir,

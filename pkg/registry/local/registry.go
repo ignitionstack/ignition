@@ -7,20 +7,21 @@ import (
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
 // localRegistry implements the registry.Registry interface using local storage
 type localRegistry struct {
-	db      *badger.DB
+	dbRepo  repository.DBRepository
 	storage registry.Storage
 }
 
 // NewLocalRegistry creates a new registry backed by local storage
-func NewLocalRegistry(rootDir string, db *badger.DB) registry.Registry {
+func NewLocalRegistry(rootDir string, dbRepo repository.DBRepository) registry.Registry {
 	return &localRegistry{
-		db:      db,
+		dbRepo:  dbRepo,
 		storage: NewLocalStorage(rootDir),
 	}
 }
@@ -100,10 +101,19 @@ func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest,
 func (r *localRegistry) ReassignTag(namespace, name, tag, newDigest string) error {
 	return r.withWriteTx(func(txn *badger.Txn) error {
 		// Get function metadata
-		metadata, err := r.getOrCreateMetadata(txn, namespace, name)
+		var metadata *registry.FunctionMetadata
+		err := r.getFunctionMetadata(txn, namespace, name, &metadata)
 		if err != nil {
+			if errors.Is(err, registry.ErrFunctionNotFound) {
+				return registry.ErrFunctionNotFound
+			}
 			return fmt.Errorf("failed to get metadata: %w", err)
 		}
+        
+        // Function was found but metadata might be nil
+        if metadata == nil {
+            return registry.ErrFunctionNotFound
+        }
 
 		// Truncate digest for storage
 		shortDigest := registry.TruncateDigest(newDigest, 12)
@@ -188,12 +198,12 @@ func (r *localRegistry) ListAll() ([]registry.FunctionMetadata, error) {
 
 // withReadTx executes a function within a read transaction
 func (r *localRegistry) withReadTx(fn func(txn *badger.Txn) error) error {
-	return r.db.View(fn)
+	return r.dbRepo.View(fn)
 }
 
 // withWriteTx executes a function within a write transaction
 func (r *localRegistry) withWriteTx(fn func(txn *badger.Txn) error) error {
-	return r.db.Update(fn)
+	return r.dbRepo.Update(fn)
 }
 
 // Internal helpers

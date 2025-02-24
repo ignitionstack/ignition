@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,8 @@ func setupTestRegistry(t *testing.T) *testSetup {
 	db, err := badger.Open(opts)
 	require.NoError(t, err)
 
-	registry := NewLocalRegistry(tmpDir, db)
+	dbRepo := repository.NewBadgerDBRepository(db)
+	registry := NewLocalRegistry(tmpDir, dbRepo)
 
 	cleanup := func() {
 		db.Close()
@@ -355,7 +357,7 @@ func TestWithMockStorage(t *testing.T) {
 
 	mockStorage := newMockStorage()
 	registry := &localRegistry{
-		db:      db,
+		dbRepo:  repository.NewBadgerDBRepository(db),
 		storage: mockStorage,
 	}
 

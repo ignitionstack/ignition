@@ -10,6 +10,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	extism "github.com/extism/go-sdk"
+	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
@@ -28,21 +29,22 @@ type CircuitBreaker struct {
 
 // Engine represents the core service that manages WebAssembly functions
 type Engine struct {
-	registry    registry.Registry
-	plugins     map[string]*extism.Plugin
-	pluginsMux  sync.RWMutex
-	socketPath  string
-	httpAddr    string
-	logger      Logger
-	initialized bool
+	registry        registry.Registry
+	functionService services.FunctionService
+	plugins         map[string]*extism.Plugin
+	pluginsMux      sync.RWMutex
+	socketPath      string
+	httpAddr        string
+	logger          Logger
+	initialized     bool
 
 	// TTL-based plugin management
-	pluginLastUsed map[string]time.Time
-	ttlDuration    time.Duration
-	cleanupTicker  *time.Ticker
+	pluginLastUsed  map[string]time.Time
+	ttlDuration     time.Duration
+	cleanupTicker   *time.Ticker
 
 	// Timeout handling
-	defaultTimeout time.Duration
+	defaultTimeout  time.Duration
 
 	// Circuit breaking
 	circuitBreakers map[string]*CircuitBreaker
@@ -64,25 +66,46 @@ func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup registry: %w", err)
 	}
+	
+	// Create function service
+	functionService := services.NewFunctionService()
+	
+	return NewEngineWithDependencies(
+		socketPath, 
+		httpAddr, 
+		registry, 
+		functionService, 
+		logger,
+	), nil
+}
 
+// NewEngineWithDependencies creates a new Engine instance with explicit dependencies
+func NewEngineWithDependencies(
+	socketPath, 
+	httpAddr string, 
+	registry registry.Registry,
+	functionService services.FunctionService,
+	logger Logger,
+) *Engine {
 	return &Engine{
-		registry:    registry,
-		plugins:     make(map[string]*extism.Plugin),
-		socketPath:  socketPath,
-		httpAddr:    httpAddr,
-		logger:      logger,
-		initialized: true,
-
+		registry:        registry,
+		functionService: functionService,
+		plugins:         make(map[string]*extism.Plugin),
+		socketPath:      socketPath,
+		httpAddr:        httpAddr,
+		logger:          logger,
+		initialized:     true,
+		
 		// TTL-based plugin management
-		pluginLastUsed: make(map[string]time.Time),
-		ttlDuration:    30 * time.Minute,
-
+		pluginLastUsed:  make(map[string]time.Time),
+		ttlDuration:     30 * time.Minute,
+		
 		// Timeout handling
-		defaultTimeout: 30 * time.Second,
-
+		defaultTimeout:  30 * time.Second,
+		
 		// Circuit breaking
 		circuitBreakers: make(map[string]*CircuitBreaker),
-	}, nil
+	}
 }
 
 // setupRegistry initializes and returns a registry instance
@@ -94,8 +117,12 @@ func setupRegistry(registryDir string) (registry.Registry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open registry database: %w", err)
 	}
-
-	return localRegistry.NewLocalRegistry(registryDir, db), nil
+	
+	// Create a DB repository
+	dbRepo := repository.NewBadgerDBRepository(db)
+	
+	// Create and return registry with the repository
+	return localRegistry.NewLocalRegistry(registryDir, dbRepo), nil
 }
 
 // Start initializes and starts the engine's HTTP and socket servers
@@ -369,8 +396,8 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 		name = filepath.Base(path)
 	}
 
-	// Build the function
-	buildResult, err := buildFunction(path, config)
+	// Build the function using the injected function service
+	buildResult, err := e.functionService.BuildFunction(path, config)
 	if err != nil {
 		e.logger.Errorf("Failed to build function: %v", err)
 		return nil, fmt.Errorf("failed to build function: %w", err)
@@ -404,11 +431,7 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 	}, nil
 }
 
-// buildFunction uses the function service to build a WASM module
-func buildFunction(path string, config manifest.FunctionManifest) (*services.BuildResult, error) {
-	service := services.NewFunctionService()
-	return service.BuildFunction(path, config)
-}
+// This standalone buildFunction has been removed in favor of using the injected functionService
 
 // ReassignTag updates a tag to point to a new digest
 func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
