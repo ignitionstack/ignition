@@ -14,7 +14,46 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
+
+// QuietLogger is a minimal implementation of fxevent.Logger that only logs errors
+type QuietLogger struct {
+	Logger *zap.Logger
+}
+
+// LogEvent implements fxevent.Logger interface but only logs important events
+func (l *QuietLogger) LogEvent(event fxevent.Event) {
+	switch e := event.(type) {
+	case *fxevent.Started:
+		// Log application startup
+		l.Logger.Info("Application started")
+	case *fxevent.Stopping:
+		// Log application shutdown
+		l.Logger.Info("Application stopping")
+	case *fxevent.Stopped:
+		// Log application shutdown status
+		if e.Err != nil {
+			l.Logger.Error("Application stopped with error", zap.Error(e.Err))
+		} else {
+			l.Logger.Info("Application stopped gracefully")
+		}
+	case *fxevent.Invoked:
+		// Only log errors when invoking functions
+		if e.Err != nil {
+			l.Logger.Error("Error invoking function", 
+				zap.String("function", e.FunctionName),
+				zap.Error(e.Err))
+		}
+	case *fxevent.Provided:
+		// Skip all provided logs - too verbose
+	case *fxevent.Supplied:
+		// Skip all supplied logs - too verbose
+	default:
+		// Only log critical errors from other event types
+		// For most event types we don't need to log anything, making output cleaner
+	}
+}
 
 // Module exports all the DI providers
 var Module = fx.Options(
@@ -38,10 +77,13 @@ var Module = fx.Options(
 		),
 	),
 	
-	// Add logging of providers and lifecycle events
+	// Use our custom quiet logger
 	fx.WithLogger(func(logger *zap.Logger) fxevent.Logger {
-		return &fxevent.ZapLogger{Logger: logger}
+		return &QuietLogger{Logger: logger}
 	}),
+	
+	// Configure fx to be less verbose
+	fx.NopLogger,
 )
 
 // AppConfig holds configuration for the application
@@ -72,8 +114,22 @@ type EngineParams struct {
 
 // NewZapBaseLogger creates the base zap logger that will be used by fx
 func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
-	// For development, use a more readable logger configuration
-	config := zap.NewDevelopmentConfig()
+	// Create a custom, quieter configuration
+	config := zap.NewProductionConfig()
+	
+	// Adjust log level to only show warnings and above by default
+	config.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+	
+	// Make the output more concise
+	config.DisableStacktrace = true
+	config.DisableCaller = true
+	config.Encoding = "console"
+	
+	// Simplify the output format
+	config.EncoderConfig.TimeKey = "time"
+	config.EncoderConfig.LevelKey = "level"
+	config.EncoderConfig.MessageKey = "msg"
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	
 	zapLogger, err := config.Build()
 	if err != nil {
@@ -92,7 +148,24 @@ func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 
 // NewEngineLogger creates an engine.Logger adapter using the base zap logger
 func NewEngineLogger(baseLogger *zap.Logger) engine.Logger {
-	return &zapLoggerAdapter{baseLogger.Sugar()}
+	// Create a specialized logger for engine with higher verbosity
+	config := zap.NewDevelopmentConfig()
+	
+	// Only show important information by default
+	config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	
+	// Simplify the output - we don't need timestamps or log levels in server logs
+	config.Encoding = "console"
+	config.EncoderConfig.TimeKey = ""     // No timestamps
+	config.EncoderConfig.LevelKey = ""    // No log level
+	config.EncoderConfig.EncodeTime = nil // No time encoder needed
+	config.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
+	config.DisableCaller = true
+	config.DisableStacktrace = true
+	
+	engineLogger, _ := config.Build()
+	
+	return &zapLoggerAdapter{engineLogger.Sugar()}
 }
 
 type zapLoggerAdapter struct {

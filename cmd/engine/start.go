@@ -43,7 +43,8 @@ func NewEngineStartCommand() *cobra.Command {
 			}
 
 			// Print startup message
-			fmt.Println("Starting Ignition engine...")
+			fmt.Println("Starting Ignition Engine...")
+			fmt.Println("Press Ctrl+C to stop")
 			
 			// Create app configuration for fx
 			appConfig := di.NewAppConfig(
