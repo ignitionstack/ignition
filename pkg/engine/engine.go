@@ -16,6 +16,16 @@ import (
 	localRegistry "github.com/ignitionstack/ignition/pkg/registry/local"
 )
 
+// CircuitBreaker manages function reliability
+type CircuitBreaker struct {
+	failures         int
+	lastFailure      time.Time
+	state            string // "closed", "open", "half-open"
+	failureThreshold int
+	resetTimeout     time.Duration
+	mutex            sync.RWMutex
+}
+
 // Engine represents the core service that manages WebAssembly functions
 type Engine struct {
 	registry    registry.Registry
@@ -25,6 +35,18 @@ type Engine struct {
 	httpAddr    string
 	logger      Logger
 	initialized bool
+
+	// TTL-based plugin management
+	pluginLastUsed map[string]time.Time
+	ttlDuration    time.Duration
+	cleanupTicker  *time.Ticker
+
+	// Timeout handling
+	defaultTimeout time.Duration
+
+	// Circuit breaking
+	circuitBreakers map[string]*CircuitBreaker
+	cbMux           sync.RWMutex
 }
 
 // NewEngine creates a new Engine instance with default logger
@@ -50,6 +72,16 @@ func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger
 		httpAddr:    httpAddr,
 		logger:      logger,
 		initialized: true,
+
+		// TTL-based plugin management
+		pluginLastUsed: make(map[string]time.Time),
+		ttlDuration:    30 * time.Minute,
+
+		// Timeout handling
+		defaultTimeout: 30 * time.Second,
+
+		// Circuit breaking
+		circuitBreakers: make(map[string]*CircuitBreaker),
 	}, nil
 }
 
@@ -72,10 +104,33 @@ func (e *Engine) Start() error {
 		return ErrEngineNotInitialized
 	}
 
+	// Start TTL-based plugin cleanup
+	e.cleanupTicker = time.NewTicker(5 * time.Minute)
+	go e.cleanupUnusedPlugins()
+
 	handlers := NewHandlers(e, e.logger)
 	server := NewServer(e.socketPath, e.httpAddr, handlers, e.logger)
 
 	return server.Start()
+}
+
+// cleanupUnusedPlugins periodically removes unused plugins to prevent memory leaks
+func (e *Engine) cleanupUnusedPlugins() {
+	for range e.cleanupTicker.C {
+		e.pluginsMux.Lock()
+		now := time.Now()
+		for key, lastUsed := range e.pluginLastUsed {
+			if now.Sub(lastUsed) > e.ttlDuration {
+				if plugin, exists := e.plugins[key]; exists {
+					plugin.Close(context.TODO())
+					delete(e.plugins, key)
+					delete(e.pluginLastUsed, key)
+					e.logger.Printf("Plugin %s unloaded due to inactivity", key)
+				}
+			}
+		}
+		e.pluginsMux.Unlock()
+	}
 }
 
 // getFunctionKey generates a consistent key for functions in the plugins map
@@ -88,29 +143,159 @@ func (e *Engine) GetRegistry() registry.Registry {
 	return e.registry
 }
 
+// newCircuitBreaker creates a new circuit breaker with default settings
+func newCircuitBreaker() *CircuitBreaker {
+	return &CircuitBreaker{
+		failures:         0,
+		state:            "closed",
+		failureThreshold: 5,
+		resetTimeout:     30 * time.Second,
+	}
+}
+
+// recordSuccess records a successful function call
+func (cb *CircuitBreaker) recordSuccess() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	if cb.state == "half-open" {
+		cb.failures = 0
+		cb.state = "closed"
+	}
+}
+
+// recordFailure records a function failure and returns whether circuit is now open
+func (cb *CircuitBreaker) recordFailure() bool {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failures++
+	cb.lastFailure = time.Now()
+
+	if cb.state == "closed" && cb.failures >= cb.failureThreshold {
+		cb.state = "open"
+	}
+
+	return cb.state == "open"
+}
+
+// isOpen checks if the circuit breaker is open
+func (cb *CircuitBreaker) isOpen() bool {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+
+	if cb.state == "open" {
+		// Check if enough time has passed to try again
+		if time.Since(cb.lastFailure) > cb.resetTimeout {
+			// Allow one test request
+			cb.mutex.RUnlock()
+			cb.mutex.Lock()
+			cb.state = "half-open"
+			cb.mutex.Unlock()
+			cb.mutex.RLock()
+			return false
+		}
+		return true
+	}
+
+	return false
+}
+
 // CallFunction executes a previously loaded function with the given parameters
 func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	functionKey := getFunctionKey(namespace, name)
 
+	// Check circuit breaker
+	e.cbMux.RLock()
+	cb, cbExists := e.circuitBreakers[functionKey]
+	e.cbMux.RUnlock()
+
+	if !cbExists {
+		e.cbMux.Lock()
+		cb = newCircuitBreaker()
+		e.circuitBreakers[functionKey] = cb
+		e.cbMux.Unlock()
+	}
+
+	if cb.isOpen() {
+		return nil, fmt.Errorf("circuit breaker is open for function %s", functionKey)
+	}
+
+	// Update last used timestamp
 	e.pluginsMux.RLock()
 	plugin, ok := e.plugins[functionKey]
+	if ok {
+		e.pluginLastUsed[functionKey] = time.Now()
+	}
 	e.pluginsMux.RUnlock()
 
 	if !ok {
 		return nil, ErrFunctionNotLoaded
 	}
 
-	_, output, err := plugin.Call(entrypoint, payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call function: %w", err)
-	}
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
+	defer cancel()
 
-	return output, nil
+	// Create channel for results
+	resultCh := make(chan struct {
+		output []byte
+		err    error
+	}, 1)
+
+	// Execute function in goroutine
+	go func() {
+		_, output, err := plugin.Call(entrypoint, payload)
+		resultCh <- struct {
+			output []byte
+			err    error
+		}{output, err}
+	}()
+
+	// Wait for result or timeout
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			isOpen := cb.recordFailure()
+			if isOpen {
+				e.logger.Printf("Circuit breaker opened for function %s", functionKey)
+			}
+			return nil, fmt.Errorf("failed to call function: %w", result.err)
+		}
+
+		cb.recordSuccess()
+		return result.output, nil
+
+	case <-ctx.Done():
+		isOpen := cb.recordFailure()
+		if isOpen {
+			e.logger.Printf("Circuit breaker opened for function %s", functionKey)
+		}
+		return nil, fmt.Errorf("function execution timed out after %v", e.defaultTimeout)
+	}
 }
 
 // LoadFunction loads a function from the registry into memory
 func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
+
+	functionKey := getFunctionKey(namespace, name)
+
+	// Check if function is already loaded
+	e.pluginsMux.RLock()
+	_, alreadyLoaded := e.plugins[functionKey]
+	e.pluginsMux.RUnlock()
+
+	if alreadyLoaded {
+		e.logger.Printf("Function %s already loaded", functionKey)
+
+		// Update timestamp
+		e.pluginsMux.Lock()
+		e.pluginLastUsed[functionKey] = time.Now()
+		e.pluginsMux.Unlock()
+
+		return nil
+	}
 
 	// Get both the WASM bytes and version info
 	wasmBytes, versionInfo, err := e.registry.Pull(namespace, name, identifier)
@@ -130,8 +315,22 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.pluginsMux.Lock()
 	defer e.pluginsMux.Unlock()
 
-	functionKey := getFunctionKey(namespace, name)
+	// Double-check that it wasn't loaded while we were fetching
+	if _, exists := e.plugins[functionKey]; exists {
+		// Another goroutine loaded it already, close our copy
+		plugin.Close(context.TODO())
+		return nil
+	}
+
 	e.plugins[functionKey] = plugin
+	e.pluginLastUsed[functionKey] = time.Now()
+
+	// Initialize circuit breaker
+	e.cbMux.Lock()
+	if _, exists := e.circuitBreakers[functionKey]; !exists {
+		e.circuitBreakers[functionKey] = newCircuitBreaker()
+	}
+	e.cbMux.Unlock()
 
 	e.logger.Printf("Function loaded successfully: %s", functionKey)
 	return nil
