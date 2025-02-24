@@ -132,9 +132,6 @@ http POST http://localhost:8080/my_namespace/my_function/greet payload=ignition
 ## Development Status
 Ignition is currently under heavy development. The API and features are subject to change, and we encourage you to try it out and provide feedback!
 
-## Contributing
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
 ## License
 MIT License - see [LICENSE](LICENSE) for details.
 
