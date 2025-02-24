@@ -29,7 +29,7 @@ func NewFunctionBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "build [path]",
 		Short:         "Build an extism function",
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MaximumNArgs(1),
 		RunE:          buildFunction,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -48,7 +48,10 @@ type TagInfo struct {
 }
 
 func buildFunction(cmd *cobra.Command, args []string) error {
-	path := args[0]
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
