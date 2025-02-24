@@ -29,7 +29,7 @@ func NewFunctionBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "build [path]",
 		Short:         "Build an extism function",
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MaximumNArgs(1),
 		RunE:          buildFunction,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -48,7 +48,10 @@ type TagInfo struct {
 }
 
 func buildFunction(cmd *cobra.Command, args []string) error {
-	path := args[0]
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
@@ -59,6 +62,12 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		ui.PrintError(fmt.Sprintf("path %s does not exist", absPath))
 		return err
+	}
+
+	manifestPath := filepath.Join(absPath, "ignition.yml")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		ui.PrintError(fmt.Sprintf("directory %s not an ignition project", absPath))
+		return fmt.Errorf("not an ignition project: %s does not exist", manifestPath)
 	}
 
 	// Read and parse the manifest file
