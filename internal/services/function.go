@@ -284,7 +284,9 @@ func hashSourceCode(hasher io.Writer, path string) error {
 			return fmt.Errorf("failed to read file %s: %w", filePath, err)
 		}
 		
-		hasher.Write(fileContent)
+		if _, err := hasher.Write(fileContent); err != nil {
+			return fmt.Errorf("failed to hash file %s: %w", filePath, err)
+		}
 		return nil
 	})
 
@@ -304,7 +306,9 @@ func hashConfig(hasher io.Writer, config manifest.FunctionManifest) error {
 	}
 	
 	// Write the config bytes to the hasher
-	hasher.Write(configBytes)
+	if _, err := hasher.Write(configBytes); err != nil {
+		return fmt.Errorf("failed to hash config: %w", err)
+	}
 	return nil
 }
 
