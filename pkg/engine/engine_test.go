@@ -40,7 +40,7 @@ func TestNewEngine(t *testing.T) {
 	defer cleanupTest(tmpDir)
 
 	assert.NotNil(t, engine)
-	assert.NotNil(t, engine.reg)
+	assert.NotNil(t, engine.registry)
 	assert.NotNil(t, engine.plugins)
 	assert.NotNil(t, engine.logger)
 	assert.Equal(t, filepath.Join(tmpDir, "ignition.sock"), engine.socketPath)
