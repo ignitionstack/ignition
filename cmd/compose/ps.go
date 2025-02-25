@@ -3,9 +3,7 @@ package compose
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ignitionstack/ignition/internal/di"
@@ -25,7 +23,7 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 		Long:  "List functions defined in an ignition-compose.yml file and their current status.",
 		RunE: func(c *cobra.Command, args []string) error {
 			ui.PrintInfo("Operation", "Listing compose services")
-			
+
 			// Parse the compose file
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
@@ -62,25 +60,6 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 				}
 			}
 
-			// Create a tabwriter with appropriate spacing
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-
-			// Define styles
-			headerStyle := lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color(ui.AccentColor))
-			
-			runningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.SuccessColor))
-			stoppedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.DimTextColor))
-
-			// First, format all cells to ensure consistent styling
-			service := headerStyle.Render("SERVICE")
-			function := headerStyle.Render("FUNCTION")
-			status := headerStyle.Render("STATUS")
-
-			// Print header
-			fmt.Fprintf(w, "%s\t%s\t%s\n", service, function, status)
-
 			// Create a map of loaded functions for efficient lookup
 			loadedFunctionsMap := make(map[string]bool)
 			if engineRunning {
@@ -90,12 +69,31 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 				}
 			}
 
-			// Check each function in the compose file
+			// Define styles similar to function ls
+			tableHeaderStyle := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color(ui.InfoColor)).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(lipgloss.Color(ui.DimTextColor)).
+				BorderBottom(true)
+
+			tableRowStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("255")).
+				PaddingLeft(1)
+
+			// Prepare table rows
+			var tableRows []string
+			
+			// Add header row
+			tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(" %-20s %-40s %-15s",
+				"SERVICE", "FUNCTION", "STATUS")))
+
+			// Add data rows
 			for name, service := range composeManifest.Services {
 				// Parse function reference (namespace/name:tag)
 				parts := strings.Split(service.Function, ":")
 				functionRef := parts[0]
-				
+
 				nameParts := strings.Split(functionRef, "/")
 				if len(nameParts) != 2 {
 					ui.PrintError(fmt.Sprintf("Invalid function reference '%s' for service '%s'", service.Function, name))
@@ -103,30 +101,38 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 				}
 
 				namespace, funcName := nameParts[0], nameParts[1]
-				
+
 				// Determine if the function is loaded
 				isLoaded := false
 				if engineRunning {
 					key := fmt.Sprintf("%s/%s", namespace, funcName)
 					isLoaded = loadedFunctionsMap[key]
 				}
-				
+
 				// Format status with color
-				statusText := "stopped"
+				var statusText string
 				if isLoaded {
-					statusText = runningStyle.Render("running")
+					statusText = lipgloss.NewStyle().
+						Foreground(lipgloss.Color(ui.SuccessColor)).
+						Render("running")
 				} else {
-					statusText = stoppedStyle.Render("stopped")
+					statusText = lipgloss.NewStyle().
+						Foreground(lipgloss.Color(ui.DimTextColor)).
+						Render("stopped")
 				}
 
-				// Print row
-				fmt.Fprintf(w, "%s\t%s\t%s\n", name, service.Function, statusText)
+				// Add the row
+				row := tableRowStyle.Render(fmt.Sprintf("%-20s %-40s %-15s",
+					name, service.Function, statusText))
+				tableRows = append(tableRows, row)
 			}
 
-			// Flush the table writer
-			w.Flush()
-			
-			if len(composeManifest.Services) == 0 {
+			// Combine rows into a table
+			if len(tableRows) > 1 {
+				table := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
+				output := lipgloss.JoinVertical(lipgloss.Left, "\n", table, "\n")
+				fmt.Println(output)
+			} else {
 				ui.PrintInfo("Status", "No services defined in the compose file")
 			}
 
