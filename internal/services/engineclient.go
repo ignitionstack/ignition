@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	
+	"github.com/ignitionstack/ignition/pkg/types"
 )
 
 // EngineClient is a client for communicating with the Ignition engine
@@ -153,36 +155,44 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 
 // ListFunctions lists all functions loaded in the engine
 func (c *EngineClient) ListFunctions(ctx context.Context) ([]FunctionDetails, error) {
-	// Create HTTP request to the list endpoint
+	// Create HTTP request to the loaded endpoint to get actually loaded functions
 	req, err := http.NewRequestWithContext(
 		ctx,
-		http.MethodPost,
-		"http://unix/list",
-		bytes.NewBuffer([]byte("{}")), // Empty JSON object to list all functions
+		http.MethodGet,
+		"http://unix/loaded", // Use the new endpoint for loaded functions
+		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create list request: %w", err)
+		return nil, fmt.Errorf("failed to create loaded functions request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
 	
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send list request: %w", err)
+		return nil, fmt.Errorf("failed to send loaded functions request: %w", err)
 	}
 	defer resp.Body.Close()
 	
 	// Check response
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list functions (status code %d): %s", 
+		return nil, fmt.Errorf("failed to list loaded functions (status code %d): %s", 
 			resp.StatusCode, string(responseBody))
 	}
 	
 	// Parse response
+	var loadedFunctions []types.LoadedFunction
+	if err := json.NewDecoder(resp.Body).Decode(&loadedFunctions); err != nil {
+		return nil, fmt.Errorf("failed to decode loaded functions response: %w", err)
+	}
+	
+	// Convert to FunctionDetails
 	var functions []FunctionDetails
-	if err := json.NewDecoder(resp.Body).Decode(&functions); err != nil {
-		return nil, fmt.Errorf("failed to decode list response: %w", err)
+	for _, fn := range loadedFunctions {
+		functions = append(functions, FunctionDetails{
+			Namespace: fn.Namespace,
+			Name:      fn.Name,
+		})
 	}
 	
 	return functions, nil

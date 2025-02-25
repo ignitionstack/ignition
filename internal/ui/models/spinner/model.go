@@ -64,6 +64,14 @@ type ResultMsg struct {
 	Result interface{}
 }
 
+type ErrorMsg struct {
+	Err error
+}
+
+type DoneMsg struct {
+	Result interface{}
+}
+
 func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -77,6 +85,17 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tea.Printf("%s", ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %s", strings.TrimSpace(msg.Error())))),
 			tea.Quit,
 		)
+	case ErrorMsg:
+		m.err = msg.Err
+		m.done = true
+		return m, tea.Sequence(
+			tea.Printf("%s", ui.ErrorStyle.Render(fmt.Sprintf("█ Error: %s", strings.TrimSpace(msg.Err.Error())))),
+			tea.Quit,
+		)
+	case DoneMsg:
+		m.result = msg.Result
+		m.done = true
+		return m, tea.Quit
 	case ResultMsg:
 		m.result = msg.Result
 		m.done = true

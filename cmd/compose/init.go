@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/ignitionstack/ignition/internal/di"
+	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 )
@@ -19,7 +20,7 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 		Short: "Initialize a new compose file",
 		Long:  "Create a new ignition-compose.yml file with example services.",
 		RunE: func(c *cobra.Command, args []string) error {
-			fmt.Println("Creating example compose file...")
+			ui.PrintInfo("Operation", "Creating compose file")
 			
 			// Create example compose file content
 			example := map[string]interface{}{
@@ -57,23 +58,27 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 			dir := filepath.Dir(outputPath)
 			if dir != "." {
 				if err := os.MkdirAll(dir, 0755); err != nil {
+					ui.PrintError(fmt.Sprintf("Failed to create directory %s: %v", dir, err))
 					return fmt.Errorf("failed to create directory %s: %w", dir, err)
 				}
 			}
 
 			// Check if file already exists
 			if _, err := os.Stat(outputPath); err == nil {
+				ui.PrintError(fmt.Sprintf("File %s already exists", outputPath))
 				return fmt.Errorf("file %s already exists. Use -o to specify a different output path", outputPath)
 			}
 
 			// Write to file
 			if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+				ui.PrintError(fmt.Sprintf("Failed to write file: %v", err))
 				return fmt.Errorf("failed to write file: %w", err)
 			}
 
-			fmt.Printf("Created compose file: %s\n", outputPath)
-			fmt.Println("\nTo start these services, update the function references and run:")
-			fmt.Println("  ignition compose up")
+			ui.PrintSuccess(fmt.Sprintf("Created compose file: %s", outputPath))
+			
+			ui.PrintMetadata("Usage", "To start these services, update the function references and run:")
+			ui.PrintHighlight("  ignition compose up")
 
 			return nil
 		},

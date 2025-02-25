@@ -49,6 +49,7 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 	mux.HandleFunc("/reassign-tag", h.withMiddleware(h.handleReassignTag, commonMiddleware...))
 	mux.HandleFunc("/call-once", h.withMiddleware(h.handleOneOffCall, commonMiddleware...))
 	mux.HandleFunc("/status", h.withMiddleware(h.handleStatus, h.methodMiddleware(http.MethodGet), h.errorMiddleware()))
+	mux.HandleFunc("/loaded", h.withMiddleware(h.handleLoadedFunctions, h.methodMiddleware(http.MethodGet), h.errorMiddleware()))
 
 	return mux
 }
@@ -160,6 +161,28 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	}
 
 	return h.writeJSONResponse(w, functions)
+}
+
+// handleLoadedFunctions lists currently loaded functions in memory
+func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
+	h.logger.Printf("Received request to list loaded functions")
+
+	// Get all loaded functions
+	h.engine.pluginsMux.RLock()
+	loadedFunctions := make([]types.LoadedFunction, 0, len(h.engine.plugins))
+	
+	for key := range h.engine.plugins {
+		parts := strings.Split(key, "/")
+		if len(parts) == 2 {
+			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
+				Namespace: parts[0],
+				Name:      parts[1],
+			})
+		}
+	}
+	h.engine.pluginsMux.RUnlock()
+
+	return h.writeJSONResponse(w, loadedFunctions)
 }
 
 // handleBuild builds a function and stores it in the registry

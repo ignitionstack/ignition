@@ -86,3 +86,9 @@ type PluginOptions struct {
 	MaxMemoryMB   int      `json:"max_memory_mb"`
 	TimeoutMillis int      `json:"timeout_millis"`
 }
+
+// LoadedFunction represents a function that is currently loaded in memory
+type LoadedFunction struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}

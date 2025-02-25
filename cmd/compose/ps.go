@@ -7,8 +7,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/internal/services"
+	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/spf13/cobra"
 )
@@ -22,21 +24,24 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 		Short: "List functions loaded from a compose file",
 		Long:  "List functions defined in an ignition-compose.yml file and their current status.",
 		RunE: func(c *cobra.Command, args []string) error {
-			fmt.Println("Listing compose services...")
+			ui.PrintInfo("Operation", "Listing compose services")
 			
 			// Parse the compose file
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
+				ui.PrintError(fmt.Sprintf("Failed to parse compose file: %v", err))
 				return err
 			}
 
 			// Get the engine client from the container
 			client, err := container.Get("engineClient")
 			if err != nil {
+				ui.PrintError("Error getting engine client")
 				return fmt.Errorf("error getting engine client: %w", err)
 			}
 			engineClient, ok := client.(*services.EngineClient)
 			if !ok {
+				ui.PrintError("Invalid engine client type")
 				return fmt.Errorf("invalid engine client type")
 			}
 
@@ -45,7 +50,7 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 			engineRunning := true
 			if err := engineClient.Ping(ctx); err != nil {
 				engineRunning = false
-				fmt.Println("Warning: Engine is not running. Function status may not be accurate.")
+				ui.PrintInfo("Warning", "Engine is not running. Function status may not be accurate")
 			}
 
 			// Get all loaded functions if engine is running
@@ -53,13 +58,37 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 			if engineRunning {
 				loadedFunctions, err = engineClient.ListFunctions(ctx)
 				if err != nil {
-					fmt.Println("Warning: Failed to list functions from engine. Status information may not be accurate.")
+					ui.PrintInfo("Warning", "Failed to list functions from engine. Status information may not be accurate")
 				}
 			}
 
-			// Create a writer for tabular output
+			// Create a tabwriter with appropriate spacing
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "SERVICE\tFUNCTION\tSTATUS")
+
+			// Define styles
+			headerStyle := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color(ui.AccentColor))
+			
+			runningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.SuccessColor))
+			stoppedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.DimTextColor))
+
+			// First, format all cells to ensure consistent styling
+			service := headerStyle.Render("SERVICE")
+			function := headerStyle.Render("FUNCTION")
+			status := headerStyle.Render("STATUS")
+
+			// Print header
+			fmt.Fprintf(w, "%s\t%s\t%s\n", service, function, status)
+
+			// Create a map of loaded functions for efficient lookup
+			loadedFunctionsMap := make(map[string]bool)
+			if engineRunning {
+				for _, fn := range loadedFunctions {
+					key := fmt.Sprintf("%s/%s", fn.Namespace, fn.Name)
+					loadedFunctionsMap[key] = true
+				}
+			}
 
 			// Check each function in the compose file
 			for name, service := range composeManifest.Services {
@@ -69,27 +98,37 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 				
 				nameParts := strings.Split(functionRef, "/")
 				if len(nameParts) != 2 {
-					return fmt.Errorf("invalid function reference '%s' for service '%s', expected format namespace/name:tag", service.Function, name)
+					ui.PrintError(fmt.Sprintf("Invalid function reference '%s' for service '%s'", service.Function, name))
+					continue
 				}
 
 				namespace, funcName := nameParts[0], nameParts[1]
-				status := "stopped"
-
-				// Check if function is loaded
+				
+				// Determine if the function is loaded
+				isLoaded := false
 				if engineRunning {
-					for _, fn := range loadedFunctions {
-						if fn.Namespace == namespace && fn.Name == funcName {
-							status = "running"
-							break
-						}
-					}
+					key := fmt.Sprintf("%s/%s", namespace, funcName)
+					isLoaded = loadedFunctionsMap[key]
+				}
+				
+				// Format status with color
+				statusText := "stopped"
+				if isLoaded {
+					statusText = runningStyle.Render("running")
+				} else {
+					statusText = stoppedStyle.Render("stopped")
 				}
 
-				fmt.Fprintf(w, "%s\t%s\t%s\n", name, service.Function, status)
+				// Print row
+				fmt.Fprintf(w, "%s\t%s\t%s\n", name, service.Function, statusText)
 			}
 
-			// Flush the writer to print the table
+			// Flush the table writer
 			w.Flush()
+			
+			if len(composeManifest.Services) == 0 {
+				ui.PrintInfo("Status", "No services defined in the compose file")
+			}
 
 			return nil
 		},
