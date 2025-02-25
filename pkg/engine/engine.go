@@ -251,10 +251,13 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	// Update last used timestamp
 	e.pluginsMux.RLock()
 	plugin, ok := e.plugins[functionKey]
-	if ok {
-		e.pluginLastUsed[functionKey] = time.Now()
-	}
 	e.pluginsMux.RUnlock()
+
+	if ok {
+		e.pluginsMux.Lock()
+		e.pluginLastUsed[functionKey] = time.Now()
+		e.pluginsMux.Unlock()
+	}
 
 	if !ok {
 		return nil, ErrFunctionNotLoaded
