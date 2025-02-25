@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
@@ -41,6 +43,13 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 		h.errorMiddleware(),
 	}
 
+	// Common middleware stack for GET endpoints
+	getMiddleware := []Middleware{
+		h.methodMiddleware(http.MethodGet),
+		h.loggingMiddleware(),
+		h.errorMiddleware(),
+	}
+
 	// Register socket endpoints
 	mux.HandleFunc("/load", h.withMiddleware(h.handleLoad, commonMiddleware...))
 	mux.HandleFunc("/unload", h.withMiddleware(h.handleUnload, commonMiddleware...))
@@ -50,6 +59,7 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 	mux.HandleFunc("/call-once", h.withMiddleware(h.handleOneOffCall, commonMiddleware...))
 	mux.HandleFunc("/status", h.withMiddleware(h.handleStatus, h.methodMiddleware(http.MethodGet), h.errorMiddleware()))
 	mux.HandleFunc("/loaded", h.withMiddleware(h.handleLoadedFunctions, h.methodMiddleware(http.MethodGet), h.errorMiddleware()))
+	mux.HandleFunc("/logs/", h.withMiddleware(h.handleFunctionLogs, getMiddleware...))
 
 	return mux
 }
@@ -342,4 +352,84 @@ func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return h.writeJSONResponse(w, map[string]string{"message": "Function unloaded successfully"})
+}
+
+// handleFunctionLogs returns logs for a specific function
+func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) error {
+	// Parse path: /logs/namespace/name
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/logs/"), "/")
+	if len(pathParts) != 2 {
+		return NewBadRequestError("Invalid URL format: expected /logs/namespace/name")
+	}
+	
+	namespace, name := pathParts[0], pathParts[1]
+	
+	h.logger.Printf("Received logs request for function: %s/%s", namespace, name)
+	
+	// Check if function exists and is loaded
+	functionKey := getFunctionKey(namespace, name)
+	h.engine.pluginsMux.RLock()
+	_, exists := h.engine.plugins[functionKey]
+	h.engine.pluginsMux.RUnlock()
+	
+	if !exists {
+		return NewNotFoundError(fmt.Sprintf("Function %s/%s is not loaded", namespace, name))
+	}
+	
+	// Parse query parameters
+	query := r.URL.Query()
+	
+	// Parse since parameter (seconds)
+	var since time.Time
+	if sinceStr := query.Get("since"); sinceStr != "" {
+		sinceSeconds, err := strconv.ParseInt(sinceStr, 10, 64)
+		if err != nil {
+			return NewBadRequestError(fmt.Sprintf("Invalid 'since' parameter: %v", err))
+		}
+		since = time.Now().Add(-time.Duration(sinceSeconds) * time.Second)
+	}
+	
+	// Parse tail parameter
+	var tail int
+	if tailStr := query.Get("tail"); tailStr != "" {
+		var err error
+		tail, err = strconv.Atoi(tailStr)
+		if err != nil {
+			return NewBadRequestError(fmt.Sprintf("Invalid 'tail' parameter: %v", err))
+		}
+	} else {
+		// Default to returning all logs if tail is not specified
+		tail = 0
+	}
+	
+	// Get logs from the engine's logger for this function
+	logs := h.getEngineLogs(namespace, name, since, tail)
+	
+	// Return logs as a JSON array
+	return h.writeJSONResponse(w, logs)
+}
+
+// getEngineLogs retrieves logs for a specific function from the engine's log store
+func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
+	functionKey := getFunctionKey(namespace, name)
+	
+	// Retrieve logs from the engine's log store
+	logs := h.engine.logStore.GetLogs(functionKey, since, tail)
+	
+	// If there are no logs, add an informational message
+	if len(logs) == 0 {
+		if h.engine.IsLoaded(namespace, name) {
+			return []string{
+				fmt.Sprintf("[%s] No logs available for function %s. The function is loaded but has not recorded any activity yet.",
+					time.Now().Format(time.RFC3339), functionKey),
+			}
+		} else {
+			return []string{
+				fmt.Sprintf("[%s] No logs available for function %s. The function is not currently loaded.",
+					time.Now().Format(time.RFC3339), functionKey),
+			}
+		}
+	}
+	
+	return logs
 }

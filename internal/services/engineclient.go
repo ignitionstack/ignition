@@ -8,6 +8,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"time"
 	
 	"github.com/ignitionstack/ignition/pkg/types"
 )
@@ -16,6 +19,12 @@ import (
 type EngineClient struct {
 	socketPath string
 	httpClient *http.Client
+}
+
+// EngineFunctionDetails represents basic information about a function for the EngineClient
+type EngineFunctionDetails struct {
+	Namespace string
+	Name      string
 }
 
 // NewEngineClientWithDefaults creates a minimal client with default values
@@ -154,7 +163,7 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 }
 
 // ListFunctions lists all functions loaded in the engine
-func (c *EngineClient) ListFunctions(ctx context.Context) ([]FunctionDetails, error) {
+func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetails, error) {
 	// Create HTTP request to the loaded endpoint to get actually loaded functions
 	req, err := http.NewRequestWithContext(
 		ctx,
@@ -186,14 +195,70 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]FunctionDetails, er
 		return nil, fmt.Errorf("failed to decode loaded functions response: %w", err)
 	}
 	
-	// Convert to FunctionDetails
-	var functions []FunctionDetails
+	// Convert to EngineFunctionDetails
+	var functions []EngineFunctionDetails
 	for _, fn := range loadedFunctions {
-		functions = append(functions, FunctionDetails{
+		functions = append(functions, EngineFunctionDetails{
 			Namespace: fn.Namespace,
 			Name:      fn.Name,
 		})
 	}
 	
 	return functions, nil
+}
+
+// GetFunctionLogs retrieves logs for a specific function
+func (c *EngineClient) GetFunctionLogs(ctx context.Context, namespace, name string, since time.Duration, tail int) ([]string, error) {
+	// Create query parameters
+	query := url.Values{}
+	
+	// Add since parameter (in seconds) if specified
+	if since > 0 {
+		sinceSeconds := int64(since.Seconds())
+		query.Add("since", strconv.FormatInt(sinceSeconds, 10))
+	}
+	
+	// Add tail parameter if specified
+	if tail > 0 {
+		query.Add("tail", strconv.Itoa(tail))
+	}
+	
+	// Create the URL with query parameters
+	logURL := fmt.Sprintf("http://unix/logs/%s/%s", namespace, name)
+	if len(query) > 0 {
+		logURL += "?" + query.Encode()
+	}
+	
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		logURL,
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logs request: %w", err)
+	}
+	
+	// Send request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send logs request: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	// Check response
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to retrieve logs (status code %d): %s", 
+			resp.StatusCode, string(responseBody))
+	}
+	
+	// Parse response
+	var logs []string
+	if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
+		return nil, fmt.Errorf("failed to decode logs response: %w", err)
+	}
+	
+	return logs, nil
 }

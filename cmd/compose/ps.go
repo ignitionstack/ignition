@@ -54,7 +54,7 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 			}
 
 			// Get all loaded functions if engine is running
-			var loadedFunctions []services.FunctionDetails
+			var loadedFunctions []services.EngineFunctionDetails
 			if engineRunning {
 				loadedFunctions, err = engineClient.ListFunctions(ctx)
 				if err != nil {

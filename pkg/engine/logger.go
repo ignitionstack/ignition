@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
+	"time"
 )
 
 // Logger defines the interface for logging within the engine
@@ -103,6 +105,143 @@ func (l *FileLogger) Close() error {
 		return l.file.Close()
 	}
 	return nil
+}
+
+// LogEntry represents a single log entry
+type LogEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Message   string    `json:"message"`
+	Level     LogLevel  `json:"level"`
+}
+
+// FunctionLogStore stores and retrieves logs for functions
+type FunctionLogStore struct {
+	logs    map[string][]LogEntry
+	mutex   sync.RWMutex
+	maxLogs int // Maximum number of logs to keep per function
+}
+
+// NewFunctionLogStore creates a new function log store
+func NewFunctionLogStore(maxLogsPerFunction int) *FunctionLogStore {
+	return &FunctionLogStore{
+		logs:    make(map[string][]LogEntry),
+		maxLogs: maxLogsPerFunction,
+	}
+}
+
+// AddLog adds a log entry for a function
+func (s *FunctionLogStore) AddLog(functionKey string, level LogLevel, message string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	entry := LogEntry{
+		Timestamp: time.Now(),
+		Message:   message,
+		Level:     level,
+	}
+
+	if _, exists := s.logs[functionKey]; !exists {
+		s.logs[functionKey] = []LogEntry{}
+	}
+
+	// Add the new log
+	s.logs[functionKey] = append(s.logs[functionKey], entry)
+
+	// If we exceed the maximum number of logs, trim the oldest ones
+	if len(s.logs[functionKey]) > s.maxLogs {
+		s.logs[functionKey] = s.logs[functionKey][len(s.logs[functionKey])-s.maxLogs:]
+	}
+}
+
+// GetLogs retrieves logs for a function with filtering options
+func (s *FunctionLogStore) GetLogs(functionKey string, since time.Time, tail int) []string {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	logEntries, exists := s.logs[functionKey]
+	if !exists || len(logEntries) == 0 {
+		return []string{}
+	}
+
+	// Filter by timestamp if since is specified
+	var filteredLogs []LogEntry
+	if !since.IsZero() {
+		for _, entry := range logEntries {
+			if entry.Timestamp.After(since) || entry.Timestamp.Equal(since) {
+				filteredLogs = append(filteredLogs, entry)
+			}
+		}
+	} else {
+		filteredLogs = logEntries
+	}
+
+	// Apply tail limit if specified
+	if tail > 0 && tail < len(filteredLogs) {
+		filteredLogs = filteredLogs[len(filteredLogs)-tail:]
+	}
+
+	// Format logs as strings
+	var result []string
+	for _, entry := range filteredLogs {
+		levelPrefix := ""
+		switch entry.Level {
+		case LevelError:
+			levelPrefix = "ERROR: "
+		case LevelDebug:
+			levelPrefix = "DEBUG: "
+		}
+		result = append(result, fmt.Sprintf("[%s] %s%s", 
+			entry.Timestamp.Format(time.RFC3339), levelPrefix, entry.Message))
+	}
+
+	return result
+}
+
+// LoggingFunctionLogger is a logger that logs to both a standard logger and the function log store
+type LoggingFunctionLogger struct {
+	*StandardLogger
+	store      *FunctionLogStore
+	functionKey string
+}
+
+// NewLoggingFunctionLogger creates a new logger that logs to both a standard logger and the function log store
+func NewLoggingFunctionLogger(output io.Writer, level LogLevel, store *FunctionLogStore, functionKey string) *LoggingFunctionLogger {
+	return &LoggingFunctionLogger{
+		StandardLogger: NewCustomLogger(output, "", log.LstdFlags, level),
+		store:          store,
+		functionKey:    functionKey,
+	}
+}
+
+// Printf logs a formatted informational message
+func (l *LoggingFunctionLogger) Printf(format string, v ...interface{}) {
+	if l.level >= LevelInfo {
+		message := fmt.Sprintf(format, v...)
+		l.logger.Print(message)
+		if l.store != nil {
+			l.store.AddLog(l.functionKey, LevelInfo, message)
+		}
+	}
+}
+
+// Errorf logs a formatted error message
+func (l *LoggingFunctionLogger) Errorf(format string, v ...interface{}) {
+	message := fmt.Sprintf(format, v...)
+	l.logger.Print("ERROR: " + message)
+	if l.store != nil {
+		l.store.AddLog(l.functionKey, LevelError, message)
+	}
+}
+
+// Debugf logs a formatted debug message
+func (l *LoggingFunctionLogger) Debugf(format string, v ...interface{}) {
+	if l.level >= LevelDebug {
+		message := fmt.Sprintf(format, v...)
+		l.logger.Print("DEBUG: " + message)
+		if l.store != nil {
+			l.store.AddLog(l.functionKey, LevelDebug, message)
+		}
+	}
 }
 
 // MultiLogger sends logs to multiple loggers
