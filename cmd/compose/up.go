@@ -108,8 +108,61 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 				// Block until we receive a signal
 				<-sigChan
 				
-				ui.PrintInfo("Operation", "Shutting down")
-				ui.PrintMetadata("Action", "Run 'ignition compose down' to stop all services")
+				ui.PrintInfo("Operation", "Shutting down and unloading functions...")
+				
+				// Prepare functions to unload
+				var functionsToUnload []struct {
+					namespace string
+					name      string
+					service   string
+				}
+				
+				for name, service := range composeManifest.Services {
+					parts := strings.Split(service.Function, ":")
+					functionRef := parts[0]
+					nameParts := strings.Split(functionRef, "/")
+					if len(nameParts) == 2 {
+						namespace, funcName := nameParts[0], nameParts[1]
+						functionsToUnload = append(functionsToUnload, struct {
+							namespace string
+							name      string
+							service   string
+						}{
+							namespace: namespace,
+							name:      funcName,
+							service:   name,
+						})
+					}
+				}
+				
+				// Create a spinner for the unloading process
+				spinnerModel := spinner.NewSpinnerModelWithMessage("Unloading functions...")
+				unloadProgram := tea.NewProgram(spinnerModel)
+				
+				// Unload functions in a goroutine
+				go func() {
+					err := unloadComposeServices(context.Background(), functionsToUnload, engineClient)
+					if err != nil {
+						unloadProgram.Send(spinner.ErrorMsg{Err: err})
+					} else {
+						unloadProgram.Send(spinner.DoneMsg{Result: len(functionsToUnload)})
+					}
+				}()
+				
+				// Run the spinner UI
+				unloadModel, err := unloadProgram.Run()
+				if err != nil {
+					ui.PrintError(fmt.Sprintf("Error unloading functions: %v", err))
+				} else {
+					// Check for errors during unloading
+					finalUnloadModel := unloadModel.(spinner.SpinnerModel)
+					if finalUnloadModel.HasError() {
+						ui.PrintError(fmt.Sprintf("Error unloading functions: %v", finalUnloadModel.GetError()))
+					} else {
+						unloadedCount := finalUnloadModel.GetResult().(int)
+						ui.PrintSuccess(fmt.Sprintf("Successfully unloaded %d functions", unloadedCount))
+					}
+				}
 			}
 
 			return nil
@@ -174,4 +227,40 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 	}
 
 	return len(composeManifest.Services), nil
+}
+
+// unloadComposeServices unloads all functions in the provided list
+func unloadComposeServices(ctx context.Context, functions []struct {
+	namespace string
+	name      string
+	service   string
+}, engineClient *services.EngineClient) error {
+	var unloadErrs []string
+	var unloadErrsMu sync.Mutex
+	var wg sync.WaitGroup
+	
+	for _, function := range functions {
+		wg.Add(1)
+		go func(namespace, name, serviceName string) {
+			defer wg.Done()
+			
+			err := engineClient.UnloadFunction(ctx, namespace, name)
+			if err != nil {
+				unloadErrsMu.Lock()
+				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v", 
+					namespace, name, serviceName, err))
+				unloadErrsMu.Unlock()
+			}
+		}(function.namespace, function.name, function.service)
+	}
+	
+	// Wait for all unload operations to complete
+	wg.Wait()
+	
+	// Check for errors
+	if len(unloadErrs) > 0 {
+		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
+	}
+	
+	return nil
 }
