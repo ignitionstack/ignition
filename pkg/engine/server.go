@@ -35,7 +35,7 @@ func NewServer(socketPath, httpAddr string, handlers *Handlers, logger Logger) *
 func (s *Server) Start() error {
 	// Set up graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	defer stop() // Ensure signal handler is removed when function returns
 
 	// Remove the socket file if it already exists
 	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
@@ -103,25 +103,50 @@ func (s *Server) Start() error {
 
 // shutdown gracefully shuts down the servers
 func (s *Server) shutdown() error {
+	s.logger.Printf("Beginning graceful shutdown...")
+	
 	// Create a timeout context for shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	var httpErr, socketErr, fileErr error
+
 	// Shutdown HTTP server
-	if err := s.httpServer.Shutdown(ctx); err != nil {
-		s.logger.Errorf("Error shutting down HTTP server: %v", err)
+	if s.httpServer != nil {
+		httpErr = s.httpServer.Shutdown(ctx)
+		if httpErr != nil {
+			s.logger.Errorf("Error shutting down HTTP server: %v", httpErr)
+		} else {
+			s.logger.Printf("HTTP server shutdown successful")
+		}
 	}
 
 	// Shutdown socket server
-	if err := s.socketServer.Shutdown(ctx); err != nil {
-		s.logger.Errorf("Error shutting down socket server: %v", err)
+	if s.socketServer != nil {
+		socketErr = s.socketServer.Shutdown(ctx)
+		if socketErr != nil {
+			s.logger.Errorf("Error shutting down socket server: %v", socketErr)
+		} else {
+			s.logger.Printf("Socket server shutdown successful")
+		}
 	}
 
 	// Clean up the socket file
-	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
-		s.logger.Errorf("Error removing socket file: %v", err)
+	if s.socketPath != "" {
+		fileErr = os.Remove(s.socketPath)
+		if fileErr != nil && !os.IsNotExist(fileErr) {
+			s.logger.Errorf("Error removing socket file: %v", fileErr)
+		}
 	}
 
 	s.logger.Printf("Servers shutdown complete")
-	return nil
+	
+	// Return the first error encountered, if any
+	if httpErr != nil {
+		return httpErr
+	}
+	if socketErr != nil {
+		return socketErr
+	}
+	return fileErr
 }

@@ -132,9 +132,21 @@ func (e *Engine) Start() error {
 		return ErrEngineNotInitialized
 	}
 
+	// Create a cancellable context for the cleanup goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	
+	// Handle cleanup when the function exits (either normally or due to error)
+	defer func() {
+		e.logger.Printf("Engine Start function exiting, stopping cleanup goroutine")
+		if e.cleanupTicker != nil {
+			e.cleanupTicker.Stop()
+		}
+		cancel() // Signal the cleanup goroutine to exit
+	}()
+
 	// Start TTL-based plugin cleanup
 	e.cleanupTicker = time.NewTicker(5 * time.Minute)
-	go e.cleanupUnusedPlugins()
+	go e.cleanupUnusedPlugins(ctx)
 
 	handlers := NewHandlers(e, e.logger)
 	server := NewServer(e.socketPath, e.httpAddr, handlers, e.logger)
@@ -143,21 +155,31 @@ func (e *Engine) Start() error {
 }
 
 // cleanupUnusedPlugins periodically removes unused plugins to prevent memory leaks
-func (e *Engine) cleanupUnusedPlugins() {
-	for range e.cleanupTicker.C {
-		e.pluginsMux.Lock()
-		now := time.Now()
-		for key, lastUsed := range e.pluginLastUsed {
-			if now.Sub(lastUsed) > e.ttlDuration {
-				if plugin, exists := e.plugins[key]; exists {
-					plugin.Close(context.TODO())
-					delete(e.plugins, key)
-					delete(e.pluginLastUsed, key)
-					e.logger.Printf("Plugin %s unloaded due to inactivity", key)
+func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
+	e.logger.Printf("Starting plugin cleanup goroutine")
+	
+	for {
+		select {
+		case <-e.cleanupTicker.C:
+			e.logger.Printf("Running plugin cleanup")
+			e.pluginsMux.Lock()
+			now := time.Now()
+			for key, lastUsed := range e.pluginLastUsed {
+				if now.Sub(lastUsed) > e.ttlDuration {
+					if plugin, exists := e.plugins[key]; exists {
+						plugin.Close(context.TODO())
+						delete(e.plugins, key)
+						delete(e.pluginLastUsed, key)
+						e.logger.Printf("Plugin %s unloaded due to inactivity", key)
+					}
 				}
 			}
+			e.pluginsMux.Unlock()
+			
+		case <-ctx.Done():
+			e.logger.Printf("Cleanup goroutine received shutdown signal")
+			return
 		}
-		e.pluginsMux.Unlock()
 	}
 }
 
