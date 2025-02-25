@@ -1,12 +1,16 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +18,8 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/ignitionstack/ignition/pkg/builders"
 	"github.com/ignitionstack/ignition/pkg/manifest"
+	"github.com/ignitionstack/ignition/pkg/registry"
+	"github.com/ignitionstack/ignition/pkg/types"
 )
 
 // FunctionService defines the interface for function-related operations
@@ -26,6 +32,12 @@ type FunctionService interface {
 
 	// CalculateHash computes a hash for a function based on its source code and config
 	CalculateHash(path string, config manifest.FunctionManifest) (*BuildResult, error)
+	
+	// LoadFunction loads a function into the engine
+	LoadFunction(ctx context.Context, namespace, name, tag string) error
+	
+	// ListFunctions lists all loaded functions in the engine
+	ListFunctions(ctx context.Context) ([]types.FunctionInfo, error)
 }
 
 // BuildResult contains information about a successful function build
@@ -35,15 +47,38 @@ type BuildResult struct {
 	Digest string // Content hash of the built WASM file
 }
 
+// FunctionDetails provides information about a function for internal use
+type FunctionDetails struct {
+	Namespace string   `json:"namespace"`
+	Name      string   `json:"name"`
+	Digest    string   `json:"digest"`
+	Tags      []string `json:"tags,omitempty"`
+}
+
 // functionService implements the FunctionService interface
 type functionService struct {
 	builderFactory BuilderFactory
+	socketPath     string
+	httpClient     *http.Client
 }
 
 // NewFunctionService creates a new instance of the function service
 func NewFunctionService() FunctionService {
+	socketPath := "/tmp/ignition-engine.sock"
+	
+	// Create an HTTP client that connects to the Unix socket
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", socketPath)
+			},
+		},
+	}
+	
 	return &functionService{
 		builderFactory: NewBuilderFactory(),
+		socketPath:     socketPath,
+		httpClient:     httpClient,
 	}
 }
 
@@ -329,4 +364,105 @@ func shouldSkipFile(path string) bool {
 	}
 
 	return false
+}
+
+// LoadFunction loads a function into the engine
+func (f *functionService) LoadFunction(ctx context.Context, namespace, name, tag string) error {
+	// Create load request
+	loadRequest := types.LoadRequest{
+		FunctionRequest: types.FunctionRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Digest: tag,
+	}
+	
+	// Marshal request to JSON
+	reqBytes, err := json.Marshal(loadRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal load request: %w", err)
+	}
+	
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"http://unix/load",
+		bytes.NewBuffer(reqBytes),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	
+	// Send request
+	resp, err := f.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send load request: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("engine returned error status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	return nil
+}
+
+// ListFunctions lists all functions in the engine and registry
+func (f *functionService) ListFunctions(ctx context.Context) ([]types.FunctionInfo, error) {
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"http://unix/list",
+		bytes.NewBuffer([]byte("{}")), // Empty JSON object for listing all functions
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	
+	// Send request
+	resp, err := f.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send list request: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("engine returned error status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	// Parse response
+	var registryFunctions []registry.FunctionMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&registryFunctions); err != nil {
+		return nil, fmt.Errorf("failed to decode list response: %w", err)
+	}
+	
+	// Convert registry functions to FunctionInfo
+	var functions []types.FunctionInfo
+	for _, fn := range registryFunctions {
+		// Skip if no versions
+		if len(fn.Versions) == 0 {
+			continue
+		}
+		
+		// Get the latest version
+		latestVersion := fn.Versions[len(fn.Versions)-1]
+		
+		info := types.FunctionInfo{
+			Namespace:    fn.Namespace,
+			Name:         fn.Name,
+			LatestDigest: latestVersion.FullDigest,
+			Tags:         latestVersion.Tags,
+		}
+		functions = append(functions, info)
+	}
+	
+	return functions, nil
 }

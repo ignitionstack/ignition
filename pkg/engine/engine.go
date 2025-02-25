@@ -15,6 +15,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	localRegistry "github.com/ignitionstack/ignition/pkg/registry/local"
+	"github.com/ignitionstack/ignition/pkg/types"
 )
 
 // CircuitBreaker manages function reliability
@@ -383,7 +384,7 @@ func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo) (*extism.
 }
 
 // BuildFunction builds a function and stores it in the registry
-func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*BuildResult, error) {
+func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {
 	e.logger.Printf("Building function: %s/%s", namespace, name)
 
 	buildStart := time.Now()
@@ -422,7 +423,7 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 	e.logger.Printf("Function built successfully: %s/%s (digest: %s, tag: %s)",
 		namespace, name, buildResult.Digest, tag)
 
-	return &BuildResult{
+	return &types.BuildResult{
 		Name:      name,
 		Namespace: namespace,
 		Digest:    buildResult.Digest,

@@ -10,6 +10,7 @@ import (
 	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
 	"github.com/ignitionstack/ignition/pkg/registry"
+	"github.com/ignitionstack/ignition/pkg/types"
 )
 
 // Handlers contains HTTP handlers for engine endpoints
@@ -104,7 +105,7 @@ func (h *Handlers) writeJSONResponse(w http.ResponseWriter, data interface{}) er
 // Handler Implementations
 // handleLoad loads a function into memory
 func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
-	var req LoadRequest
+	var req types.LoadRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -121,7 +122,7 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 
 // handleList lists functions in the registry
 func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
-	var req FunctionRequest
+	var req types.FunctionRequest
 	if err := h.decodeJSONRequest(r, &req); err != nil {
 		// If decoding fails, it might be an empty request for listing all functions
 		if req.Namespace == "" && req.Name == "" {
@@ -162,7 +163,7 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 
 // handleBuild builds a function and stores it in the registry
 func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
-	var req BuildRequest
+	var req ExtendedBuildRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -174,7 +175,7 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 		return NewInternalServerError(fmt.Sprintf("Build failed: %v", err))
 	}
 
-	response := BuildResponse{
+	response := types.BuildResponse{
 		Digest:    result.Digest,
 		Tag:       result.Tag,
 		Status:    "success",
@@ -218,7 +219,7 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 
 // handleOneOffCall handles one-off function calls
 func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) error {
-	var req OneOffCallRequest
+	var req types.OneOffCallRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -269,7 +270,7 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 
 // handleReassignTag handles tag reassignment requests
 func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) error {
-	var req ReassignTagRequest
+	var req types.ReassignTagRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}

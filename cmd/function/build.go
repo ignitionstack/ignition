@@ -17,6 +17,7 @@ import (
 	"github.com/ignitionstack/ignition/internal/ui/models/spinner"
 	"github.com/ignitionstack/ignition/pkg/engine"
 	"github.com/ignitionstack/ignition/pkg/manifest"
+	"github.com/ignitionstack/ignition/pkg/types"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 )
@@ -90,7 +91,7 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 	}
 
 	// Display build results
-	result := finalModel.GetResult().(engine.BuildResult)
+	result := finalModel.GetResult().(types.BuildResult)
 	displayBuildResults(result, tags)
 
 	return nil
@@ -223,7 +224,7 @@ func createEngineClient(socketPath string) *http.Client {
 func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 	functionConfig manifest.FunctionManifest, client *http.Client) {
 	buildStart := time.Now()
-	var finalResult *engine.BuildResult
+	var finalResult *types.BuildResult
 
 	// Send build requests for each tag
 	for _, tagInfo := range tags {
@@ -244,15 +245,17 @@ func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 
 // sendBuildRequest sends a single build request to the engine
 func sendBuildRequest(client *http.Client, tagInfo TagInfo,
-	absPath string, functionConfig manifest.FunctionManifest) (*engine.BuildResult, error) {
+	absPath string, functionConfig manifest.FunctionManifest) (*types.BuildResult, error) {
 	// Create request body
-	reqBody := engine.BuildRequest{
-		Namespace: tagInfo.Namespace,
-		Name:      tagInfo.Name,
-		Path:      absPath,
-		Manifest:  functionConfig,
-		Tag:       tagInfo.Tag,
-	}
+		reqBody := engine.ExtendedBuildRequest{
+			BuildRequest: types.BuildRequest{
+				Namespace: tagInfo.Namespace,
+				Name:      tagInfo.Name,
+				Path:      absPath,
+				Tag:       tagInfo.Tag,
+			},
+			Manifest: functionConfig,
+		}
 
 	// Marshal the request body
 	jsonData, err := json.Marshal(reqBody)
@@ -288,7 +291,7 @@ func sendBuildRequest(client *http.Client, tagInfo TagInfo,
 	}
 
 	// Decode successful response
-	var buildResult engine.BuildResult
+	var buildResult types.BuildResult
 	if err := json.NewDecoder(resp.Body).Decode(&buildResult); err != nil {
 		return nil, fmt.Errorf("failed to decode build response: %w", err)
 	}
@@ -297,7 +300,7 @@ func sendBuildRequest(client *http.Client, tagInfo TagInfo,
 }
 
 // displayBuildResults shows the build results to the user
-func displayBuildResults(result engine.BuildResult, tags []TagInfo) {
+func displayBuildResults(result types.BuildResult, tags []TagInfo) {
 	ui.PrintSuccess("Function built successfully")
 	fmt.Println()
 

@@ -10,6 +10,7 @@ Ignition is a powerful CLI tool for building, managing, and running WebAssembly 
 - **Simple workflow**: Familiar commands for building, running, and managing functions
 - **Local registry**: Store and version your functions locally
 - **Dual execution modes**: Run functions via CLI or HTTP API
+- **Compose support**: Define and run multi-function applications with compose files
 - **Built on standards**: Uses Extism PDK for WebAssembly development
 
 ## Installation
@@ -109,6 +110,64 @@ Functions use Docker-like tagging for versioning:
 ```bash
 # Build with specific tag
 ignition build -t my_namespace/my_function:v1.0.0 my_function/
+```
+
+## Using Compose
+
+Ignition supports a Docker Compose-like workflow for running multiple functions together.
+
+### Initialize a Compose File
+
+```bash
+# Create a new ignition-compose.yml file
+ignition compose init
+```
+
+### Define Your Services
+
+Edit the generated `ignition-compose.yml` file:
+
+```yaml
+version: "1"
+services:
+  api:
+    function: my_namespace/api_service:latest
+    environment:
+      DEBUG: "true"
+  processor:
+    function: my_namespace/processor:v1.2.0
+    depends_on:
+      - api
+  worker:
+    function: my_namespace/worker:latest
+    restart: always
+```
+
+### Start Services
+
+```bash
+# Load and run all functions defined in ignition-compose.yml
+ignition compose up
+
+# Use a different compose file
+ignition compose up -f my-compose.yml
+
+# Run in detached mode
+ignition compose up -d
+```
+
+### Check Status
+
+```bash
+# List running functions from compose file
+ignition compose ps
+```
+
+### Stop Services
+
+```bash
+# Stop all functions defined in ignition-compose.yml
+ignition compose down
 ```
 
 ## HTTP API Reference

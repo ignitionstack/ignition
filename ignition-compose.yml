@@ -1,0 +1,13 @@
+services:
+  api:
+    environment:
+      DEBUG: "true"
+    function: my_namespace/api_service:latest
+  processor:
+    depends_on:
+    - api
+    function: my_namespace/processor:v1.2.0
+  worker:
+    function: my_namespace/worker:latest
+    restart: always
+version: "1"
