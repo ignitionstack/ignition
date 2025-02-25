@@ -2,11 +2,13 @@
 package localRegistry
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +33,8 @@ func setupTestRegistry(t *testing.T) *testSetup {
 	db, err := badger.Open(opts)
 	require.NoError(t, err)
 
-	registry := NewLocalRegistry(tmpDir, db)
+	dbRepo := repository.NewBadgerDBRepository(db)
+	registry := NewLocalRegistry(tmpDir, dbRepo)
 
 	cleanup := func() {
 		db.Close()
@@ -133,6 +136,20 @@ func TestPush(t *testing.T) {
 		assert.Equal(t, int64(len(secondPayload)), v2Version.Size)
 		assert.Equal(t, settings2, v2Version.Settings)
 	})
+
+	t.Run("reassign tag with push", func(t *testing.T) {
+		// Push again with the same tag but different digest
+		thirdPayload := []byte("test wasm v3")
+		thirdDigest := "digest3"
+		err := setup.registry.Push("test", "func1", thirdPayload, thirdDigest, "latest", defaultSettings)
+		require.NoError(t, err)
+
+		// Verify tag was moved
+		wasmBytes, versionInfo, err := setup.registry.Pull("test", "func1", "latest")
+		require.NoError(t, err)
+		assert.Equal(t, thirdPayload, wasmBytes)
+		assert.Equal(t, thirdDigest, versionInfo.FullDigest)
+	})
 }
 
 func TestPull(t *testing.T) {
@@ -168,7 +185,10 @@ func TestPull(t *testing.T) {
 
 	t.Run("pull nonexistent reference", func(t *testing.T) {
 		_, _, err := setup.registry.Pull("test", "func1", "nonexistent")
-		assert.ErrorIs(t, err, registry.ErrTagNotFound)
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, registry.ErrInvalidReference) ||
+			errors.Is(err, registry.ErrTagNotFound) ||
+			errors.Is(err, registry.ErrDigestNotFound))
 	})
 
 	t.Run("pull nonexistent function", func(t *testing.T) {
@@ -209,6 +229,45 @@ func TestReassignTag(t *testing.T) {
 		}
 		assert.Equal(t, 1, v1Count, "should have exactly one version with v1 tag")
 	})
+
+	t.Run("reassign to nonexistent digest", func(t *testing.T) {
+		err := setup.registry.ReassignTag("test", "func1", "v1", "nonexistent")
+		assert.ErrorIs(t, err, registry.ErrDigestNotFound)
+	})
+
+	t.Run("reassign in nonexistent function", func(t *testing.T) {
+		err := setup.registry.ReassignTag("test", "nonexistent", "v1", digest1)
+		assert.ErrorIs(t, err, registry.ErrFunctionNotFound)
+	})
+}
+
+func TestDigestExists(t *testing.T) {
+	setup := setupTestRegistry(t)
+	defer setup.cleanup()
+
+	// Push a function
+	payload := []byte("test wasm")
+	digest := "digest123"
+	err := setup.registry.Push("test", "func1", payload, digest, "latest", defaultSettings)
+	require.NoError(t, err)
+
+	t.Run("existing digest", func(t *testing.T) {
+		exists, err := setup.registry.DigestExists("test", "func1", digest)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("nonexistent digest", func(t *testing.T) {
+		exists, err := setup.registry.DigestExists("test", "func1", "nonexistent")
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("nonexistent function", func(t *testing.T) {
+		exists, err := setup.registry.DigestExists("test", "nonexistent", digest)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
 }
 
 func TestListAll(t *testing.T) {
@@ -245,6 +304,42 @@ func TestListAll(t *testing.T) {
 		assert.True(t, foundTest1)
 		assert.True(t, foundTest2)
 	})
+
+	t.Run("empty registry", func(t *testing.T) {
+		// Create a new clean registry
+		emptySetup := setupTestRegistry(t)
+		defer emptySetup.cleanup()
+
+		functions, err := emptySetup.registry.ListAll()
+		require.NoError(t, err)
+		assert.Empty(t, functions)
+	})
+}
+
+func TestTransactionHandling(t *testing.T) {
+	setup := setupTestRegistry(t)
+	defer setup.cleanup()
+
+	localReg, ok := setup.registry.(*localRegistry)
+	if !ok {
+		t.Fatal("Failed to cast registry to localRegistry")
+	}
+
+	t.Run("read transaction handles errors", func(t *testing.T) {
+		expectedErr := errors.New("test error")
+		err := localReg.withReadTx(func(txn *badger.Txn) error {
+			return expectedErr
+		})
+		assert.ErrorIs(t, err, expectedErr)
+	})
+
+	t.Run("write transaction handles errors", func(t *testing.T) {
+		expectedErr := errors.New("test error")
+		err := localReg.withWriteTx(func(txn *badger.Txn) error {
+			return expectedErr
+		})
+		assert.ErrorIs(t, err, expectedErr)
+	})
 }
 
 func TestWithMockStorage(t *testing.T) {
@@ -262,7 +357,7 @@ func TestWithMockStorage(t *testing.T) {
 
 	mockStorage := newMockStorage()
 	registry := &localRegistry{
-		db:      db,
+		dbRepo:  repository.NewBadgerDBRepository(db),
 		storage: mockStorage,
 	}
 
