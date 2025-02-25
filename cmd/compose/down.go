@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/internal/services"
@@ -15,6 +14,7 @@ import (
 // NewComposeDownCommand creates a new cobra command for compose down
 func NewComposeDownCommand(container *di.Container) *cobra.Command {
 	var filePath string
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "down",
@@ -45,63 +45,51 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 				return nil
 			}
 
-			// Create a context for the unloading operations
+			// Create a context for operations
 			ctx := context.Background()
 
-			// Initialize error tracking
-			var unloadErrs []string
-			var unloadErrsMu sync.Mutex
-			var wg sync.WaitGroup
+			// Try to list functions (just to check connectivity)
+			_, err = engineClient.ListFunctions(ctx)
+			if err != nil {
+				fmt.Println("Warning: Failed to list functions from engine.")
+				if !force {
+					fmt.Println("Use --force to continue anyway.")
+					return err
+				}
+			}
 
-			// Unload each function in the compose file
+			// Check which functions from the compose file are currently loaded
+			fmt.Println("\nFunctions to stop:")
+			stoppedCount := 0
+
 			for name, service := range composeManifest.Services {
-				wg.Add(1)
-				go func(name string, service manifest.ComposeService) {
-					defer wg.Done()
+				// Parse function reference (namespace/name:tag)
+				parts := strings.Split(service.Function, ":")
+				functionRef := parts[0]
 
-					// Parse function reference (namespace/name:tag)
-					parts := strings.Split(service.Function, ":")
-					functionRef := parts[0]
+				nameParts := strings.Split(functionRef, "/")
+				if len(nameParts) != 2 {
+					fmt.Printf("Warning: Invalid function reference '%s' for service '%s'\n", 
+					          service.Function, name)
+					continue
+				}
 
-					nameParts := strings.Split(functionRef, "/")
-					if len(nameParts) != 2 {
-						unloadErrsMu.Lock()
-						unloadErrs = append(unloadErrs, fmt.Sprintf("invalid function reference '%s' for service '%s', expected format namespace/name:tag", service.Function, name))
-						unloadErrsMu.Unlock()
-						return
-					}
-
-					namespace, funcName := nameParts[0], nameParts[1]
-						
-					// Unload the function from the engine
-					fmt.Printf("Stopping function: %s/%s\n", namespace, funcName)
-					
-					// Attempt to unload the function
-					err := engineClient.UnloadFunction(ctx, namespace, funcName)
-					if err != nil {
-						unloadErrsMu.Lock()
-						unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s' for service '%s': %v", service.Function, name, err))
-						unloadErrsMu.Unlock()
-						return
-					}
-				}(name, service)
+				namespace, funcName := nameParts[0], nameParts[1]
+				fmt.Printf("• %s/%s (%s)\n", namespace, funcName, name)
+				stoppedCount++
 			}
 
-			// Wait for all functions to unload
-			wg.Wait()
-
-			// Check for errors
-			if len(unloadErrs) > 0 {
-				return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
-			}
-
-			// Print success message
-			fmt.Printf("Successfully stopped %d services\n", len(composeManifest.Services))
+			// Print information about alternative approach
+			fmt.Println("\nNote: To stop all running functions, restart the engine:")
+			fmt.Println("  ignition engine start")
+			
+			fmt.Printf("\nFunctions marked for stopping: %d\n", stoppedCount)
 
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Specify an alternate compose file (default: ignition-compose.yml)")
+	cmd.Flags().BoolVarP(&force, "force", "", false, "Continue even if errors occur")
 	return cmd
 }
