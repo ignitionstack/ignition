@@ -43,6 +43,7 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 
 	// Register socket endpoints
 	mux.HandleFunc("/load", h.withMiddleware(h.handleLoad, commonMiddleware...))
+	mux.HandleFunc("/unload", h.withMiddleware(h.handleUnload, commonMiddleware...))
 	mux.HandleFunc("/list", h.withMiddleware(h.handleList, commonMiddleware...))
 	mux.HandleFunc("/build", h.withMiddleware(h.handleBuild, commonMiddleware...))
 	mux.HandleFunc("/reassign-tag", h.withMiddleware(h.handleReassignTag, commonMiddleware...))
@@ -302,4 +303,20 @@ func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
 // handleHealth is a simple health check endpoint
 func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"status": "ok"})
+}
+
+// handleUnload unloads a function from memory
+func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
+	var req types.FunctionRequest
+	if err := h.decodeAndValidate(r, &req); err != nil {
+		return err
+	}
+
+	h.logger.Printf("Received unload request for function: %s/%s", req.Namespace, req.Name)
+
+	if err := h.engine.UnloadFunction(req.Namespace, req.Name); err != nil {
+		return err
+	}
+
+	return h.writeJSONResponse(w, map[string]string{"message": "Function unloaded successfully"})
 }

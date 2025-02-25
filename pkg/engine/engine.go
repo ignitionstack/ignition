@@ -447,3 +447,43 @@ func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 	e.logger.Printf("Tag %s reassigned to digest %s for function: %s/%s", tag, newDigest, namespace, name)
 	return nil
 }
+
+// UnloadFunction unloads a function from memory
+func (e *Engine) UnloadFunction(namespace, name string) error {
+	e.logger.Printf("Unloading function: %s/%s", namespace, name)
+
+	functionKey := getFunctionKey(namespace, name)
+
+	// Check if function is loaded
+	e.pluginsMux.RLock()
+	plugin, exists := e.plugins[functionKey]
+	e.pluginsMux.RUnlock()
+
+	if !exists {
+		e.logger.Printf("Function %s is not loaded, nothing to unload", functionKey)
+		return nil
+	}
+
+	// Acquire write lock to remove the plugin
+	e.pluginsMux.Lock()
+	defer e.pluginsMux.Unlock()
+
+	// Double-check the function still exists (it might have been removed by another goroutine)
+	plugin, exists = e.plugins[functionKey]
+	if !exists {
+		return nil
+	}
+
+	// Close the plugin and remove it from memory
+	plugin.Close(context.TODO())
+	delete(e.plugins, functionKey)
+	delete(e.pluginLastUsed, functionKey)
+
+	// Reset circuit breaker for this function
+	e.cbMux.Lock()
+	delete(e.circuitBreakers, functionKey)
+	e.cbMux.Unlock()
+
+	e.logger.Printf("Function %s unloaded successfully", functionKey)
+	return nil
+}
