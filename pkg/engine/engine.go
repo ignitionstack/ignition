@@ -140,7 +140,7 @@ func (e *Engine) Start() error {
 
 	// Create a cancellable context for the cleanup goroutine
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Handle cleanup when the function exits (either normally or due to error)
 	defer func() {
 		e.logger.Printf("Engine Start function exiting, stopping cleanup goroutine")
@@ -163,7 +163,7 @@ func (e *Engine) Start() error {
 // cleanupUnusedPlugins periodically removes unused plugins to prevent memory leaks
 func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 	e.logger.Printf("Starting plugin cleanup goroutine")
-	
+
 	for {
 		select {
 		case <-e.cleanupTicker.C:
@@ -181,7 +181,7 @@ func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 				}
 			}
 			e.pluginsMux.Unlock()
-			
+
 		case <-ctx.Done():
 			e.logger.Printf("Cleanup goroutine received shutdown signal")
 			return
@@ -197,11 +197,11 @@ func getFunctionKey(namespace, name string) string {
 // IsLoaded checks if a function is currently loaded in the engine
 func (e *Engine) IsLoaded(namespace, name string) bool {
 	functionKey := getFunctionKey(namespace, name)
-	
+
 	e.pluginsMux.RLock()
 	_, exists := e.plugins[functionKey]
 	e.pluginsMux.RUnlock()
-	
+
 	return exists
 }
 
@@ -290,7 +290,7 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	if cb.isOpen() {
 		errMsg := fmt.Sprintf("Circuit breaker is open for function %s", functionKey)
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
 	}
 
 	// Update last used timestamp
@@ -335,22 +335,22 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 			isOpen := cb.recordFailure()
 			errMsg := fmt.Sprintf("Failed to call function: %v", result.err)
 			e.logStore.AddLog(functionKey, LevelError, errMsg)
-			
+
 			if isOpen {
 				cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
 				e.logger.Printf(cbMsg)
 				e.logStore.AddLog(functionKey, LevelError, cbMsg)
 			}
-			
+
 			return nil, fmt.Errorf("failed to call function: %w", result.err)
 		}
 
 		// Log successful execution with execution time
 		execTime := time.Since(startTime)
-		e.logStore.AddLog(functionKey, LevelInfo, 
-			fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)", 
+		e.logStore.AddLog(functionKey, LevelInfo,
+			fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
 				entrypoint, execTime, len(result.output)))
-		
+
 		cb.recordSuccess()
 		return result.output, nil
 
@@ -358,14 +358,14 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 		isOpen := cb.recordFailure()
 		errMsg := fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
-		
+
 		if isOpen {
 			cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
 			e.logger.Printf(cbMsg)
 			e.logStore.AddLog(functionKey, LevelError, cbMsg)
 		}
-		
-		return nil, fmt.Errorf(errMsg)
+
+		return nil, fmt.Errorf("%s", errMsg)
 	}
 }
 
@@ -373,7 +373,7 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
 	functionKey := getFunctionKey(namespace, name)
-	
+
 	// Log function loading
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Loading function with identifier: %s", identifier))
 
@@ -403,8 +403,8 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
 		return fmt.Errorf("failed to fetch WASM file from registry: %w", err)
 	}
-	e.logStore.AddLog(functionKey, LevelInfo, 
-		fmt.Sprintf("Function pulled from registry (size: %d bytes, time: %v)", 
+	e.logStore.AddLog(functionKey, LevelInfo,
+		fmt.Sprintf("Function pulled from registry (size: %d bytes, time: %v)",
 			len(wasmBytes), time.Since(loadStart)))
 
 	// Create plugin from wasm bytes with appropriate settings
@@ -416,7 +416,7 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
 		return fmt.Errorf("failed to initialize plugin: %w", err)
 	}
-	e.logStore.AddLog(functionKey, LevelInfo, 
+	e.logStore.AddLog(functionKey, LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
 	// Store the plugin
@@ -535,7 +535,7 @@ func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logger.Printf("Unloading function: %s/%s", namespace, name)
 	functionKey := getFunctionKey(namespace, name)
-	
+
 	// Log unload operation
 	e.logStore.AddLog(functionKey, LevelInfo, "Unloading function")
 
@@ -563,7 +563,7 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	}
 
 	unloadStart := time.Now()
-	
+
 	// Close the plugin and remove it from memory
 	plugin.Close(context.TODO())
 	delete(e.plugins, functionKey)
@@ -577,9 +577,9 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	successMsg := fmt.Sprintf("Function %s unloaded successfully (time: %v)", functionKey, time.Since(unloadStart))
 	e.logger.Printf(successMsg)
 	e.logStore.AddLog(functionKey, LevelInfo, successMsg)
-	
+
 	// Add one final log entry noting that this is the last log for this function
 	e.logStore.AddLog(functionKey, LevelInfo, "Function unloaded - this is the final log entry")
-	
+
 	return nil
 }
