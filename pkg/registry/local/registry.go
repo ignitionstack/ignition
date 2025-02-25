@@ -29,11 +29,11 @@ func NewLocalRegistry(rootDir string, dbRepo repository.DBRepository) registry.R
 // Get retrieves function metadata from the registry
 func (r *localRegistry) Get(namespace, name string) (*registry.FunctionMetadata, error) {
 	var metadata *registry.FunctionMetadata
-	
+
 	err := r.withReadTx(func(txn *badger.Txn) error {
 		return r.getFunctionMetadata(txn, namespace, name, &metadata)
 	})
-	
+
 	return metadata, err
 }
 
@@ -79,7 +79,7 @@ func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest,
 
 		// Check if this version already exists
 		versionExists := r.versionExists(metadata, shortDigest)
-		
+
 		// If the version doesn't exist, write the WASM file and create version info
 		if !versionExists {
 			if err := r.storage.WriteWASMFile(path, payload); err != nil {
@@ -109,15 +109,15 @@ func (r *localRegistry) ReassignTag(namespace, name, tag, newDigest string) erro
 			}
 			return fmt.Errorf("failed to get metadata: %w", err)
 		}
-        
-        // Function was found but metadata might be nil
-        if metadata == nil {
-            return registry.ErrFunctionNotFound
-        }
+
+		// Function was found but metadata might be nil
+		if metadata == nil {
+			return registry.ErrFunctionNotFound
+		}
 
 		// Truncate digest for storage
 		shortDigest := registry.TruncateDigest(newDigest, 12)
-		
+
 		// Ensure the target digest exists
 		if !r.versionExists(metadata, shortDigest) {
 			return registry.ErrDigestNotFound
@@ -135,7 +135,7 @@ func (r *localRegistry) ReassignTag(namespace, name, tag, newDigest string) erro
 // DigestExists checks if a digest exists for a function
 func (r *localRegistry) DigestExists(namespace, name, digest string) (bool, error) {
 	var exists bool
-	
+
 	err := r.withReadTx(func(txn *badger.Txn) error {
 		var metadata *registry.FunctionMetadata
 		if err := r.getFunctionMetadata(txn, namespace, name, &metadata); err != nil {
@@ -151,7 +151,7 @@ func (r *localRegistry) DigestExists(namespace, name, digest string) (bool, erro
 		exists = r.versionExists(metadata, shortDigest)
 		return nil
 	})
-	
+
 	return exists, err
 }
 
@@ -179,7 +179,7 @@ func (r *localRegistry) ListAll() ([]registry.FunctionMetadata, error) {
 				functions = append(functions, metadata)
 				return nil
 			})
-			
+
 			if err != nil {
 				return err
 			}
@@ -211,7 +211,7 @@ func (r *localRegistry) withWriteTx(fn func(txn *badger.Txn) error) error {
 // getFunctionMetadata retrieves a function's metadata from the database
 func (r *localRegistry) getFunctionMetadata(txn *badger.Txn, namespace, name string, metadata **registry.FunctionMetadata) error {
 	key := buildFunctionKey(namespace, name)
-	
+
 	// Try to get the item from the database
 	item, err := txn.Get(key)
 	if err == badger.ErrKeyNotFound {
@@ -234,7 +234,7 @@ func (r *localRegistry) getFunctionMetadata(txn *badger.Txn, namespace, name str
 // getOrCreateMetadata gets a function's metadata or creates it if it doesn't exist
 func (r *localRegistry) getOrCreateMetadata(txn *badger.Txn, namespace, name string) (*registry.FunctionMetadata, error) {
 	key := buildFunctionKey(namespace, name)
-	
+
 	// Try to get existing metadata
 	item, err := txn.Get(key)
 	if err == badger.ErrKeyNotFound {
@@ -255,18 +255,18 @@ func (r *localRegistry) getOrCreateMetadata(txn *badger.Txn, namespace, name str
 	err = item.Value(func(val []byte) error {
 		return json.Unmarshal(val, &metadata)
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
-	
+
 	return &metadata, nil
 }
 
 // updateMetadata writes updated metadata to the database
 func (r *localRegistry) updateMetadata(txn *badger.Txn, namespace, name string, metadata *registry.FunctionMetadata) error {
 	key := buildFunctionKey(namespace, name)
-	
+
 	// Update the timestamp
 	metadata.UpdatedAt = time.Now()
 
@@ -275,12 +275,12 @@ func (r *localRegistry) updateMetadata(txn *badger.Txn, namespace, name string, 
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-	
+
 	// Write to the database
 	if err := txn.Set(key, val); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -298,7 +298,7 @@ func (r *localRegistry) versionExists(metadata *registry.FunctionMetadata, short
 func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byte, *registry.VersionInfo, error) {
 	// Build the path to the WASM file
 	path := r.storage.BuildWASMPath(namespace, name, shortDigest)
-	
+
 	// Read the WASM file
 	wasmBytes, err := r.storage.ReadWASMFile(path)
 	if err != nil {
@@ -307,7 +307,7 @@ func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byt
 
 	// Get version info from metadata
 	var versionInfo *registry.VersionInfo
-	
+
 	err = r.withReadTx(func(txn *badger.Txn) error {
 		var metadata *registry.FunctionMetadata
 		if err := r.getFunctionMetadata(txn, namespace, name, &metadata); err != nil {
@@ -323,7 +323,7 @@ func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byt
 				return nil
 			}
 		}
-		
+
 		return registry.ErrDigestNotFound
 	})
 
@@ -351,7 +351,7 @@ func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, *registr
 				// Create a copy to avoid issues with the slice
 				versionInfoCopy := v
 				versionInfo = &versionInfoCopy
-				
+
 				// Read the WASM file
 				path := r.storage.BuildWASMPath(namespace, name, v.Hash)
 				var err error
@@ -359,11 +359,11 @@ func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, *registr
 				if err != nil {
 					return fmt.Errorf("failed to read WASM file: %w", err)
 				}
-				
+
 				return nil
 			}
 		}
-		
+
 		return registry.ErrTagNotFound
 	})
 

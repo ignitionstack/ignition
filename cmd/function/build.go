@@ -220,8 +220,8 @@ func createEngineClient(socketPath string) *http.Client {
 }
 
 // runBuild executes the build process and updates the spinner with progress
-func runBuild(program *tea.Program, absPath string, tags []TagInfo, 
-              functionConfig manifest.FunctionManifest, client *http.Client) {
+func runBuild(program *tea.Program, absPath string, tags []TagInfo,
+	functionConfig manifest.FunctionManifest, client *http.Client) {
 	buildStart := time.Now()
 	var finalResult *engine.BuildResult
 
@@ -243,8 +243,8 @@ func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 }
 
 // sendBuildRequest sends a single build request to the engine
-func sendBuildRequest(client *http.Client, tagInfo TagInfo, 
-                      absPath string, functionConfig manifest.FunctionManifest) (*engine.BuildResult, error) {
+func sendBuildRequest(client *http.Client, tagInfo TagInfo,
+	absPath string, functionConfig manifest.FunctionManifest) (*engine.BuildResult, error) {
 	// Create request body
 	reqBody := engine.BuildRequest{
 		Namespace: tagInfo.Namespace,

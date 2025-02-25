@@ -45,22 +45,22 @@ func NewEngineStartCommand() *cobra.Command {
 			// Print startup message
 			fmt.Println("Starting Ignition Engine...")
 			fmt.Println("Press Ctrl+C to stop")
-			
+
 			// Create app configuration for fx
 			appConfig := di.NewAppConfig(
 				config.socketPath,
 				config.httpAddr,
 				config.registryDir,
 			)
-			
+
 			// Setup the fx app with our module
 			app := fx.New(
 				// Provide app configuration
 				fx.Supply(appConfig),
-				
+
 				// Include all our dependency providers
 				di.Module,
-				
+
 				// Register the engine start as an fx invocation
 				fx.Invoke(func(engine *engine.Engine) {
 					// The engine's Start method will block, which is what we want
@@ -71,25 +71,25 @@ func NewEngineStartCommand() *cobra.Command {
 						os.Exit(1)
 					}
 				}),
-				
+
 				// Configure fx options
 				fx.StartTimeout(30*time.Second),
 				fx.StopTimeout(30*time.Second),
 			)
-			
+
 			// Start the application and wait for it to finish
 			if err := app.Start(context.Background()); err != nil {
 				return fmt.Errorf("failed to start engine: %w", err)
 			}
-			
+
 			// This allows for graceful shutdown on SIGINT/SIGTERM
 			<-app.Done()
-			
+
 			// Handle shutdown
 			if err := app.Stop(context.Background()); err != nil {
 				return fmt.Errorf("error during shutdown: %w", err)
 			}
-			
+
 			return nil
 		},
 	}

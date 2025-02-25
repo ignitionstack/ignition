@@ -41,7 +41,7 @@ func (l *QuietLogger) LogEvent(event fxevent.Event) {
 	case *fxevent.Invoked:
 		// Only log errors when invoking functions
 		if e.Err != nil {
-			l.Logger.Error("Error invoking function", 
+			l.Logger.Error("Error invoking function",
 				zap.String("function", e.FunctionName),
 				zap.Error(e.Err))
 		}
@@ -60,28 +60,28 @@ var Module = fx.Options(
 	fx.Provide(
 		// Base zap logger
 		NewZapBaseLogger,
-		
+
 		// DB and repositories
 		NewBadgerDB,
 		NewDBRepository,
 		NewRegistry,
-		
+
 		// Services
 		services.NewFunctionService,
 		NewEngine,
-		
+
 		// Engine logger
 		fx.Annotate(
 			NewEngineLogger,
 			fx.As(new(engine.Logger)),
 		),
 	),
-	
+
 	// Use our custom quiet logger
 	fx.WithLogger(func(logger *zap.Logger) fxevent.Logger {
 		return &QuietLogger{Logger: logger}
 	}),
-	
+
 	// Configure fx to be less verbose
 	fx.NopLogger,
 )
@@ -116,21 +116,21 @@ type EngineParams struct {
 func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	// Create a custom, quieter configuration
 	config := zap.NewProductionConfig()
-	
+
 	// Adjust log level to only show warnings and above by default
 	config.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
-	
+
 	// Make the output more concise
 	config.DisableStacktrace = true
 	config.DisableCaller = true
 	config.Encoding = "console"
-	
+
 	// Simplify the output format
 	config.EncoderConfig.TimeKey = "time"
 	config.EncoderConfig.LevelKey = "level"
 	config.EncoderConfig.MessageKey = "msg"
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	
+
 	zapLogger, err := config.Build()
 	if err != nil {
 		return nil, err
@@ -150,10 +150,10 @@ func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 func NewEngineLogger(baseLogger *zap.Logger) engine.Logger {
 	// Create a specialized logger for engine with higher verbosity
 	config := zap.NewDevelopmentConfig()
-	
+
 	// Only show important information by default
 	config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	
+
 	// Simplify the output - we don't need timestamps or log levels in server logs
 	config.Encoding = "console"
 	config.EncoderConfig.TimeKey = ""     // No timestamps
@@ -162,9 +162,9 @@ func NewEngineLogger(baseLogger *zap.Logger) engine.Logger {
 	config.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
 	config.DisableCaller = true
 	config.DisableStacktrace = true
-	
+
 	engineLogger, _ := config.Build()
-	
+
 	return &zapLoggerAdapter{engineLogger.Sugar()}
 }
 

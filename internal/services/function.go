@@ -20,10 +20,10 @@ import (
 type FunctionService interface {
 	// InitFunction initializes a new function with the given name and language
 	InitFunction(name string, language string) error
-	
+
 	// BuildFunction builds a function and returns the build result
 	BuildFunction(path string, functionConfig manifest.FunctionManifest) (result *BuildResult, err error)
-	
+
 	// CalculateHash computes a hash for a function based on its source code and config
 	CalculateHash(path string, config manifest.FunctionManifest) (*BuildResult, error)
 }
@@ -59,7 +59,7 @@ func (f *functionService) BuildFunction(path string, functionConfig manifest.Fun
 	if err != nil {
 		return nil, fmt.Errorf("builder initialization failed: %w", err)
 	}
-	
+
 	// Build the function
 	buildResult, err := builder.Build(path)
 	if err != nil {
@@ -85,7 +85,7 @@ func (f *functionService) InitFunction(name string, language string) error {
 	if name == "" {
 		return errors.New("function name cannot be empty")
 	}
-	
+
 	// Check if language is supported
 	templateURL, err := getTemplateURL(language)
 	if err != nil {
@@ -94,7 +94,7 @@ func (f *functionService) InitFunction(name string, language string) error {
 
 	// Create the function directory path
 	path := fmt.Sprintf("./%s", name)
-	
+
 	// Check if directory already exists
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return errors.New("directory already exists")
@@ -188,7 +188,7 @@ func getTemplateURL(language string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("language not supported: %s", language)
 	}
-	
+
 	return url, nil
 }
 
@@ -206,7 +206,7 @@ func cloneTemplate(path, url string) error {
 	if err := os.RemoveAll(filepath.Join(path, ".git")); err != nil {
 		return fmt.Errorf("failed to remove .git directory: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -243,7 +243,7 @@ func createManifestFile(path, name, language string) error {
 func hashFile(filePath string) (string, error) {
 	// Create a new hasher
 	hasher := sha256.New()
-	
+
 	// Open the file for reading
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -267,7 +267,7 @@ func hashSourceCode(hasher io.Writer, path string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip directories
 		if info.IsDir() {
 			return nil
@@ -283,7 +283,7 @@ func hashSourceCode(hasher io.Writer, path string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", filePath, err)
 		}
-		
+
 		if _, err := hasher.Write(fileContent); err != nil {
 			return fmt.Errorf("failed to hash file %s: %w", filePath, err)
 		}
@@ -293,7 +293,7 @@ func hashSourceCode(hasher io.Writer, path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to hash source code: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -304,7 +304,7 @@ func hashConfig(hasher io.Writer, config manifest.FunctionManifest) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	// Write the config bytes to the hasher
 	if _, err := hasher.Write(configBytes); err != nil {
 		return fmt.Errorf("failed to hash config: %w", err)
@@ -327,6 +327,6 @@ func shouldSkipFile(path string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }

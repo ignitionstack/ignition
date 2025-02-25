@@ -186,9 +186,9 @@ func TestPull(t *testing.T) {
 	t.Run("pull nonexistent reference", func(t *testing.T) {
 		_, _, err := setup.registry.Pull("test", "func1", "nonexistent")
 		assert.Error(t, err)
-		assert.True(t, errors.Is(err, registry.ErrInvalidReference) || 
-		            errors.Is(err, registry.ErrTagNotFound) || 
-		            errors.Is(err, registry.ErrDigestNotFound))
+		assert.True(t, errors.Is(err, registry.ErrInvalidReference) ||
+			errors.Is(err, registry.ErrTagNotFound) ||
+			errors.Is(err, registry.ErrDigestNotFound))
 	})
 
 	t.Run("pull nonexistent function", func(t *testing.T) {
@@ -309,7 +309,7 @@ func TestListAll(t *testing.T) {
 		// Create a new clean registry
 		emptySetup := setupTestRegistry(t)
 		defer emptySetup.cleanup()
-		
+
 		functions, err := emptySetup.registry.ListAll()
 		require.NoError(t, err)
 		assert.Empty(t, functions)

@@ -6,10 +6,10 @@ import "github.com/dgraph-io/badger/v4"
 type DBRepository interface {
 	// View executes a read-only transaction
 	View(fn func(txn *badger.Txn) error) error
-	
+
 	// Update executes a read-write transaction
 	Update(fn func(txn *badger.Txn) error) error
-	
+
 	// Close closes the database connection
 	Close() error
 }

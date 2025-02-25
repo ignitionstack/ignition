@@ -39,12 +39,12 @@ type Engine struct {
 	initialized     bool
 
 	// TTL-based plugin management
-	pluginLastUsed  map[string]time.Time
-	ttlDuration     time.Duration
-	cleanupTicker   *time.Ticker
+	pluginLastUsed map[string]time.Time
+	ttlDuration    time.Duration
+	cleanupTicker  *time.Ticker
 
 	// Timeout handling
-	defaultTimeout  time.Duration
+	defaultTimeout time.Duration
 
 	// Circuit breaking
 	circuitBreakers map[string]*CircuitBreaker
@@ -66,23 +66,23 @@ func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup registry: %w", err)
 	}
-	
+
 	// Create function service
 	functionService := services.NewFunctionService()
-	
+
 	return NewEngineWithDependencies(
-		socketPath, 
-		httpAddr, 
-		registry, 
-		functionService, 
+		socketPath,
+		httpAddr,
+		registry,
+		functionService,
 		logger,
 	), nil
 }
 
 // NewEngineWithDependencies creates a new Engine instance with explicit dependencies
 func NewEngineWithDependencies(
-	socketPath, 
-	httpAddr string, 
+	socketPath,
+	httpAddr string,
 	registry registry.Registry,
 	functionService services.FunctionService,
 	logger Logger,
@@ -95,14 +95,14 @@ func NewEngineWithDependencies(
 		httpAddr:        httpAddr,
 		logger:          logger,
 		initialized:     true,
-		
+
 		// TTL-based plugin management
-		pluginLastUsed:  make(map[string]time.Time),
-		ttlDuration:     30 * time.Minute,
-		
+		pluginLastUsed: make(map[string]time.Time),
+		ttlDuration:    30 * time.Minute,
+
 		// Timeout handling
-		defaultTimeout:  30 * time.Second,
-		
+		defaultTimeout: 30 * time.Second,
+
 		// Circuit breaking
 		circuitBreakers: make(map[string]*CircuitBreaker),
 	}
@@ -117,10 +117,10 @@ func setupRegistry(registryDir string) (registry.Registry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open registry database: %w", err)
 	}
-	
+
 	// Create a DB repository
 	dbRepo := repository.NewBadgerDBRepository(db)
-	
+
 	// Create and return registry with the repository
 	return localRegistry.NewLocalRegistry(registryDir, dbRepo), nil
 }

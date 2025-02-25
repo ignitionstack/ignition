@@ -22,7 +22,7 @@ func (f *mockBuilderFactory) GetBuilder(language string) (builders.Builder, erro
 
 // mockBuilder is a test implementation of builders.Builder
 type mockBuilder struct {
-	buildFunc           func(path string) (*builders.BuildResult, error)
+	buildFunc              func(path string) (*builders.BuildResult, error)
 	verifyDependenciesFunc func() error
 }
 
