@@ -114,6 +114,8 @@ ignition build -t my_namespace/my_function:v1.0.0 my_function/
 
 ## Using Compose
 
+*WARNING: This feature is still in active development so some things might not work or not be implemented yet*
+
 Ignition supports a Docker Compose-like workflow for running multiple functions together.
 
 ### Initialize a Compose File
