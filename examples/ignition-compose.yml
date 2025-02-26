@@ -1,0 +1,36 @@
+version: "1"
+
+# This is an example ignition-compose.yml file
+# It demonstrates how to define multiple services for Ignition
+
+services:
+  # API service that handles HTTP requests
+  api:
+    function: my_namespace/api_service:latest
+    environment:
+      DEBUG: "true"
+      API_KEY: "your-api-key"
+    hostname: api
+    restart: on-failure
+  
+  # Background processor that depends on the API
+  processor:
+    function: my_namespace/processor:v1.2.0
+    depends_on:
+      - api
+    environment:
+      WORKER_COUNT: "3"
+    restart: always
+  
+  # Worker service for background processing
+  worker:
+    function: my_namespace/worker:latest
+    depends_on:
+      - processor
+    restart: always
+
+# To use this file:
+# 1. Replace the function references with your actual functions
+# 2. Run: ignition compose up
+# 3. Check status with: ignition compose ps
+# 4. Stop all services with: ignition compose down

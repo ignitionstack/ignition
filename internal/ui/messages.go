@@ -94,3 +94,19 @@ func HighlightJSON(jsonStr string) string {
 func PrintError(message string) {
 	fmt.Println(ErrorStyle.Render(fmt.Sprintf("█ Error: %s", message)))
 }
+
+// PrintWarning prints a warning message with an appropriate style
+func PrintWarning(message string) {
+	warningStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFA500")). // Orange for warnings
+		Bold(true)
+	fmt.Println(warningStyle.Render(fmt.Sprintf("⚠ Warning: %s", message)))
+}
+
+// StyleServiceName applies appropriate styling to service names
+func StyleServiceName(serviceName string) string {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color(AccentColor)).
+		Bold(true).
+		Render(serviceName)
+}

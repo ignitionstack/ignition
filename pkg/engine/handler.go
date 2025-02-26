@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
 	"github.com/ignitionstack/ignition/pkg/registry"
+	"github.com/ignitionstack/ignition/pkg/types"
 )
 
 // Handlers contains HTTP handlers for engine endpoints
@@ -40,13 +43,23 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 		h.errorMiddleware(),
 	}
 
+	// Common middleware stack for GET endpoints
+	getMiddleware := []Middleware{
+		h.methodMiddleware(http.MethodGet),
+		h.loggingMiddleware(),
+		h.errorMiddleware(),
+	}
+
 	// Register socket endpoints
 	mux.HandleFunc("/load", h.withMiddleware(h.handleLoad, commonMiddleware...))
+	mux.HandleFunc("/unload", h.withMiddleware(h.handleUnload, commonMiddleware...))
 	mux.HandleFunc("/list", h.withMiddleware(h.handleList, commonMiddleware...))
 	mux.HandleFunc("/build", h.withMiddleware(h.handleBuild, commonMiddleware...))
 	mux.HandleFunc("/reassign-tag", h.withMiddleware(h.handleReassignTag, commonMiddleware...))
 	mux.HandleFunc("/call-once", h.withMiddleware(h.handleOneOffCall, commonMiddleware...))
 	mux.HandleFunc("/status", h.withMiddleware(h.handleStatus, h.methodMiddleware(http.MethodGet), h.errorMiddleware()))
+	mux.HandleFunc("/loaded", h.withMiddleware(h.handleLoadedFunctions, h.methodMiddleware(http.MethodGet), h.errorMiddleware()))
+	mux.HandleFunc("/logs/", h.withMiddleware(h.handleFunctionLogs, getMiddleware...))
 
 	return mux
 }
@@ -104,7 +117,7 @@ func (h *Handlers) writeJSONResponse(w http.ResponseWriter, data interface{}) er
 // Handler Implementations
 // handleLoad loads a function into memory
 func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
-	var req LoadRequest
+	var req types.LoadRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -121,7 +134,7 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 
 // handleList lists functions in the registry
 func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
-	var req FunctionRequest
+	var req types.FunctionRequest
 	if err := h.decodeJSONRequest(r, &req); err != nil {
 		// If decoding fails, it might be an empty request for listing all functions
 		if req.Namespace == "" && req.Name == "" {
@@ -160,9 +173,31 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, functions)
 }
 
+// handleLoadedFunctions lists currently loaded functions in memory
+func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
+	h.logger.Printf("Received request to list loaded functions")
+
+	// Get all loaded functions
+	h.engine.pluginsMux.RLock()
+	loadedFunctions := make([]types.LoadedFunction, 0, len(h.engine.plugins))
+
+	for key := range h.engine.plugins {
+		parts := strings.Split(key, "/")
+		if len(parts) == 2 {
+			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
+				Namespace: parts[0],
+				Name:      parts[1],
+			})
+		}
+	}
+	h.engine.pluginsMux.RUnlock()
+
+	return h.writeJSONResponse(w, loadedFunctions)
+}
+
 // handleBuild builds a function and stores it in the registry
 func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
-	var req BuildRequest
+	var req ExtendedBuildRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -174,7 +209,7 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 		return NewInternalServerError(fmt.Sprintf("Build failed: %v", err))
 	}
 
-	response := BuildResponse{
+	response := types.BuildResponse{
 		Digest:    result.Digest,
 		Tag:       result.Tag,
 		Status:    "success",
@@ -218,7 +253,7 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 
 // handleOneOffCall handles one-off function calls
 func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) error {
-	var req OneOffCallRequest
+	var req types.OneOffCallRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -269,7 +304,7 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 
 // handleReassignTag handles tag reassignment requests
 func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) error {
-	var req ReassignTagRequest
+	var req types.ReassignTagRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
 		return err
 	}
@@ -301,4 +336,100 @@ func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
 // handleHealth is a simple health check endpoint
 func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"status": "ok"})
+}
+
+// handleUnload unloads a function from memory
+func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
+	var req types.FunctionRequest
+	if err := h.decodeAndValidate(r, &req); err != nil {
+		return err
+	}
+
+	h.logger.Printf("Received unload request for function: %s/%s", req.Namespace, req.Name)
+
+	if err := h.engine.UnloadFunction(req.Namespace, req.Name); err != nil {
+		return err
+	}
+
+	return h.writeJSONResponse(w, map[string]string{"message": "Function unloaded successfully"})
+}
+
+// handleFunctionLogs returns logs for a specific function
+func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) error {
+	// Parse path: /logs/namespace/name
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/logs/"), "/")
+	if len(pathParts) != 2 {
+		return NewBadRequestError("Invalid URL format: expected /logs/namespace/name")
+	}
+
+	namespace, name := pathParts[0], pathParts[1]
+
+	h.logger.Printf("Received logs request for function: %s/%s", namespace, name)
+
+	// Check if function exists and is loaded
+	functionKey := getFunctionKey(namespace, name)
+	h.engine.pluginsMux.RLock()
+	_, exists := h.engine.plugins[functionKey]
+	h.engine.pluginsMux.RUnlock()
+
+	if !exists {
+		return NewNotFoundError(fmt.Sprintf("Function %s/%s is not loaded", namespace, name))
+	}
+
+	// Parse query parameters
+	query := r.URL.Query()
+
+	// Parse since parameter (seconds)
+	var since time.Time
+	if sinceStr := query.Get("since"); sinceStr != "" {
+		sinceSeconds, err := strconv.ParseInt(sinceStr, 10, 64)
+		if err != nil {
+			return NewBadRequestError(fmt.Sprintf("Invalid 'since' parameter: %v", err))
+		}
+		since = time.Now().Add(-time.Duration(sinceSeconds) * time.Second)
+	}
+
+	// Parse tail parameter
+	var tail int
+	if tailStr := query.Get("tail"); tailStr != "" {
+		var err error
+		tail, err = strconv.Atoi(tailStr)
+		if err != nil {
+			return NewBadRequestError(fmt.Sprintf("Invalid 'tail' parameter: %v", err))
+		}
+	} else {
+		// Default to returning all logs if tail is not specified
+		tail = 0
+	}
+
+	// Get logs from the engine's logger for this function
+	logs := h.getEngineLogs(namespace, name, since, tail)
+
+	// Return logs as a JSON array
+	return h.writeJSONResponse(w, logs)
+}
+
+// getEngineLogs retrieves logs for a specific function from the engine's log store
+func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
+	functionKey := getFunctionKey(namespace, name)
+
+	// Retrieve logs from the engine's log store
+	logs := h.engine.logStore.GetLogs(functionKey, since, tail)
+
+	// If there are no logs, add an informational message
+	if len(logs) == 0 {
+		if h.engine.IsLoaded(namespace, name) {
+			return []string{
+				fmt.Sprintf("[%s] No logs available for function %s. The function is loaded but has not recorded any activity yet.",
+					time.Now().Format(time.RFC3339), functionKey),
+			}
+		} else {
+			return []string{
+				fmt.Sprintf("[%s] No logs available for function %s. The function is not currently loaded.",
+					time.Now().Format(time.RFC3339), functionKey),
+			}
+		}
+	}
+
+	return logs
 }

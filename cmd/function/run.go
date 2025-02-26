@@ -13,6 +13,7 @@ import (
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/ignitionstack/ignition/internal/ui/models/spinner"
 	"github.com/ignitionstack/ignition/pkg/engine"
+	"github.com/ignitionstack/ignition/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -74,7 +75,7 @@ func NewFunctionRunCommand() *cobra.Command {
 				}
 
 				loadTime := time.Since(loadStart)
-				p.Send(spinner.ResultMsg{Result: engine.LoadResult{
+				p.Send(spinner.ResultMsg{Result: types.LoadResult{
 					Namespace: namespace,
 					Name:      name,
 					Digest:    identifier,

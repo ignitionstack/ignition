@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ignitionstack/ignition/internal/repository"
@@ -16,6 +17,39 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+// Container is a simple dependency injection container
+type Container struct {
+	services map[string]interface{}
+	mu       sync.RWMutex
+}
+
+// NewContainer creates a new dependency injection container
+func NewContainer() *Container {
+	return &Container{
+		services: make(map[string]interface{}),
+	}
+}
+
+// Register adds a service to the container
+func (c *Container) Register(name string, service interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.services[name] = service
+}
+
+// Get retrieves a service from the container
+func (c *Container) Get(name string) (interface{}, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	service, ok := c.services[name]
+	if !ok {
+		return nil, fmt.Errorf("service not found: %s", name)
+	}
+
+	return service, nil
+}
 
 // QuietLogger is a minimal implementation of fxevent.Logger that only logs errors
 type QuietLogger struct {
