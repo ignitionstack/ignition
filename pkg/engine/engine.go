@@ -569,7 +569,6 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logger.Printf(successMsg)
 	e.logStore.AddLog(functionKey, LevelInfo, successMsg)
 
-	// Add one final log entry noting that this is the last log for this function
 	e.logStore.AddLog(functionKey, LevelInfo, "Function unloaded - this is the final log entry")
 
 	return nil

@@ -21,7 +21,6 @@ type Server struct {
 	socketServer *http.Server
 }
 
-// NewServer creates a new Server instance
 func NewServer(socketPath, httpAddr string, handlers *Handlers, logger Logger) *Server {
 	return &Server{
 		socketPath: socketPath,
@@ -31,11 +30,10 @@ func NewServer(socketPath, httpAddr string, handlers *Handlers, logger Logger) *
 	}
 }
 
-// Start initializes and starts the HTTP and socket servers
 func (s *Server) Start() error {
 	// Set up graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop() // Ensure signal handler is removed when function returns
+	defer stop()
 
 	// Check if socket is already in use before removing
 	if _, err := os.Stat(s.socketPath); err == nil {
@@ -55,7 +53,6 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to check socket file status: %w", err)
 	}
 
-	// Create listeners
 	socketListener, err := net.Listen("unix", s.socketPath)
 	if err != nil {
 		return fmt.Errorf("failed to start Unix socket listener: %w", err)
@@ -67,7 +64,6 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to start HTTP listener: %w", err)
 	}
 
-	// Create HTTP servers
 	s.httpServer = &http.Server{
 		Handler:      s.handlers.HTTPHandler(),
 		ReadTimeout:  30 * time.Second,
@@ -82,7 +78,6 @@ func (s *Server) Start() error {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Start servers in goroutines
 	errChan := make(chan error, 2)
 
 	// Start Unix socket server
@@ -114,11 +109,9 @@ func (s *Server) Start() error {
 	}
 }
 
-// shutdown gracefully shuts down the servers
 func (s *Server) shutdown() error {
 	s.logger.Printf("Beginning graceful shutdown...")
 
-	// Create a timeout context for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -154,7 +147,6 @@ func (s *Server) shutdown() error {
 
 	s.logger.Printf("Servers shutdown complete")
 
-	// Return the first error encountered, if any
 	if httpErr != nil {
 		return httpErr
 	}
