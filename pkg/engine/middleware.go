@@ -114,7 +114,6 @@ func (h *Handlers) corsMiddleware() Middleware {
 	}
 }
 
-// responseWriter is a wrapper for http.ResponseWriter that captures the status code
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
