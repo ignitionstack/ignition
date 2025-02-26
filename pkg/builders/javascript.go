@@ -43,7 +43,6 @@ func runCommandWithOutput(cmd *exec.Cmd, step string) error {
 	return nil
 }
 
-// Build implements Builder.
 func (j *jsBuilder) Build(path string) (*BuildResult, error) {
 	// Install dependencies
 	dependencyCmd := exec.Command("npm", "install")

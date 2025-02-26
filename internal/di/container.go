@@ -18,27 +18,23 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Container is a simple dependency injection container
 type Container struct {
 	services map[string]interface{}
 	mu       sync.RWMutex
 }
 
-// NewContainer creates a new dependency injection container
 func NewContainer() *Container {
 	return &Container{
 		services: make(map[string]interface{}),
 	}
 }
 
-// Register adds a service to the container
 func (c *Container) Register(name string, service interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.services[name] = service
 }
 
-// Get retrieves a service from the container
 func (c *Container) Get(name string) (interface{}, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -51,12 +47,10 @@ func (c *Container) Get(name string) (interface{}, error) {
 	return service, nil
 }
 
-// QuietLogger is a minimal implementation of fxevent.Logger that only logs errors
 type QuietLogger struct {
 	Logger *zap.Logger
 }
 
-// LogEvent implements fxevent.Logger interface but only logs important events
 func (l *QuietLogger) LogEvent(event fxevent.Event) {
 	switch e := event.(type) {
 	case *fxevent.Started:
@@ -89,7 +83,6 @@ func (l *QuietLogger) LogEvent(event fxevent.Event) {
 	}
 }
 
-// Module exports all the DI providers
 var Module = fx.Options(
 	fx.Provide(
 		// Base zap logger
@@ -120,14 +113,12 @@ var Module = fx.Options(
 	fx.NopLogger,
 )
 
-// AppConfig holds configuration for the application
 type AppConfig struct {
 	SocketPath  string
 	HTTPAddr    string
 	RegistryDir string
 }
 
-// NewAppConfig creates a new application configuration
 func NewAppConfig(socketPath, httpAddr, registryDir string) AppConfig {
 	return AppConfig{
 		SocketPath:  socketPath,
@@ -136,7 +127,6 @@ func NewAppConfig(socketPath, httpAddr, registryDir string) AppConfig {
 	}
 }
 
-// EngineParams contains all dependencies needed to create an Engine
 type EngineParams struct {
 	fx.In
 
@@ -146,7 +136,6 @@ type EngineParams struct {
 	Logger          engine.Logger
 }
 
-// NewZapBaseLogger creates the base zap logger that will be used by fx
 func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	// Create a custom, quieter configuration
 	config := zap.NewProductionConfig()
@@ -180,7 +169,6 @@ func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	return zapLogger, nil
 }
 
-// NewEngineLogger creates an engine.Logger adapter using the base zap logger
 func NewEngineLogger(baseLogger *zap.Logger) engine.Logger {
 	// Create a specialized logger for engine with higher verbosity
 	config := zap.NewDevelopmentConfig()
@@ -218,7 +206,6 @@ func (z *zapLoggerAdapter) Debugf(format string, args ...interface{}) {
 	z.logger.Debugf(format, args...)
 }
 
-// NewBadgerDB creates a new BadgerDB instance
 func NewBadgerDB(lc fx.Lifecycle, config AppConfig) (*badger.DB, error) {
 	opts := badger.DefaultOptions(filepath.Join(config.RegistryDir, "registry.db"))
 	opts.Logger = nil
@@ -238,17 +225,14 @@ func NewBadgerDB(lc fx.Lifecycle, config AppConfig) (*badger.DB, error) {
 	return db, nil
 }
 
-// NewDBRepository creates a new DB repository
 func NewDBRepository(db *badger.DB) repository.DBRepository {
 	return repository.NewBadgerDBRepository(db)
 }
 
-// NewRegistry creates a new registry
 func NewRegistry(dbRepo repository.DBRepository, config AppConfig) registry.Registry {
 	return localRegistry.NewLocalRegistry(config.RegistryDir, dbRepo)
 }
 
-// NewEngine creates a new engine
 func NewEngine(params EngineParams) *engine.Engine {
 	return engine.NewEngineWithDependencies(
 		params.Config.SocketPath,

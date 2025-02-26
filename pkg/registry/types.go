@@ -21,5 +21,5 @@ type VersionInfo struct {
 	CreatedAt  time.Time                        `json:"created_at"`
 	Size       int64                            `json:"size"`
 	Tags       []string                         `json:"tags"`
-	Settings   manifest.FunctionVersionSettings `json:"settings"` // Add settings field
+	Settings   manifest.FunctionVersionSettings `json:"settings"`
 }

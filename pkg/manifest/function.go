@@ -6,19 +6,19 @@ import (
 )
 
 type FunctionManifest struct {
-	FunctionSettings FunctionSettings `yaml:"function" toml:"function" comment:"Function specific settings"`
+	FunctionSettings FunctionSettings `yaml:"function" toml:"function"`
 }
 
 type FunctionSettings struct {
 	Name     string `toml:"name"`
 	Language string `toml:"language"`
 
-	VersionSettings FunctionVersionSettings `yaml:"settings" toml:"settings" comment:"These settings are applied to a version on a build. Will be changed when a new version is created."`
+	VersionSettings FunctionVersionSettings `yaml:"settings" toml:"settings"`
 }
 
 type FunctionVersionSettings struct {
-	Wasi        bool     `yaml:"enable_wasi" toml:"enable_wasi" comment:"Whether WASI is enabled (default: true)"`
-	AllowedUrls []string `yaml:"allowed_urls" toml:"allowed_urls" comment:"Allowed URLs for the function"`
+	Wasi        bool     `yaml:"enable_wasi" toml:"enable_wasi"`
+	AllowedUrls []string `yaml:"allowed_urls" toml:"allowed_urls"`
 }
 
 func (m *FunctionManifest) MarhsalYaml() ([]byte, error) {

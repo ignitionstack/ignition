@@ -6,20 +6,15 @@ import (
 	"time"
 )
 
-// HandlerFunc defines the function signature for HTTP handlers that return errors
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
-// Middleware defines a function that wraps a HandlerFunc
 type Middleware func(HandlerFunc) HandlerFunc
 
-// withMiddleware applies middlewares to a handler in the order they are provided
 func (h *Handlers) withMiddleware(handler HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
-	// Apply all middlewares in order
 	for _, middleware := range middlewares {
 		handler = middleware(handler)
 	}
 
-	// Convert to standard http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := handler(w, r); err != nil {
 			h.logger.Errorf("Unhandled error in handler: %v", err)
@@ -28,7 +23,6 @@ func (h *Handlers) withMiddleware(handler HandlerFunc, middlewares ...Middleware
 	}
 }
 
-// methodMiddleware restricts handlers to specific HTTP methods
 func (h *Handlers) methodMiddleware(method string) Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
@@ -41,7 +35,6 @@ func (h *Handlers) methodMiddleware(method string) Middleware {
 	}
 }
 
-// errorMiddleware handles errors returned from handlers
 func (h *Handlers) errorMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
@@ -49,7 +42,6 @@ func (h *Handlers) errorMiddleware() Middleware {
 			if err != nil {
 				var reqErr RequestError
 
-				// Convert to RequestError if not already
 				if e, ok := err.(RequestError); ok {
 					reqErr = e
 				} else {
@@ -61,7 +53,6 @@ func (h *Handlers) errorMiddleware() Middleware {
 
 				h.logger.Errorf("Handler error: %v", err)
 
-				// Send structured error response
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(reqErr.StatusCode)
 
@@ -77,19 +68,15 @@ func (h *Handlers) errorMiddleware() Middleware {
 	}
 }
 
-// loggingMiddleware logs request information
 func (h *Handlers) loggingMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
 			start := time.Now()
 
-			// Create a response wrapper to capture status code
 			rw := newResponseWriter(w)
 
-			// Call the next handler
 			err := next(rw, r)
 
-			// Log request details
 			duration := time.Since(start)
 			h.logger.Printf("%s %s %d %s", r.Method, r.URL.Path, rw.statusCode, duration)
 
@@ -98,7 +85,6 @@ func (h *Handlers) loggingMiddleware() Middleware {
 	}
 }
 
-// corsMiddleware adds CORS headers to responses
 func (h *Handlers) corsMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
@@ -116,18 +102,15 @@ func (h *Handlers) corsMiddleware() Middleware {
 	}
 }
 
-// responseWriter is a wrapper for http.ResponseWriter that captures the status code
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
 }
 
-// newResponseWriter creates a new responseWriter
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
 	return &responseWriter{w, http.StatusOK}
 }
 
-// WriteHeader captures the status code and calls the underlying WriteHeader
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)

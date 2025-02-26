@@ -5,51 +5,49 @@ import (
 	"net/http"
 )
 
-// EngineError represents a generic engine error
-type EngineError struct {
-	msg string
-}
-
-// Error returns the error message
-func (e *EngineError) Error() string {
-	return e.msg
-}
-
-// NewEngineError creates a new engine error
-func NewEngineError(msg string) *EngineError {
-	return &EngineError{msg: msg}
-}
-
 // Common engine errors
 var (
-	ErrFunctionNotLoaded    = NewEngineError("function not loaded")
-	ErrInvalidConfig        = NewEngineError("invalid configuration")
-	ErrPluginCreation       = NewEngineError("failed to create plugin")
-	ErrEngineNotInitialized = NewEngineError("engine not initialized")
+	ErrEngineNotInitialized = fmt.Errorf("engine is not initialized")
+	ErrFunctionNotLoaded    = fmt.Errorf("function is not loaded")
+	ErrFunctionNotFound     = fmt.Errorf("function not found")
 )
 
-// RequestError represents an HTTP request error
-type RequestError struct {
-	Message    string
-	StatusCode int
-	Cause      error
+type EngineError struct {
+	message string
 }
 
-// Error returns the error message
+func (e EngineError) Error() string {
+	return e.message
+}
+
+func NewEngineError(message string) error {
+	return EngineError{message: message}
+}
+
+// IsEngineError checks if an error is an engine error
+func IsEngineError(err error) bool {
+	_, ok := err.(EngineError)
+	return ok
+}
+
+type RequestError struct {
+	Message    string `json:"error"`
+	StatusCode int    `json:"status"`
+	cause      error  `json:"-"`
+}
+
 func (e RequestError) Error() string {
-	if e.Cause != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Cause)
+	if e.cause != nil {
+		return fmt.Sprintf("%s: %v", e.Message, e.cause)
 	}
 	return e.Message
 }
 
-// WithCause sets the cause of the error
-func (e RequestError) WithCause(err error) RequestError {
-	e.Cause = err
+func (e RequestError) WithCause(cause error) RequestError {
+	e.cause = cause
 	return e
 }
 
-// NewRequestError creates a new request error with a custom status code
 func NewRequestError(message string, statusCode int) RequestError {
 	return RequestError{
 		Message:    message,
@@ -57,18 +55,18 @@ func NewRequestError(message string, statusCode int) RequestError {
 	}
 }
 
-// Common HTTP request errors
-func NewBadRequestError(message string) RequestError {
-	return RequestError{
-		Message:    message,
-		StatusCode: http.StatusBadRequest,
-	}
-}
-
+// Common request errors
 func NewNotFoundError(message string) RequestError {
 	return RequestError{
 		Message:    message,
 		StatusCode: http.StatusNotFound,
+	}
+}
+
+func NewBadRequestError(message string) RequestError {
+	return RequestError{
+		Message:    message,
+		StatusCode: http.StatusBadRequest,
 	}
 }
 
@@ -93,7 +91,11 @@ func NewForbiddenError(message string) RequestError {
 	}
 }
 
-// IsNotFoundError checks if an error is a not found error
+func IsRequestError(err error) bool {
+	_, ok := err.(RequestError)
+	return ok
+}
+
 func IsNotFoundError(err error) bool {
 	if reqErr, ok := err.(RequestError); ok {
 		return reqErr.StatusCode == http.StatusNotFound
@@ -101,10 +103,23 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-// IsBadRequestError checks if an error is a bad request error
 func IsBadRequestError(err error) bool {
 	if reqErr, ok := err.(RequestError); ok {
 		return reqErr.StatusCode == http.StatusBadRequest
 	}
 	return false
+}
+
+func IsInternalServerError(err error) bool {
+	if reqErr, ok := err.(RequestError); ok {
+		return reqErr.StatusCode == http.StatusInternalServerError
+	}
+	return false
+}
+
+func ErrorToStatusCode(err error) int {
+	if reqErr, ok := err.(RequestError); ok {
+		return reqErr.StatusCode
+	}
+	return http.StatusInternalServerError
 }

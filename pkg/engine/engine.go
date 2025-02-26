@@ -18,7 +18,6 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// CircuitBreaker manages function reliability
 type CircuitBreaker struct {
 	failures         int
 	lastFailure      time.Time
@@ -28,7 +27,6 @@ type CircuitBreaker struct {
 	mutex            sync.RWMutex
 }
 
-// Engine represents the core service that manages WebAssembly functions
 type Engine struct {
 	registry        registry.Registry
 	functionService services.FunctionService
@@ -55,7 +53,6 @@ type Engine struct {
 	logStore *FunctionLogStore
 }
 
-// NewEngine creates a new Engine instance with default logger
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
 	// Create default logger
 	logger := NewStdLogger(os.Stdout)
@@ -63,7 +60,6 @@ func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error)
 	return NewEngineWithLogger(socketPath, httpAddr, registryDir, logger)
 }
 
-// NewEngineWithLogger creates a new Engine instance with a custom logger
 func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger Logger) (*Engine, error) {
 	// Setup registry
 	registry, err := setupRegistry(registryDir)
@@ -83,7 +79,6 @@ func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger
 	), nil
 }
 
-// NewEngineWithDependencies creates a new Engine instance with explicit dependencies
 func NewEngineWithDependencies(
 	socketPath,
 	httpAddr string,
@@ -115,7 +110,6 @@ func NewEngineWithDependencies(
 	}
 }
 
-// setupRegistry initializes and returns a registry instance
 func setupRegistry(registryDir string) (registry.Registry, error) {
 	opts := badger.DefaultOptions(filepath.Join(registryDir, "registry.db"))
 	opts.Logger = nil
@@ -132,7 +126,6 @@ func setupRegistry(registryDir string) (registry.Registry, error) {
 	return localRegistry.NewLocalRegistry(registryDir, dbRepo), nil
 }
 
-// Start initializes and starts the engine's HTTP and socket servers
 func (e *Engine) Start() error {
 	if !e.initialized {
 		return ErrEngineNotInitialized
@@ -189,12 +182,10 @@ func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 	}
 }
 
-// getFunctionKey generates a consistent key for functions in the plugins map
 func getFunctionKey(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }
 
-// IsLoaded checks if a function is currently loaded in the engine
 func (e *Engine) IsLoaded(namespace, name string) bool {
 	functionKey := getFunctionKey(namespace, name)
 
@@ -205,12 +196,10 @@ func (e *Engine) IsLoaded(namespace, name string) bool {
 	return exists
 }
 
-// GetRegistry returns the registry associated with this engine
 func (e *Engine) GetRegistry() registry.Registry {
 	return e.registry
 }
 
-// newCircuitBreaker creates a new circuit breaker with default settings
 func newCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
 		failures:         0,
@@ -220,7 +209,6 @@ func newCircuitBreaker() *CircuitBreaker {
 	}
 }
 
-// recordSuccess records a successful function call
 func (cb *CircuitBreaker) recordSuccess() {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -231,7 +219,6 @@ func (cb *CircuitBreaker) recordSuccess() {
 	}
 }
 
-// recordFailure records a function failure and returns whether circuit is now open
 func (cb *CircuitBreaker) recordFailure() bool {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -246,7 +233,6 @@ func (cb *CircuitBreaker) recordFailure() bool {
 	return cb.state == "open"
 }
 
-// isOpen checks if the circuit breaker is open
 func (cb *CircuitBreaker) isOpen() bool {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
@@ -268,7 +254,6 @@ func (cb *CircuitBreaker) isOpen() bool {
 	return false
 }
 
-// CallFunction executes a previously loaded function with the given parameters
 func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	functionKey := getFunctionKey(namespace, name)
 
@@ -372,7 +357,6 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	}
 }
 
-// LoadFunction loads a function from the registry into memory
 func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
 	functionKey := getFunctionKey(namespace, name)
@@ -450,7 +434,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	return nil
 }
 
-// createPlugin creates an Extism plugin from WASM bytes with version-specific settings
 func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo) (*extism.Plugin, error) {
 	// Create the Extism manifest
 	manifest := extism.Manifest{
@@ -469,7 +452,6 @@ func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo) (*extism.
 	return extism.NewPlugin(context.Background(), manifest, config, []extism.HostFunction{})
 }
 
-// BuildFunction builds a function and stores it in the registry
 func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {
 	e.logger.Printf("Building function: %s/%s", namespace, name)
 
@@ -518,7 +500,6 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 	}, nil
 }
 
-// ReassignTag updates a tag to point to a new digest
 func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 	e.logger.Printf("Reassigning tag %s to digest %s for function: %s/%s", tag, newDigest, namespace, name)
 
@@ -532,7 +513,6 @@ func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 	return nil
 }
 
-// UnloadFunction unloads a function from memory
 func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logger.Printf("Unloading function: %s/%s", namespace, name)
 	functionKey := getFunctionKey(namespace, name)

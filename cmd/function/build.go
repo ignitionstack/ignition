@@ -24,14 +24,12 @@ import (
 
 var socketPath string
 
-// TagInfo holds information about a function tag
 type TagInfo struct {
 	Namespace string
 	Name      string
 	Tag       string
 }
 
-// NewFunctionBuildCommand creates a new command for building functions
 func NewFunctionBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "build [path]",
@@ -48,7 +46,6 @@ func NewFunctionBuildCommand() *cobra.Command {
 	return cmd
 }
 
-// buildFunction is the main entry point for the build command
 func buildFunction(cmd *cobra.Command, args []string) error {
 	// Validate and prepare the build directory
 	absPath, err := validateAndPrepareBuildDir(args)
@@ -97,7 +94,6 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// validateAndPrepareBuildDir validates the build directory and returns the absolute path
 func validateAndPrepareBuildDir(args []string) (string, error) {
 	// Use current directory if no path provided
 	path := "."

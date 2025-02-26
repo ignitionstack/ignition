@@ -28,7 +28,6 @@ type EngineFunctionDetails struct {
 	Name      string
 }
 
-// NewEngineClientWithDefaults creates a minimal client with default values
 func NewEngineClientWithDefaults() *EngineClient {
 	return &EngineClient{
 		socketPath: "/tmp/ignition-engine.sock",
@@ -36,7 +35,6 @@ func NewEngineClientWithDefaults() *EngineClient {
 	}
 }
 
-// NewEngineClient creates a new client for the Ignition engine
 func NewEngineClient(socketPath string) (*EngineClient, error) {
 	// Create an HTTP client that connects to the Unix socket
 	httpClient := &http.Client{
@@ -97,7 +95,6 @@ func (c *EngineClient) Ping(ctx context.Context) error {
 	return nil
 }
 
-// LoadFunction loads a function into the engine
 func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag string) error {
 	// Create HTTP request body
 	reqBody := map[string]interface{}{
@@ -141,7 +138,6 @@ func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag st
 	return nil
 }
 
-// UnloadFunction unloads a function from the engine
 func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name string) error {
 	// Create HTTP request body
 	reqBody := map[string]interface{}{
@@ -184,7 +180,6 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 	return nil
 }
 
-// ListFunctions lists all functions loaded in the engine
 func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetails, error) {
 	// Create HTTP request to the loaded endpoint to get actually loaded functions
 	req, err := http.NewRequestWithContext(
@@ -229,7 +224,6 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetai
 	return functions, nil
 }
 
-// GetFunctionLogs retrieves logs for a specific function
 func (c *EngineClient) GetFunctionLogs(ctx context.Context, namespace, name string, since time.Duration, tail int) ([]string, error) {
 	// Create query parameters
 	query := url.Values{}
