@@ -31,16 +31,16 @@ func IsEngineError(err error) bool {
 }
 
 type RequestError struct {
-	message    string
-	statusCode int
-	cause      error
+	Message    string `json:"error"`
+	StatusCode int    `json:"status"`
+	cause      error  `json:"-"`
 }
 
 func (e RequestError) Error() string {
 	if e.cause != nil {
-		return fmt.Sprintf("%s: %v", e.message, e.cause)
+		return fmt.Sprintf("%s: %v", e.Message, e.cause)
 	}
-	return e.message
+	return e.Message
 }
 
 func (e RequestError) WithCause(cause error) RequestError {
@@ -50,44 +50,44 @@ func (e RequestError) WithCause(cause error) RequestError {
 
 func NewRequestError(message string, statusCode int) RequestError {
 	return RequestError{
-		message:    message,
-		statusCode: statusCode,
+		Message:    message,
+		StatusCode: statusCode,
 	}
 }
 
 // Common request errors
 func NewNotFoundError(message string) RequestError {
 	return RequestError{
-		message:    message,
-		statusCode: http.StatusNotFound,
+		Message:    message,
+		StatusCode: http.StatusNotFound,
 	}
 }
 
 func NewBadRequestError(message string) RequestError {
 	return RequestError{
-		message:    message,
-		statusCode: http.StatusBadRequest,
+		Message:    message,
+		StatusCode: http.StatusBadRequest,
 	}
 }
 
 func NewInternalServerError(message string) RequestError {
 	return RequestError{
-		message:    message,
-		statusCode: http.StatusInternalServerError,
+		Message:    message,
+		StatusCode: http.StatusInternalServerError,
 	}
 }
 
 func NewUnauthorizedError(message string) RequestError {
 	return RequestError{
-		message:    message,
-		statusCode: http.StatusUnauthorized,
+		Message:    message,
+		StatusCode: http.StatusUnauthorized,
 	}
 }
 
 func NewForbiddenError(message string) RequestError {
 	return RequestError{
-		message:    message,
-		statusCode: http.StatusForbidden,
+		Message:    message,
+		StatusCode: http.StatusForbidden,
 	}
 }
 
@@ -98,28 +98,28 @@ func IsRequestError(err error) bool {
 
 func IsNotFoundError(err error) bool {
 	if reqErr, ok := err.(RequestError); ok {
-		return reqErr.statusCode == http.StatusNotFound
+		return reqErr.StatusCode == http.StatusNotFound
 	}
 	return false
 }
 
 func IsBadRequestError(err error) bool {
 	if reqErr, ok := err.(RequestError); ok {
-		return reqErr.statusCode == http.StatusBadRequest
+		return reqErr.StatusCode == http.StatusBadRequest
 	}
 	return false
 }
 
 func IsInternalServerError(err error) bool {
 	if reqErr, ok := err.(RequestError); ok {
-		return reqErr.statusCode == http.StatusInternalServerError
+		return reqErr.StatusCode == http.StatusInternalServerError
 	}
 	return false
 }
 
 func ErrorToStatusCode(err error) int {
 	if reqErr, ok := err.(RequestError); ok {
-		return reqErr.statusCode
+		return reqErr.StatusCode
 	}
 	return http.StatusInternalServerError
 }

@@ -93,22 +93,22 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 
 				sigChan := make(chan os.Signal, 1)
 				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
+				
 				engineHealthChan := make(chan struct{})
 				engineCheckCtx, engineCheckCancel := context.WithCancel(context.Background())
 				defer engineCheckCancel()
-
+				
 				go func() {
 					ticker := time.NewTicker(10 * time.Second)
 					defer ticker.Stop()
-
+					
 					for {
 						select {
 						case <-ticker.C:
 							pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 							err := engineClient.Ping(pingCtx)
 							cancel()
-
+							
 							if err != nil {
 								ui.PrintWarning("Engine is no longer running. Stopping compose services.")
 								close(engineHealthChan)
@@ -159,7 +159,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
-
+					
 					err := unloadComposeServices(ctx, functionsToUnload, engineClient)
 					if err != nil {
 						if isConnectionError(err) {
@@ -231,7 +231,7 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 					errorMsg = fmt.Sprintf("Function '%s' not found for service '%s'. Run 'ignition function build' to create it first.",
 						service.Function, name)
 				} else if strings.Contains(err.Error(), "engine is not running") {
-					errorMsg = fmt.Sprintf("Engine is not running. Start it with 'ignition engine start' before running compose up.")
+					errorMsg = "Engine is not running. Start it with 'ignition engine start' before running compose up."
 				} else {
 					errorMsg = fmt.Sprintf("%s: %v", errorMsg, err)
 				}

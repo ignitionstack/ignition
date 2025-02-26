@@ -10,14 +10,11 @@ type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
 type Middleware func(HandlerFunc) HandlerFunc
 
-// withMiddleware applies middlewares to a handler in the order they are provided
 func (h *Handlers) withMiddleware(handler HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
-	// Apply all middlewares in order
 	for _, middleware := range middlewares {
 		handler = middleware(handler)
 	}
 
-	// Convert to standard http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := handler(w, r); err != nil {
 			h.logger.Errorf("Unhandled error in handler: %v", err)
@@ -26,7 +23,6 @@ func (h *Handlers) withMiddleware(handler HandlerFunc, middlewares ...Middleware
 	}
 }
 
-// methodMiddleware restricts handlers to specific HTTP methods
 func (h *Handlers) methodMiddleware(method string) Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
@@ -39,7 +35,6 @@ func (h *Handlers) methodMiddleware(method string) Middleware {
 	}
 }
 
-// errorMiddleware handles errors returned from handlers
 func (h *Handlers) errorMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
@@ -47,25 +42,23 @@ func (h *Handlers) errorMiddleware() Middleware {
 			if err != nil {
 				var reqErr RequestError
 
-				// Convert to RequestError if not already
 				if e, ok := err.(RequestError); ok {
 					reqErr = e
 				} else {
 					reqErr = RequestError{
-						message:    err.Error(),
-						statusCode: http.StatusInternalServerError,
+						Message:    err.Error(),
+						StatusCode: http.StatusInternalServerError,
 					}
 				}
 
 				h.logger.Errorf("Handler error: %v", err)
 
-				// Send structured error response
 				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(reqErr.statusCode)
+				w.WriteHeader(reqErr.StatusCode)
 
 				if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":  reqErr.message,
-					"status": reqErr.statusCode,
+					"error":  reqErr.Message,
+					"status": reqErr.StatusCode,
 				}); encodeErr != nil {
 					h.logger.Errorf("Failed to encode error response: %v", encodeErr)
 				}
@@ -75,19 +68,15 @@ func (h *Handlers) errorMiddleware() Middleware {
 	}
 }
 
-// loggingMiddleware logs request information
 func (h *Handlers) loggingMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
 			start := time.Now()
 
-			// Create a response wrapper to capture status code
 			rw := newResponseWriter(w)
 
-			// Call the next handler
 			err := next(rw, r)
 
-			// Log request details
 			duration := time.Since(start)
 			h.logger.Printf("%s %s %d %s", r.Method, r.URL.Path, rw.statusCode, duration)
 
@@ -96,7 +85,6 @@ func (h *Handlers) loggingMiddleware() Middleware {
 	}
 }
 
-// corsMiddleware adds CORS headers to responses
 func (h *Handlers) corsMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
