@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ignitionstack/ignition/internal/di"
@@ -106,9 +107,43 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 				// Set up signal handling for graceful shutdown
 				sigChan := make(chan os.Signal, 1)
 				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+				
+				// Also set up engine health checking
+				engineHealthChan := make(chan struct{})
+				engineCheckCtx, engineCheckCancel := context.WithCancel(context.Background())
+				defer engineCheckCancel()
+				
+				// Start a goroutine to periodically check if the engine is still running
+				go func() {
+					ticker := time.NewTicker(10 * time.Second)
+					defer ticker.Stop()
+					
+					for {
+						select {
+						case <-ticker.C:
+							// Check engine health
+							pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+							err := engineClient.Ping(pingCtx)
+							cancel()
+							
+							if err != nil {
+								ui.PrintWarning("Engine is no longer running. Stopping compose services.")
+								close(engineHealthChan)
+								return
+							}
+						case <-engineCheckCtx.Done():
+							return
+						}
+					}
+				}()
 
-				// Block until we receive a signal
-				<-sigChan
+				// Block until we receive a signal or engine health check fails
+				select {
+				case <-sigChan:
+					// User pressed Ctrl+C
+				case <-engineHealthChan:
+					// Engine is no longer running
+				}
 
 				ui.PrintInfo("Operation", "Shutting down and unloading functions...")
 
@@ -143,9 +178,19 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 
 				// Unload functions in a goroutine
 				go func() {
-					err := unloadComposeServices(context.Background(), functionsToUnload, engineClient)
+					// Create context with timeout for unloading
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					
+					err := unloadComposeServices(ctx, functionsToUnload, engineClient)
 					if err != nil {
-						unloadProgram.Send(spinner.ErrorMsg{Err: err})
+						// Check if it's a connection error (engine might have been stopped)
+						if isConnectionError(err) {
+							// Engine is no longer available, just inform the user
+							unloadProgram.Send(spinner.DoneMsg{Result: 0})
+						} else {
+							unloadProgram.Send(spinner.ErrorMsg{Err: err})
+						}
 					} else {
 						unloadProgram.Send(spinner.DoneMsg{Result: len(functionsToUnload)})
 					}
@@ -248,6 +293,18 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 	}
 
 	return len(composeManifest.Services), nil
+}
+
+// isConnectionError checks if an error is related to connection problems
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "connection refused") ||
+		strings.Contains(errMsg, "no such file or directory") ||
+		strings.Contains(errMsg, "cannot connect to the engine") ||
+		strings.Contains(errMsg, "engine is not running")
 }
 
 // unloadComposeServices unloads all functions in the provided list

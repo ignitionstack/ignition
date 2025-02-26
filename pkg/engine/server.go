@@ -37,9 +37,22 @@ func (s *Server) Start() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop() // Ensure signal handler is removed when function returns
 
-	// Remove the socket file if it already exists
-	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove existing socket file: %w", err)
+	// Check if socket is already in use before removing
+	if _, err := os.Stat(s.socketPath); err == nil {
+		// Socket file exists, let's check if it's active
+		conn, err := net.Dial("unix", s.socketPath)
+		if err == nil {
+			// Connection successful, socket is in use by another process
+			conn.Close()
+			return fmt.Errorf("socket %s is already in use by another process (possibly another ignition engine instance)", s.socketPath)
+		}
+		// Socket file exists but no process is listening, safe to remove
+		if err := os.Remove(s.socketPath); err != nil {
+			return fmt.Errorf("failed to remove stale socket file: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		// Some other error occurred when checking the socket file
+		return fmt.Errorf("failed to check socket file status: %w", err)
 	}
 
 	// Create listeners

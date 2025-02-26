@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 	
 	"github.com/ignitionstack/ignition/pkg/types"
@@ -54,23 +55,44 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 
 // Ping checks if the engine is running
 func (c *EngineClient) Ping(ctx context.Context) error {
+	// Create a context with a short timeout to avoid long hangs
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(
-		ctx,
+		pingCtx,
 		http.MethodGet,
 		"http://unix/status",
 		nil,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create ping request: %w", err)
 	}
 	
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		// Check for common connection errors and provide more helpful messages
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return fmt.Errorf("engine connection timed out: %w", err)
+		}
+		
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "connect: no such file or directory") {
+			return fmt.Errorf("engine is not running (socket file not found)")
+		} else if strings.Contains(errMsg, "connect: connection refused") {
+			return fmt.Errorf("engine is not running (connection refused)")
+		}
+		
+		return fmt.Errorf("cannot connect to the engine: %w", err)
 	}
 	defer resp.Body.Close()
+	
+	// Check for a 200 OK response
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("engine returned unexpected status: %s", resp.Status)
+	}
 	
 	return nil
 }
