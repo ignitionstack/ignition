@@ -24,12 +24,14 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 	var detach bool
 
 	cmd := &cobra.Command{
-		Use:   "up",
-		Short: "Create and start functions defined in a compose file",
-		Long:  "Create and start functions defined in an ignition-compose.yml file.",
+		Use:           "up",
+		Short:         "Create and start functions defined in a compose file",
+		Long:          "Create and start functions defined in an ignition-compose.yml file.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(c *cobra.Command, args []string) error {
 			ui.PrintInfo("Operation", "Starting compose services")
-			
+
 			// Parse the compose file
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
@@ -57,11 +59,11 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 
 			// Create a context for the loading operations
 			ctx := context.Background()
-			
+
 			// Create a spinner for the loading process
 			spinnerModel := spinner.NewSpinnerModelWithMessage("Loading functions from compose file...")
 			program := tea.NewProgram(spinnerModel)
-			
+
 			// Load functions in a goroutine
 			go func() {
 				result, err := loadFunctions(ctx, composeManifest, engineClient)
@@ -71,26 +73,26 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					program.Send(spinner.DoneMsg{Result: result})
 				}
 			}()
-			
+
 			// Run the spinner UI
 			model, err := program.Run()
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("UI error: %v", err))
 				return err
 			}
-			
+
 			// Check for errors during loading
 			finalModel := model.(spinner.SpinnerModel)
 			if finalModel.HasError() {
 				return finalModel.GetError()
 			}
-			
+
 			// Get the result (number of loaded services)
 			loadedCount := finalModel.GetResult().(int)
 
 			// Print success message
 			ui.PrintSuccess(fmt.Sprintf("Successfully started %d functions from compose file", loadedCount))
-			
+
 			// List running functions
 			ui.PrintInfo("Status", "Running functions")
 			for name, service := range composeManifest.Services {
@@ -100,23 +102,23 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 			// If not detached, keep the process running until interrupted
 			if !detach {
 				ui.PrintInfo("Status", "Functions are running. Press Ctrl+C to stop...")
-				
+
 				// Set up signal handling for graceful shutdown
 				sigChan := make(chan os.Signal, 1)
 				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-				
+
 				// Block until we receive a signal
 				<-sigChan
-				
+
 				ui.PrintInfo("Operation", "Shutting down and unloading functions...")
-				
+
 				// Prepare functions to unload
 				var functionsToUnload []struct {
 					namespace string
 					name      string
 					service   string
 				}
-				
+
 				for name, service := range composeManifest.Services {
 					parts := strings.Split(service.Function, ":")
 					functionRef := parts[0]
@@ -134,11 +136,11 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 						})
 					}
 				}
-				
+
 				// Create a spinner for the unloading process
 				spinnerModel := spinner.NewSpinnerModelWithMessage("Unloading functions...")
 				unloadProgram := tea.NewProgram(spinnerModel)
-				
+
 				// Unload functions in a goroutine
 				go func() {
 					err := unloadComposeServices(context.Background(), functionsToUnload, engineClient)
@@ -148,7 +150,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 						unloadProgram.Send(spinner.DoneMsg{Result: len(functionsToUnload)})
 					}
 				}()
-				
+
 				// Run the spinner UI
 				unloadModel, err := unloadProgram.Run()
 				if err != nil {
@@ -172,7 +174,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 	// Add flags
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Specify an alternate compose file (default: ignition-compose.yml)")
 	cmd.Flags().BoolVarP(&detach, "detach", "d", false, "Run in detached mode")
-	
+
 	return cmd
 }
 
@@ -210,8 +212,22 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 			// Load the function into the engine
 			err := engineClient.LoadFunction(ctx, namespace, funcName, tag)
 			if err != nil {
+				// Create a more user-friendly error message
+				errorMsg := fmt.Sprintf("Failed to load function '%s' for service '%s'", service.Function, name)
+
+				// Check if it's a "function not found" error
+				if strings.Contains(err.Error(), "function not found") {
+					errorMsg = fmt.Sprintf("Function '%s' not found for service '%s'. Run 'ignition function build' to create it first.",
+						service.Function, name)
+				} else if strings.Contains(err.Error(), "engine is not running") {
+					errorMsg = fmt.Sprintf("Engine is not running. Start it with 'ignition engine start' before running compose up.")
+				} else {
+					// Include the original error for non-common cases, but in a cleaner format
+					errorMsg = fmt.Sprintf("%s: %v", errorMsg, err)
+				}
+
 				loadErrsMu.Lock()
-				loadErrs = append(loadErrs, fmt.Sprintf("failed to load function '%s' for service '%s': %v", service.Function, name, err))
+				loadErrs = append(loadErrs, errorMsg)
 				loadErrsMu.Unlock()
 				return
 			}
@@ -223,7 +239,12 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 
 	// Check for errors
 	if len(loadErrs) > 0 {
-		return 0, fmt.Errorf("failed to load some functions:\n%s", strings.Join(loadErrs, "\n"))
+		// Create a more structured error message with bullet points
+		errorMessage := "Failed to start services:\n"
+		for _, err := range loadErrs {
+			errorMessage += fmt.Sprintf("• %s\n", err)
+		}
+		return 0, fmt.Errorf("%s", errorMessage)
 	}
 
 	return len(composeManifest.Services), nil
@@ -238,29 +259,29 @@ func unloadComposeServices(ctx context.Context, functions []struct {
 	var unloadErrs []string
 	var unloadErrsMu sync.Mutex
 	var wg sync.WaitGroup
-	
+
 	for _, function := range functions {
 		wg.Add(1)
 		go func(namespace, name, serviceName string) {
 			defer wg.Done()
-			
+
 			err := engineClient.UnloadFunction(ctx, namespace, name)
 			if err != nil {
 				unloadErrsMu.Lock()
-				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v", 
+				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v",
 					namespace, name, serviceName, err))
 				unloadErrsMu.Unlock()
 			}
 		}(function.namespace, function.name, function.service)
 	}
-	
+
 	// Wait for all unload operations to complete
 	wg.Wait()
-	
+
 	// Check for errors
 	if len(unloadErrs) > 0 {
 		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
 	}
-	
+
 	return nil
 }
