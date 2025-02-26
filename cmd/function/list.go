@@ -29,7 +29,6 @@ func NewFunctionListCommand() *cobra.Command {
 			var req map[string]string
 
 			if len(args) == 1 {
-				// Parse namespace and name for specific function
 				namespace, name, err := parseNamespaceAndNameWithoutTag(args[0])
 				if err != nil {
 					return fmt.Errorf("invalid function name format: %w", err)
@@ -40,7 +39,6 @@ func NewFunctionListCommand() *cobra.Command {
 					"name":      name,
 				}
 			} else {
-				// List all functions
 				req = map[string]string{}
 			}
 
@@ -116,7 +114,6 @@ func parseNamespaceAndNameWithoutTag(input string) (namespace, name string, err 
 	return namespace, name, nil
 }
 
-// renderFunctionListPlain outputs function list in a machine-readable tab-separated format
 func renderFunctionListPlain(metadataList []registry.FunctionMetadata) {
 	// Use format strings with exact field widths for consistent alignment
 	const headerFormat = "%-30s\t%-15s\t%-20s\t%-10s\n"
@@ -153,7 +150,6 @@ func renderFunctionListPlain(metadataList []registry.FunctionMetadata) {
 	}
 }
 
-// renderFunctionMetadataPlain outputs single function metadata in a machine-readable tab-separated format
 func renderFunctionMetadataPlain(metadata registry.FunctionMetadata) {
 	// Use format strings with exact field widths for consistent alignment
 	const headerFormat = "%-30s\t%-15s\t%-20s\t%-10s\n"
