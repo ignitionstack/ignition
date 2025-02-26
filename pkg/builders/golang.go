@@ -11,7 +11,6 @@ import (
 
 type goBuilder struct{}
 
-// VerifyDependencies implements Builder.
 func (g *goBuilder) VerifyDependencies() error {
 	cmd := exec.Command("tinygo", "version")
 	if err := cmd.Run(); err != nil {

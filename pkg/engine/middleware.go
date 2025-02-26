@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// HandlerFunc defines the function signature for HTTP handlers that return errors
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
-// Middleware defines a function that wraps a HandlerFunc
 type Middleware func(HandlerFunc) HandlerFunc
 
 // withMiddleware applies middlewares to a handler in the order they are provided
@@ -54,8 +52,8 @@ func (h *Handlers) errorMiddleware() Middleware {
 					reqErr = e
 				} else {
 					reqErr = RequestError{
-						Message:    err.Error(),
-						StatusCode: http.StatusInternalServerError,
+						message:    err.Error(),
+						statusCode: http.StatusInternalServerError,
 					}
 				}
 
@@ -63,11 +61,11 @@ func (h *Handlers) errorMiddleware() Middleware {
 
 				// Send structured error response
 				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(reqErr.StatusCode)
+				w.WriteHeader(reqErr.statusCode)
 
 				if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":  reqErr.Message,
-					"status": reqErr.StatusCode,
+					"error":  reqErr.message,
+					"status": reqErr.statusCode,
 				}); encodeErr != nil {
 					h.logger.Errorf("Failed to encode error response: %v", encodeErr)
 				}
@@ -122,12 +120,10 @@ type responseWriter struct {
 	statusCode int
 }
 
-// newResponseWriter creates a new responseWriter
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
 	return &responseWriter{w, http.StatusOK}
 }
 
-// WriteHeader captures the status code and calls the underlying WriteHeader
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)

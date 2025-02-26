@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// Server handles the HTTP and Unix socket servers for the engine
 type Server struct {
 	socketPath   string
 	httpAddr     string

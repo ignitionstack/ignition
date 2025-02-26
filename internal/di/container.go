@@ -18,27 +18,23 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Container is a simple dependency injection container
 type Container struct {
 	services map[string]interface{}
 	mu       sync.RWMutex
 }
 
-// NewContainer creates a new dependency injection container
 func NewContainer() *Container {
 	return &Container{
 		services: make(map[string]interface{}),
 	}
 }
 
-// Register adds a service to the container
 func (c *Container) Register(name string, service interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.services[name] = service
 }
 
-// Get retrieves a service from the container
 func (c *Container) Get(name string) (interface{}, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -218,7 +214,6 @@ func (z *zapLoggerAdapter) Debugf(format string, args ...interface{}) {
 	z.logger.Debugf(format, args...)
 }
 
-// NewBadgerDB creates a new BadgerDB instance
 func NewBadgerDB(lc fx.Lifecycle, config AppConfig) (*badger.DB, error) {
 	opts := badger.DefaultOptions(filepath.Join(config.RegistryDir, "registry.db"))
 	opts.Logger = nil
