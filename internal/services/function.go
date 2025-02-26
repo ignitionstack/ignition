@@ -62,7 +62,6 @@ type functionService struct {
 	httpClient     *http.Client
 }
 
-// NewFunctionService creates a new instance of the function service
 func NewFunctionService() FunctionService {
 	socketPath := "/tmp/ignition-engine.sock"
 
@@ -82,7 +81,6 @@ func NewFunctionService() FunctionService {
 	}
 }
 
-// BuildFunction builds a function and calculates its hash
 func (f *functionService) BuildFunction(path string, functionConfig manifest.FunctionManifest) (*BuildResult, error) {
 	language := functionConfig.FunctionSettings.Language
 	if language == "" {
@@ -114,7 +112,6 @@ func (f *functionService) BuildFunction(path string, functionConfig manifest.Fun
 	}, nil
 }
 
-// InitFunction initializes a new function from a template
 func (f *functionService) InitFunction(name string, language string) error {
 	// Validate inputs
 	if name == "" {
@@ -148,7 +145,6 @@ func (f *functionService) InitFunction(name string, language string) error {
 	return nil
 }
 
-// CalculateHash computes a hash for a function based on its source code and config
 func (f *functionService) CalculateHash(path string, config manifest.FunctionManifest) (*BuildResult, error) {
 	// Create a new hash
 	h := sha256.New()
@@ -366,7 +362,6 @@ func shouldSkipFile(path string) bool {
 	return false
 }
 
-// LoadFunction loads a function into the engine
 func (f *functionService) LoadFunction(ctx context.Context, namespace, name, tag string) error {
 	// Create load request
 	loadRequest := types.LoadRequest{
@@ -411,7 +406,6 @@ func (f *functionService) LoadFunction(ctx context.Context, namespace, name, tag
 	return nil
 }
 
-// ListFunctions lists all functions in the engine and registry
 func (f *functionService) ListFunctions(ctx context.Context) ([]types.FunctionInfo, error) {
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(

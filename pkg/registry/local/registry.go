@@ -12,13 +12,11 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// localRegistry implements the registry.Registry interface using local storage
 type localRegistry struct {
 	dbRepo  repository.DBRepository
 	storage registry.Storage
 }
 
-// NewLocalRegistry creates a new registry backed by local storage
 func NewLocalRegistry(rootDir string, dbRepo repository.DBRepository) registry.Registry {
 	return &localRegistry{
 		dbRepo:  dbRepo,
@@ -26,7 +24,6 @@ func NewLocalRegistry(rootDir string, dbRepo repository.DBRepository) registry.R
 	}
 }
 
-// Get retrieves function metadata from the registry
 func (r *localRegistry) Get(namespace, name string) (*registry.FunctionMetadata, error) {
 	var metadata *registry.FunctionMetadata
 
@@ -37,7 +34,6 @@ func (r *localRegistry) Get(namespace, name string) (*registry.FunctionMetadata,
 	return metadata, err
 }
 
-// Pull retrieves a function's WASM bytes and version info by reference (tag or digest)
 func (r *localRegistry) Pull(namespace, name, reference string) ([]byte, *registry.VersionInfo, error) {
 	// Try to pull by digest first
 	wasmBytes, versionInfo, digestErr := r.pullByDigest(namespace, name, reference)
@@ -60,7 +56,6 @@ func (r *localRegistry) Pull(namespace, name, reference string) ([]byte, *regist
 	return nil, nil, tagErr
 }
 
-// Push stores a new version of a function in the registry
 func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest, tag string, settings manifest.FunctionVersionSettings) error {
 	shortDigest := registry.TruncateDigest(fullDigest, 12)
 	path := r.storage.BuildWASMPath(namespace, name, shortDigest)
@@ -97,7 +92,6 @@ func (r *localRegistry) Push(namespace, name string, payload []byte, fullDigest,
 	})
 }
 
-// ReassignTag updates a tag to point to a different version
 func (r *localRegistry) ReassignTag(namespace, name, tag, newDigest string) error {
 	return r.withWriteTx(func(txn *badger.Txn) error {
 		// Get function metadata
@@ -132,7 +126,6 @@ func (r *localRegistry) ReassignTag(namespace, name, tag, newDigest string) erro
 	})
 }
 
-// DigestExists checks if a digest exists for a function
 func (r *localRegistry) DigestExists(namespace, name, digest string) (bool, error) {
 	var exists bool
 
@@ -155,7 +148,6 @@ func (r *localRegistry) DigestExists(namespace, name, digest string) (bool, erro
 	return exists, err
 }
 
-// ListAll returns all functions in the registry
 func (r *localRegistry) ListAll() ([]registry.FunctionMetadata, error) {
 	var functions []registry.FunctionMetadata
 
@@ -194,19 +186,13 @@ func (r *localRegistry) ListAll() ([]registry.FunctionMetadata, error) {
 	return functions, nil
 }
 
-// Transaction helpers
-
-// withReadTx executes a function within a read transaction
 func (r *localRegistry) withReadTx(fn func(txn *badger.Txn) error) error {
 	return r.dbRepo.View(fn)
 }
 
-// withWriteTx executes a function within a write transaction
 func (r *localRegistry) withWriteTx(fn func(txn *badger.Txn) error) error {
 	return r.dbRepo.Update(fn)
 }
-
-// Internal helpers
 
 // getFunctionMetadata retrieves a function's metadata from the database
 func (r *localRegistry) getFunctionMetadata(txn *badger.Txn, namespace, name string, metadata **registry.FunctionMetadata) error {
