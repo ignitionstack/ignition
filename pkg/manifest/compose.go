@@ -10,18 +10,18 @@ import (
 
 // ComposeManifest represents the structure of an ignition-compose.yml file
 type ComposeManifest struct {
-	Version  string                       `yaml:"version,omitempty"`
-	Services map[string]ComposeService    `yaml:"services"`
+	Version  string                    `yaml:"version,omitempty"`
+	Services map[string]ComposeService `yaml:"services"`
 }
 
 // ComposeService represents a single function service in the compose file
 type ComposeService struct {
-	Function     string            `yaml:"function"`     // namespace/name:tag format
-	Environment  map[string]string `yaml:"environment,omitempty"`
-	DependsOn    []string          `yaml:"depends_on,omitempty"`
-	HostName     string            `yaml:"hostname,omitempty"`
-	RestartPolicy string           `yaml:"restart,omitempty"` // "always", "on-failure", "no"
-	Ports        []string          `yaml:"ports,omitempty"`   // For future use with network config
+	Function      string            `yaml:"function"` // namespace/name:tag format
+	Environment   map[string]string `yaml:"environment,omitempty"`
+	DependsOn     []string          `yaml:"depends_on,omitempty"`
+	HostName      string            `yaml:"hostname,omitempty"`
+	RestartPolicy string            `yaml:"restart,omitempty"` // "always", "on-failure", "no"
+	Ports         []string          `yaml:"ports,omitempty"`   // For future use with network config
 }
 
 // ParseComposeFile parses an ignition-compose.yml file and returns a ComposeManifest

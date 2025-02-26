@@ -21,13 +21,13 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 		Long:  "Create a new ignition-compose.yml file with example services.",
 		RunE: func(c *cobra.Command, args []string) error {
 			ui.PrintInfo("Operation", "Creating compose file")
-			
+
 			// Create example compose file content
 			example := map[string]interface{}{
 				"version": "1",
 				"services": map[string]interface{}{
 					"api": map[string]interface{}{
-						"function":    "my_namespace/api_service:latest",
+						"function": "my_namespace/api_service:latest",
 						"environment": map[string]string{
 							"DEBUG": "true",
 						},
@@ -76,7 +76,7 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 			}
 
 			ui.PrintSuccess(fmt.Sprintf("Created compose file: %s", outputPath))
-			
+
 			ui.PrintMetadata("Usage", "To start these services, update the function references and run:")
 			ui.PrintHighlight("  ignition compose up")
 

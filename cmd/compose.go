@@ -21,6 +21,6 @@ func init() {
 	ComposeCmd.AddCommand(compose.NewComposePsCommand(Container))
 	ComposeCmd.AddCommand(compose.NewComposeInitCommand(Container))
 	ComposeCmd.AddCommand(compose.NewComposeLogsCommand(Container))
-	
+
 	rootCmd.AddCommand(ComposeCmd)
 }

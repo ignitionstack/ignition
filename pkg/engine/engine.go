@@ -553,13 +553,6 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.pluginsMux.Lock()
 	defer e.pluginsMux.Unlock()
 
-	// Double-check the function still exists (it might have been removed by another goroutine)
-	plugin, exists = e.plugins[functionKey]
-	if !exists {
-		e.logStore.AddLog(functionKey, LevelInfo, "Function was already unloaded by another request")
-		return nil
-	}
-
 	unloadStart := time.Now()
 
 	// Close the plugin and remove it from memory

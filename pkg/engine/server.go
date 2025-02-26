@@ -117,7 +117,7 @@ func (s *Server) Start() error {
 // shutdown gracefully shuts down the servers
 func (s *Server) shutdown() error {
 	s.logger.Printf("Beginning graceful shutdown...")
-	
+
 	// Create a timeout context for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -153,7 +153,7 @@ func (s *Server) shutdown() error {
 	}
 
 	s.logger.Printf("Servers shutdown complete")
-	
+
 	// Return the first error encountered, if any
 	if httpErr != nil {
 		return httpErr

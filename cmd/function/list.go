@@ -25,7 +25,7 @@ func NewFunctionListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check if output should be machine-readable
 			plainFormat, _ := cmd.Flags().GetBool("plain")
-			
+
 			var req map[string]string
 
 			if len(args) == 1 {
@@ -72,7 +72,7 @@ func NewFunctionListCommand() *cobra.Command {
 				if err := json.NewDecoder(resp.Body).Decode(&metadata); err != nil {
 					return fmt.Errorf("failed to decode response: %w", err)
 				}
-				
+
 				if plainFormat {
 					renderFunctionMetadataPlain(metadata)
 				} else {
@@ -83,7 +83,7 @@ func NewFunctionListCommand() *cobra.Command {
 				if err := json.NewDecoder(resp.Body).Decode(&metadataList); err != nil {
 					return fmt.Errorf("failed to decode response: %w", err)
 				}
-				
+
 				if plainFormat {
 					renderFunctionListPlain(metadataList)
 				} else {
@@ -121,15 +121,15 @@ func renderFunctionListPlain(metadataList []registry.FunctionMetadata) {
 	// Use format strings with exact field widths for consistent alignment
 	const headerFormat = "%-30s\t%-15s\t%-20s\t%-10s\n"
 	const dataFormat = "%-30s\t%-15s\t%-20s\t%-10s\n"
-	
+
 	// Print header with exact spacing
 	fmt.Printf(headerFormat, "REPOSITORY", "TAG", "FUNCTION_ID", "SIZE")
-	
+
 	// Print each function version with consistent alignment
 	for _, metadata := range metadataList {
 		for _, version := range metadata.Versions {
 			repository := fmt.Sprintf("%s/%s", metadata.Namespace, metadata.Name)
-			
+
 			if len(version.Tags) == 0 {
 				fmt.Printf(dataFormat,
 					repository,
@@ -140,7 +140,7 @@ func renderFunctionListPlain(metadataList []registry.FunctionMetadata) {
 				sortedTags := make([]string, len(version.Tags))
 				copy(sortedTags, version.Tags)
 				sort.Strings(sortedTags)
-				
+
 				for _, tag := range sortedTags {
 					fmt.Printf(dataFormat,
 						repository,
@@ -158,14 +158,14 @@ func renderFunctionMetadataPlain(metadata registry.FunctionMetadata) {
 	// Use format strings with exact field widths for consistent alignment
 	const headerFormat = "%-30s\t%-15s\t%-20s\t%-10s\n"
 	const dataFormat = "%-30s\t%-15s\t%-20s\t%-10s\n"
-	
+
 	// Print header with exact spacing
 	fmt.Printf(headerFormat, "REPOSITORY", "TAG", "FUNCTION_ID", "SIZE")
-	
+
 	// Print each version with consistent alignment
 	for _, version := range metadata.Versions {
 		repository := fmt.Sprintf("%s/%s", metadata.Namespace, metadata.Name)
-		
+
 		if len(version.Tags) == 0 {
 			fmt.Printf(dataFormat,
 				repository,
@@ -176,7 +176,7 @@ func renderFunctionMetadataPlain(metadata registry.FunctionMetadata) {
 			sortedTags := make([]string, len(version.Tags))
 			copy(sortedTags, version.Tags)
 			sort.Strings(sortedTags)
-			
+
 			for _, tag := range sortedTags {
 				fmt.Printf(dataFormat,
 					repository,

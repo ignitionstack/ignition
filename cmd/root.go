@@ -27,11 +27,11 @@ func Execute() {
 
 func init() {
 	// Register services in the container
-	
+
 	// Register the function service
 	functionService := services.NewFunctionService()
 	Container.Register("functionService", functionService)
-	
+
 	// Register the engine client with safe creation
 	engineClient, err := services.NewEngineClient("/tmp/ignition-engine.sock")
 	if err != nil {

@@ -24,7 +24,7 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 		RunE: func(c *cobra.Command, args []string) error {
 			// Check if output should be machine-readable
 			plainFormat, _ := c.Flags().GetBool("plain")
-			
+
 			if !plainFormat {
 				ui.PrintInfo("Operation", "Listing compose services")
 			}
@@ -91,10 +91,10 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 					// Define format strings with exact field widths
 					const headerFormat = "%-20s\t%-40s\t%-15s\n"
 					const dataFormat = "%-20s\t%-40s\t%-15s\n"
-					
+
 					// Print header with exact spacing
 					fmt.Printf(headerFormat, "SERVICE", "FUNCTION", "STATUS")
-					
+
 					// Print each service
 					for name, service := range composeManifest.Services {
 						// Determine if the function is loaded
@@ -102,7 +102,7 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 						parts := strings.Split(service.Function, ":")
 						functionRef := parts[0]
 						nameParts := strings.Split(functionRef, "/")
-						
+
 						if len(nameParts) == 2 {
 							namespace, funcName := nameParts[0], nameParts[1]
 							if engineRunning {
@@ -110,13 +110,13 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 								isLoaded = loadedFunctionsMap[key]
 							}
 						}
-						
+
 						// Format status without color
 						status := "stopped"
 						if isLoaded {
 							status = "running"
 						}
-						
+
 						// Print the row as tab-separated values
 						fmt.Printf(dataFormat, name, service.Function, status)
 					}
@@ -140,7 +140,7 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 
 			// Prepare table rows
 			var tableRows []string
-			
+
 			// Add header row
 			tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(" %-20s %-40s %-15s",
 				"SERVICE", "FUNCTION", "STATUS")))
@@ -199,6 +199,6 @@ func NewComposePsCommand(container *di.Container) *cobra.Command {
 
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Specify an alternate compose file (default: ignition-compose.yml)")
 	cmd.Flags().Bool("plain", false, "Output in plain, machine-readable format (useful for piping to other commands)")
-	
+
 	return cmd
 }

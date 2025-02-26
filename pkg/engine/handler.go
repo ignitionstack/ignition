@@ -180,7 +180,7 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 	// Get all loaded functions
 	h.engine.pluginsMux.RLock()
 	loadedFunctions := make([]types.LoadedFunction, 0, len(h.engine.plugins))
-	
+
 	for key := range h.engine.plugins {
 		parts := strings.Split(key, "/")
 		if len(parts) == 2 {
@@ -361,24 +361,24 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 	if len(pathParts) != 2 {
 		return NewBadRequestError("Invalid URL format: expected /logs/namespace/name")
 	}
-	
+
 	namespace, name := pathParts[0], pathParts[1]
-	
+
 	h.logger.Printf("Received logs request for function: %s/%s", namespace, name)
-	
+
 	// Check if function exists and is loaded
 	functionKey := getFunctionKey(namespace, name)
 	h.engine.pluginsMux.RLock()
 	_, exists := h.engine.plugins[functionKey]
 	h.engine.pluginsMux.RUnlock()
-	
+
 	if !exists {
 		return NewNotFoundError(fmt.Sprintf("Function %s/%s is not loaded", namespace, name))
 	}
-	
+
 	// Parse query parameters
 	query := r.URL.Query()
-	
+
 	// Parse since parameter (seconds)
 	var since time.Time
 	if sinceStr := query.Get("since"); sinceStr != "" {
@@ -388,7 +388,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 		}
 		since = time.Now().Add(-time.Duration(sinceSeconds) * time.Second)
 	}
-	
+
 	// Parse tail parameter
 	var tail int
 	if tailStr := query.Get("tail"); tailStr != "" {
@@ -401,10 +401,10 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 		// Default to returning all logs if tail is not specified
 		tail = 0
 	}
-	
+
 	// Get logs from the engine's logger for this function
 	logs := h.getEngineLogs(namespace, name, since, tail)
-	
+
 	// Return logs as a JSON array
 	return h.writeJSONResponse(w, logs)
 }
@@ -412,10 +412,10 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 // getEngineLogs retrieves logs for a specific function from the engine's log store
 func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
 	functionKey := getFunctionKey(namespace, name)
-	
+
 	// Retrieve logs from the engine's log store
 	logs := h.engine.logStore.GetLogs(functionKey, since, tail)
-	
+
 	// If there are no logs, add an informational message
 	if len(logs) == 0 {
 		if h.engine.IsLoaded(namespace, name) {
@@ -430,6 +430,6 @@ func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail i
 			}
 		}
 	}
-	
+
 	return logs
 }

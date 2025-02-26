@@ -28,7 +28,7 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 		Long:  "View the logs from services defined in an ignition-compose.yml file.",
 		RunE: func(c *cobra.Command, args []string) error {
 			ui.PrintInfo("Operation", "Viewing service logs")
-			
+
 			// Parse the compose file
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
@@ -87,7 +87,7 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 			// Create a spinner for retrieving logs
 			spinnerModel := spinner.NewSpinnerModelWithMessage("Retrieving logs from services...")
 			program := tea.NewProgram(spinnerModel)
-			
+
 			// Retrieve logs in a goroutine
 			go func() {
 				logs, err := retrieveLogs(context.Background(), servicesToShow, engineClient, sinceDuration, tail)
@@ -97,20 +97,20 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 					program.Send(spinner.DoneMsg{Result: logs})
 				}
 			}()
-			
+
 			// Run the spinner UI
 			model, err := program.Run()
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("UI error: %v", err))
 				return err
 			}
-			
+
 			// Check for errors during log retrieval
 			finalModel := model.(spinner.SpinnerModel)
 			if finalModel.HasError() {
 				return finalModel.GetError()
 			}
-			
+
 			// Display the logs
 			logs := finalModel.GetResult().(map[string][]string)
 			displayLogs(logs)
@@ -118,18 +118,18 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 			// If follow mode is enabled, continuously retrieve and display new logs
 			if follow {
 				ui.PrintInfo("Status", "Watching for new logs. Press Ctrl+C to stop...")
-				
+
 				// Get the most recent timestamp to filter future logs
 				lastSeen := time.Now()
-				
+
 				// Setup a ticker for polling
 				ticker := time.NewTicker(2 * time.Second)
 				defer ticker.Stop()
-				
+
 				// Create context for cancellation
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
-				
+
 				// Start polling for new logs
 				for {
 					select {
@@ -140,13 +140,13 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 							ui.PrintError(fmt.Sprintf("Error retrieving new logs: %v", err))
 							return err
 						}
-						
+
 						// Display only new logs
 						if hasNewLogs(newLogs) {
 							displayLogs(newLogs)
 							lastSeen = time.Now()
 						}
-						
+
 					case <-ctx.Done():
 						return nil
 					}
@@ -162,35 +162,35 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 	cmd.Flags().BoolVarP(&follow, "follow", "F", false, "Follow log output")
 	cmd.Flags().StringVar(&since, "since", "", "Show logs since timestamp (e.g., 30m for 30 minutes)")
 	cmd.Flags().IntVar(&tail, "tail", 100, "Number of lines to show from the end of the logs")
-	
+
 	return cmd
 }
 
 // retrieveLogs gets logs for the specified services
 func retrieveLogs(ctx context.Context, services map[string]manifest.ComposeService, client *services.EngineClient, since time.Duration, tail int) (map[string][]string, error) {
 	logs := make(map[string][]string)
-	
+
 	for name, service := range services {
 		// Parse function reference (namespace/name:tag)
 		parts := strings.Split(service.Function, ":")
 		functionRef := parts[0]
-		
+
 		nameParts := strings.Split(functionRef, "/")
 		if len(nameParts) != 2 {
 			return nil, fmt.Errorf("invalid function reference '%s' for service '%s', expected format namespace/name:tag", service.Function, name)
 		}
-		
+
 		namespace, funcName := nameParts[0], nameParts[1]
-		
+
 		// Retrieve logs for the function
 		functionLogs, err := client.GetFunctionLogs(ctx, namespace, funcName, since, tail)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve logs for service '%s': %v", name, err)
 		}
-		
+
 		logs[name] = functionLogs
 	}
-	
+
 	return logs, nil
 }
 
@@ -200,7 +200,7 @@ func displayLogs(logs map[string][]string) {
 		if len(serviceLog) == 0 {
 			continue
 		}
-		
+
 		for _, line := range serviceLog {
 			// Format each log line with service name prefix
 			fmt.Printf("%s | %s\n", ui.StyleServiceName(serviceName), line)

@@ -247,15 +247,15 @@ func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 func sendBuildRequest(client *http.Client, tagInfo TagInfo,
 	absPath string, functionConfig manifest.FunctionManifest) (*types.BuildResult, error) {
 	// Create request body
-		reqBody := engine.ExtendedBuildRequest{
-			BuildRequest: types.BuildRequest{
-				Namespace: tagInfo.Namespace,
-				Name:      tagInfo.Name,
-				Path:      absPath,
-				Tag:       tagInfo.Tag,
-			},
-			Manifest: functionConfig,
-		}
+	reqBody := engine.ExtendedBuildRequest{
+		BuildRequest: types.BuildRequest{
+			Namespace: tagInfo.Namespace,
+			Name:      tagInfo.Name,
+			Path:      absPath,
+			Tag:       tagInfo.Tag,
+		},
+		Manifest: functionConfig,
+	}
 
 	// Marshal the request body
 	jsonData, err := json.Marshal(reqBody)

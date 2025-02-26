@@ -190,7 +190,7 @@ func (s *FunctionLogStore) GetLogs(functionKey string, since time.Time, tail int
 		case LevelDebug:
 			levelPrefix = "DEBUG: "
 		}
-		result = append(result, fmt.Sprintf("[%s] %s%s", 
+		result = append(result, fmt.Sprintf("[%s] %s%s",
 			entry.Timestamp.Format(time.RFC3339), levelPrefix, entry.Message))
 	}
 
@@ -200,7 +200,7 @@ func (s *FunctionLogStore) GetLogs(functionKey string, since time.Time, tail int
 // LoggingFunctionLogger is a logger that logs to both a standard logger and the function log store
 type LoggingFunctionLogger struct {
 	*StandardLogger
-	store      *FunctionLogStore
+	store       *FunctionLogStore
 	functionKey string
 }
 

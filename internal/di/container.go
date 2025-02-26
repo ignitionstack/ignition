@@ -42,12 +42,12 @@ func (c *Container) Register(name string, service interface{}) {
 func (c *Container) Get(name string) (interface{}, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	service, ok := c.services[name]
 	if !ok {
 		return nil, fmt.Errorf("service not found: %s", name)
 	}
-	
+
 	return service, nil
 }
 
