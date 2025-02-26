@@ -515,8 +515,6 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 	}, nil
 }
 
-// This standalone buildFunction has been removed in favor of using the injected functionService
-
 // ReassignTag updates a tag to point to a new digest
 func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 	e.logger.Printf("Reassigning tag %s to digest %s for function: %s/%s", tag, newDigest, namespace, name)
