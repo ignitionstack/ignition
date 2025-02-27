@@ -18,7 +18,7 @@ var PsCmd = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		// Check if output should be machine-readable
 		plainFormat, _ := c.Flags().GetBool("plain")
-		
+
 		if !plainFormat {
 			ui.PrintInfo("Operation", "Listing running functions")
 		}
@@ -69,7 +69,7 @@ var PsCmd = &cobra.Command{
 
 			// Print header
 			fmt.Printf(headerFormat, "NAMESPACE", "NAME", "STATUS")
-			
+
 			// Print all running functions
 			if engineRunning && len(runningFunctions) > 0 {
 				for _, fn := range runningFunctions {
@@ -95,18 +95,18 @@ var PsCmd = &cobra.Command{
 
 		// Prepare table rows
 		var tableRows []string
-		
+
 		// Add header row
 		tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(" %-20s %-20s %-15s",
 			"NAMESPACE", "NAME", "STATUS")))
-		
+
 		// Add rows for all running functions
 		if engineRunning && len(runningFunctions) > 0 {
 			for _, fn := range runningFunctions {
 				statusText := lipgloss.NewStyle().
 					Foreground(lipgloss.Color(ui.SuccessColor)).
 					Render("running")
-					
+
 				row := tableRowStyle.Render(fmt.Sprintf("%-20s %-20s %-15s",
 					fn.Namespace, fn.Name, statusText))
 				tableRows = append(tableRows, row)

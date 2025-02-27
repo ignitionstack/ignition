@@ -22,6 +22,10 @@ func (m SpinnerModel) HasError() bool {
 	return m.err != nil
 }
 
+func (m SpinnerModel) HasResult() bool {
+	return m.result != nil
+}
+
 func (m *SpinnerModel) SetResult(result interface{}) {
 	m.result = result
 }

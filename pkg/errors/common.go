@@ -10,15 +10,15 @@ var (
 	ErrFunctionNotLoaded    = errors.New("function not loaded")
 	ErrFunctionTimeout      = errors.New("function execution timed out")
 	ErrCircuitBreakerOpen   = errors.New("circuit breaker is open")
-	
-	ErrFunctionNotFound     = errors.New("function not found")
-	ErrDigestMismatch       = errors.New("digest mismatch")
-	ErrTagNotFound          = errors.New("tag not found")
-	
-	ErrInvalidManifest      = errors.New("invalid function manifest")
-	
-	ErrUnsupportedLanguage  = errors.New("unsupported language")
-	ErrBuildFailed          = errors.New("function build failed")
+
+	ErrFunctionNotFound = errors.New("function not found")
+	ErrDigestMismatch   = errors.New("digest mismatch")
+	ErrTagNotFound      = errors.New("tag not found")
+
+	ErrInvalidManifest = errors.New("invalid function manifest")
+
+	ErrUnsupportedLanguage = errors.New("unsupported language")
+	ErrBuildFailed         = errors.New("function build failed")
 )
 
 func WithDetails(err error, details string) error {

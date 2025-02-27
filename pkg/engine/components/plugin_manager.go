@@ -73,24 +73,24 @@ func (pm *PluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 		pm.pluginLastUsed[key] = time.Now()
 	}
 	pm.pluginsMux.RUnlock()
-	
+
 	return plugin, ok
 }
 
 func (pm *PluginManager) StorePlugin(key string, plugin *extism.Plugin) {
 	pm.pluginsMux.Lock()
 	defer pm.pluginsMux.Unlock()
-	
+
 	pm.plugins[key] = plugin
 	pm.pluginLastUsed[key] = time.Now()
-	
+
 	pm.logger.Printf("Plugin %s loaded and stored", key)
 }
 
 func (pm *PluginManager) RemovePlugin(key string) bool {
 	pm.pluginsMux.Lock()
 	defer pm.pluginsMux.Unlock()
-	
+
 	plugin, exists := pm.plugins[key]
 	if exists {
 		plugin.Close(context.TODO())
@@ -98,7 +98,7 @@ func (pm *PluginManager) RemovePlugin(key string) bool {
 		delete(pm.pluginLastUsed, key)
 		return true
 	}
-	
+
 	return false
 }
 
@@ -106,7 +106,7 @@ func (pm *PluginManager) IsPluginLoaded(key string) bool {
 	pm.pluginsMux.RLock()
 	_, exists := pm.plugins[key]
 	pm.pluginsMux.RUnlock()
-	
+
 	return exists
 }
 
@@ -114,10 +114,10 @@ func (pm *PluginManager) Shutdown() {
 	if pm.cleanupTicker != nil {
 		pm.cleanupTicker.Stop()
 	}
-	
+
 	pm.pluginsMux.Lock()
 	defer pm.pluginsMux.Unlock()
-	
+
 	for key, plugin := range pm.plugins {
 		plugin.Close(context.TODO())
 		delete(pm.plugins, key)

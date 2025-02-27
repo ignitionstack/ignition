@@ -18,18 +18,18 @@ func WithSpinner(message string, operation OperationFunc, display DisplayFunc) e
 	go func() {
 		startTime := time.Now()
 		result, err := operation()
-		
+
 		if err != nil {
 			program.Send(err)
 			return
 		}
-		
+
 		program.Send(spinner.ResultMsg{
 			Result: struct {
-				Data        interface{}
+				Data          interface{}
 				ExecutionTime time.Duration
 			}{
-				Data:        result,
+				Data:          result,
 				ExecutionTime: time.Since(startTime),
 			},
 		})

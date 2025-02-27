@@ -41,7 +41,7 @@ type Engine struct {
 	ttlDuration    time.Duration
 	cleanupTicker  *time.Ticker
 
-	defaultTimeout time.Duration
+	defaultTimeout  time.Duration
 	circuitBreakers map[string]*CircuitBreaker
 	cbMux           sync.RWMutex
 
@@ -87,11 +87,11 @@ func NewEngineWithDependencies(
 		logger:          logger,
 		initialized:     true,
 
-		pluginLastUsed: make(map[string]time.Time),
-		ttlDuration:    30 * time.Minute,
-		defaultTimeout: 30 * time.Second,
+		pluginLastUsed:  make(map[string]time.Time),
+		ttlDuration:     30 * time.Minute,
+		defaultTimeout:  30 * time.Second,
 		circuitBreakers: make(map[string]*CircuitBreaker),
-		logStore: NewFunctionLogStore(1000),
+		logStore:        NewFunctionLogStore(1000),
 	}
 }
 
