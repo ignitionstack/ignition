@@ -56,7 +56,7 @@ func PrintLogo() {
 	}
 
 	// Print subtitle
-	subtitle := "WebAssembly Function Platform"
+	subtitle := "\nWebAssembly Function Platform"
 	fmt.Println(CenterText(SubtitleStyle.Render(subtitle)))
 }
 
@@ -98,11 +98,11 @@ func PrintInfo(label, value string) {
 func PrintMetadata(label, value string) {
 	if value == "" {
 		fmt.Printf("%s %s\n",
-			SuccessStyle.Render(CheckmarkSymbol),
+			InfoStyle.Render(InfoSymbol),
 			DimStyle.Bold(true).Render(label))
 	} else {
 		fmt.Printf("%s %s %s\n",
-			SuccessStyle.Render(CheckmarkSymbol),
+			InfoStyle.Render(InfoSymbol),
 			DimStyle.Bold(true).Render(label),
 			InfoStyle.Render(value))
 	}
