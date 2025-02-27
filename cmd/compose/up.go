@@ -83,13 +83,15 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 
 			ui.PrintSuccess(fmt.Sprintf("Successfully started %d functions from compose file", loadedCount))
 
-			ui.PrintInfo("Status", "Running functions")
+			// Display running functions in a cleaner format
+			fmt.Println()
 			for name, service := range composeManifest.Services {
 				ui.PrintMetadata(name, service.Function)
 			}
 
 			if !detach {
-				ui.PrintInfo("Status", "Functions are running. Press Ctrl+C to stop...")
+				fmt.Println()
+				fmt.Println(ui.DimStyle.Render("Functions are running. Press Ctrl+C to stop..."))
 
 				sigChan := make(chan os.Signal, 1)
 				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

@@ -99,13 +99,13 @@ func PrintInfo(label, value string) {
 func PrintMetadata(label, value string) {
 	if value == "" {
 		fmt.Printf("%s %s\n",
-			InfoStyle.Render(InfoSymbol),
+			SuccessStyle.Render(CheckmarkSymbol),
 			DimStyle.Bold(true).Render(label))
 	} else {
 		fmt.Printf("%s %s %s\n",
-			InfoStyle.Render(InfoSymbol),
+			SuccessStyle.Render(CheckmarkSymbol),
 			DimStyle.Bold(true).Render(label),
-			BaseStyle.Render(value))
+			InfoStyle.Render(value))
 	}
 }
 
