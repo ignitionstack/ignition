@@ -39,9 +39,8 @@ func PrintLogo() {
 	}
 
 	// Multi-line styled logo for larger terminals
-	logo := `
-█ █▀▀ █▄░█ █ ▀█▀ █ █▀█ █▄░█
-█ █▄█ █░▀█ █ ░█░ █ █▄█ █░▀█`
+	logo := `█ █▀▀ █▄░█ █ ▀█▀ █ █▀█ █▄░█
+█ █▄█ █░▀█ █ ░█░ █ █▄█ █░▀█`
 
 	// Apply gradient colors to the logo
 	lines := strings.Split(logo, "\n")
@@ -57,7 +56,7 @@ func PrintLogo() {
 	}
 
 	// Print subtitle
-	subtitle := "\nWebAssembly Function Platform"
+	subtitle := "WebAssembly Function Platform"
 	fmt.Println(CenterText(SubtitleStyle.Render(subtitle)))
 }
 
