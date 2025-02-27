@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	"github.com/spf13/cobra"
@@ -20,8 +19,28 @@ func NewFunctionListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list [namespace/name]",
 		Aliases: []string{"ls"},
-		Short:   "List functions. If namespace/name is provided, shows all versions of that function",
-		Args:    cobra.MaximumNArgs(1),
+		Short:   "List functions in the registry",
+		Long: `Display all functions registered in the Ignition function registry.
+
+If called without arguments, lists all available functions in the registry.
+If a namespace/name is provided, shows detailed information about all versions
+of that specific function including:
+* Repository name (namespace/name)
+* Tags
+* Function ID (hash)
+* Size
+
+The registry contains all functions that have been built or loaded, and this
+command allows you to explore what's available to run.`,
+		Example: `  # List all available functions
+  ignition function list
+
+  # List all versions of a specific function
+  ignition function list my-namespace/my-function
+  
+  # List in plain format (useful for scripting)
+  ignition function list --plain`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check if output should be machine-readable
 			plainFormat, _ := cmd.Flags().GetBool("plain")
@@ -185,103 +204,51 @@ func renderFunctionMetadataPlain(metadata registry.FunctionMetadata) {
 }
 
 func renderFunctionList(metadataList []registry.FunctionMetadata) {
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(ui.InfoColor)).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(ui.DimTextColor)).
-		BorderBottom(true)
-
-	tableRowStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		PaddingLeft(1)
-
-	var tableRows []string
-	tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(" %-40s %-25s %-20s %-10s",
-		"REPOSITORY", "TAG", "FUNCTION ID", "SIZE")))
+	table := ui.NewTable([]string{"REPOSITORY", "TAG", "FUNCTION ID", "SIZE"})
 
 	for _, metadata := range metadataList {
 		for _, version := range metadata.Versions {
 			repository := fmt.Sprintf("%s/%s", metadata.Namespace, metadata.Name)
 
 			if len(version.Tags) == 0 {
-				row := tableRowStyle.Render(fmt.Sprintf("%-40s %-25s %-20s %-10s",
-					repository,
-					"<none>",
-					version.Hash,
-					formatSize(version.Size),
-				))
-				tableRows = append(tableRows, row)
+				table.AddRow(repository, "<none>", version.Hash, formatSize(version.Size))
 			} else {
 				sortedTags := make([]string, len(version.Tags))
 				copy(sortedTags, version.Tags)
 				sort.Strings(sortedTags)
 
 				for _, tag := range sortedTags {
-					row := tableRowStyle.Render(fmt.Sprintf("%-40s %-25s %-20s %-10s",
-						repository,
-						tag,
-						version.Hash,
-						formatSize(version.Size),
-					))
-					tableRows = append(tableRows, row)
+					table.AddRow(repository, tag, version.Hash, formatSize(version.Size))
 				}
 			}
 		}
 	}
 
-	table := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
-	output := lipgloss.JoinVertical(lipgloss.Left, "\n", table, "\n")
-	fmt.Println(output)
+	// Render the table
+	fmt.Println(ui.RenderTable(table))
 }
 
 func renderFunctionMetadata(metadata registry.FunctionMetadata) {
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(ui.InfoColor)).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(ui.DimTextColor)).
-		BorderBottom(true)
-
-	tableRowStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		PaddingLeft(1)
-
-	var tableRows []string
-	tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(" %-40s %-25s %-20s %-10s",
-		"REPOSITORY", "TAG", "FUNCTION ID", "SIZE")))
+	table := ui.NewTable([]string{"REPOSITORY", "TAG", "FUNCTION ID", "SIZE"})
 
 	for _, version := range metadata.Versions {
 		repository := fmt.Sprintf("%s/%s", metadata.Namespace, metadata.Name)
 
 		if len(version.Tags) == 0 {
-			row := tableRowStyle.Render(fmt.Sprintf("%-40s %-25s %-20s %-10s",
-				repository,
-				"<none>",
-				version.Hash,
-				formatSize(version.Size),
-			))
-			tableRows = append(tableRows, row)
+			table.AddRow(repository, "<none>", version.Hash, formatSize(version.Size))
 		} else {
 			sortedTags := make([]string, len(version.Tags))
 			copy(sortedTags, version.Tags)
 			sort.Strings(sortedTags)
 
 			for _, tag := range sortedTags {
-				row := tableRowStyle.Render(fmt.Sprintf("%-40s %-25s %-20s %-10s",
-					repository,
-					tag,
-					version.Hash,
-					formatSize(version.Size),
-				))
-				tableRows = append(tableRows, row)
+				table.AddRow(repository, tag, version.Hash, formatSize(version.Size))
 			}
 		}
 	}
 
-	table := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
-	output := lipgloss.JoinVertical(lipgloss.Left, "\n", table, "\n")
-	fmt.Println(output)
+	// Render the table
+	fmt.Println(ui.RenderTable(table))
 }
 
 func formatSize(size int64) string {

@@ -27,6 +27,25 @@ func NewEngineStartCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start the engine server",
+		Long: `Start the Ignition WebAssembly runtime engine server.
+
+The engine server provides:
+* A runtime environment for WebAssembly modules
+* Function lifecycle management
+* Local registry integration
+* HTTP and socket-based APIs
+* Circuit breaker patterns for resilience
+
+The engine must be running for other Ignition commands like function calls to work.
+The engine can be configured with various flags to customize its behavior.`,
+		Example: `  # Start the engine with default settings
+  ignition engine start
+
+  # Start with a custom socket path and HTTP port
+  ignition engine start --socket /tmp/my-socket.sock --http :9090
+
+  # Start with detailed logging
+  ignition engine start --log-level debug --log-file /var/log/ignition.log`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Setup registry directory
 			if config.registryDir == "" {

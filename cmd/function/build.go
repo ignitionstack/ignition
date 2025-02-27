@@ -32,8 +32,31 @@ type TagInfo struct {
 
 func NewFunctionBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "build [path]",
-		Short:         "Build an extism function",
+		Use:   "build [path]",
+		Short: "Build a WebAssembly function",
+		Long: `Build a WebAssembly function from source code.
+
+This command compiles a function defined in an ignition.yml manifest file into a 
+WebAssembly module, and registers it in the local registry. The build process:
+
+1. Reads the function configuration from ignition.yml
+2. Identifies the appropriate builder based on the function language
+3. Builds the source code into a WebAssembly module
+4. Stores the built function in the registry with specified tags
+5. Makes the function available for deployment
+
+The build command requires a running engine to perform the compilation process.`,
+		Example: `  # Build function in the current directory
+  ignition build
+
+  # Build function in a specific directory
+  ignition build ./path/to/function
+
+  # Build and tag the function
+  ignition build -t namespace/name:tag
+
+  # Build with multiple tags
+  ignition build -t namespace/name:latest -t namespace/name:v1.0.0`,
 		Args:          cobra.MaximumNArgs(1),
 		RunE:          buildFunction,
 		SilenceErrors: true,
