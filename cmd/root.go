@@ -6,7 +6,9 @@ import (
 
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/internal/services"
+	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var rootCmd = &cobra.Command{
@@ -43,6 +45,26 @@ Key capabilities:
 var Container = di.NewContainer()
 
 func Execute() {
+	// Add logo display to root command with pre-run hook
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		// Skip logo for help commands and plain output
+		if cmd.Name() == "help" || cmd.Name() == "completion" {
+			return
+		}
+
+		// Check if any command in the hierarchy has a plain flag set to true
+		plainFlag := false
+		cmd.Flags().Visit(func(f *pflag.Flag) {
+			if f.Name == "plain" && f.Value.String() == "true" {
+				plainFlag = true
+			}
+		})
+
+		if !plainFlag {
+			ui.PrintLogo()
+		}
+	}
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)

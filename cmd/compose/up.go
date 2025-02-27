@@ -30,7 +30,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(c *cobra.Command, args []string) error {
-			ui.PrintInfo("Operation", "Starting compose services")
+			// Removed redundant operation line
 
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
@@ -83,13 +83,15 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 
 			ui.PrintSuccess(fmt.Sprintf("Successfully started %d functions from compose file", loadedCount))
 
-			ui.PrintInfo("Status", "Running functions")
+			// Display running functions in a cleaner format
+			fmt.Println()
 			for name, service := range composeManifest.Services {
 				ui.PrintMetadata(name, service.Function)
 			}
 
 			if !detach {
-				ui.PrintInfo("Status", "Functions are running. Press Ctrl+C to stop...")
+				fmt.Println()
+				fmt.Println(ui.DimStyle.Render("Functions are running. Press Ctrl+C to stop..."))
 
 				sigChan := make(chan os.Signal, 1)
 				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -127,7 +129,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					// Engine is no longer running
 				}
 
-				ui.PrintInfo("Operation", "Shutting down and unloading functions...")
+				// Removed redundant operation line
 
 				var functionsToUnload []struct {
 					namespace string

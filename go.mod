@@ -14,7 +14,10 @@ require (
 	github.com/extism/go-sdk v1.7.0
 	github.com/go-git/go-git/v5 v5.13.2
 	github.com/go-playground/validator/v10 v10.25.0
+	github.com/muesli/reflow v0.3.0
+	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a
 	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/fx v1.23.0
 	go.uber.org/zap v1.26.0
@@ -61,7 +64,6 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -69,7 +71,6 @@ require (
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/tetratelabs/wabin v0.0.0-20230304001439-f6f874872834 // indirect
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
