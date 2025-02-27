@@ -44,7 +44,7 @@ func PrintLogo() {
 
 	// Apply gradient colors to the logo
 	lines := strings.Split(logo, "\n")
-	colors := []string{PrimaryColor, SecondaryColor, InfoColor, TertiaryColor}
+	colors := []string{SecondaryColor, InfoColor}
 
 	for i, line := range lines {
 		if len(line) > 0 {
