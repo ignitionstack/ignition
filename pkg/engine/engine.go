@@ -21,7 +21,7 @@ import (
 type CircuitBreaker struct {
 	failures         int
 	lastFailure      time.Time
-	state            string // "closed", "open", "half-open"
+	state            string
 	failureThreshold int
 	resetTimeout     time.Duration
 	mutex            sync.RWMutex
@@ -37,37 +37,29 @@ type Engine struct {
 	logger          Logger
 	initialized     bool
 
-	// TTL-based plugin management
 	pluginLastUsed map[string]time.Time
 	ttlDuration    time.Duration
 	cleanupTicker  *time.Ticker
 
-	// Timeout handling
 	defaultTimeout time.Duration
-
-	// Circuit breaking
 	circuitBreakers map[string]*CircuitBreaker
 	cbMux           sync.RWMutex
 
-	// Log storage
 	logStore *FunctionLogStore
 }
 
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
-	// Create default logger
 	logger := NewStdLogger(os.Stdout)
 
 	return NewEngineWithLogger(socketPath, httpAddr, registryDir, logger)
 }
 
 func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger Logger) (*Engine, error) {
-	// Setup registry
 	registry, err := setupRegistry(registryDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup registry: %w", err)
 	}
 
-	// Create function service
 	functionService := services.NewFunctionService()
 
 	return NewEngineWithDependencies(
@@ -95,17 +87,10 @@ func NewEngineWithDependencies(
 		logger:          logger,
 		initialized:     true,
 
-		// TTL-based plugin management
 		pluginLastUsed: make(map[string]time.Time),
 		ttlDuration:    30 * time.Minute,
-
-		// Timeout handling
 		defaultTimeout: 30 * time.Second,
-
-		// Circuit breaking
 		circuitBreakers: make(map[string]*CircuitBreaker),
-
-		// Log storage (store 1000 logs per function)
 		logStore: NewFunctionLogStore(1000),
 	}
 }
@@ -119,10 +104,7 @@ func setupRegistry(registryDir string) (registry.Registry, error) {
 		return nil, fmt.Errorf("failed to open registry database: %w", err)
 	}
 
-	// Create a DB repository
 	dbRepo := repository.NewBadgerDBRepository(db)
-
-	// Create and return registry with the repository
 	return localRegistry.NewLocalRegistry(registryDir, dbRepo), nil
 }
 
@@ -131,19 +113,16 @@ func (e *Engine) Start() error {
 		return ErrEngineNotInitialized
 	}
 
-	// Create a cancellable context for the cleanup goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Handle cleanup when the function exits (either normally or due to error)
 	defer func() {
 		e.logger.Printf("Engine Start function exiting, stopping cleanup goroutine")
 		if e.cleanupTicker != nil {
 			e.cleanupTicker.Stop()
 		}
-		cancel() // Signal the cleanup goroutine to exit
+		cancel()
 	}()
 
-	// Start TTL-based plugin cleanup
 	e.cleanupTicker = time.NewTicker(5 * time.Minute)
 	go e.cleanupUnusedPlugins(ctx)
 
@@ -153,7 +132,6 @@ func (e *Engine) Start() error {
 	return server.Start()
 }
 
-// cleanupUnusedPlugins periodically removes unused plugins to prevent memory leaks
 func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 	e.logger.Printf("Starting plugin cleanup goroutine")
 
@@ -238,9 +216,7 @@ func (cb *CircuitBreaker) isOpen() bool {
 	defer cb.mutex.RUnlock()
 
 	if cb.state == "open" {
-		// Check if enough time has passed to try again
 		if time.Since(cb.lastFailure) > cb.resetTimeout {
-			// Allow one test request
 			cb.mutex.RUnlock()
 			cb.mutex.Lock()
 			cb.state = "half-open"
@@ -257,10 +233,8 @@ func (cb *CircuitBreaker) isOpen() bool {
 func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	functionKey := getFunctionKey(namespace, name)
 
-	// Log the function call
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Function call: %s with payload size %d bytes", entrypoint, len(payload)))
 
-	// Check circuit breaker
 	e.cbMux.RLock()
 	cb, cbExists := e.circuitBreakers[functionKey]
 	e.cbMux.RUnlock()
@@ -278,7 +252,6 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 		return nil, fmt.Errorf("%s", errMsg)
 	}
 
-	// Update last used timestamp
 	e.pluginsMux.RLock()
 	plugin, ok := e.plugins[functionKey]
 	if ok {
@@ -290,20 +263,16 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	}
 	e.pluginsMux.RUnlock()
 
-	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
 	defer cancel()
 
-	// Record start time for performance logging
 	startTime := time.Now()
 
-	// Create channel for results
 	resultCh := make(chan struct {
 		output []byte
 		err    error
 	}, 1)
 
-	// Execute function in goroutine
 	go func() {
 		_, output, err := plugin.Call(entrypoint, payload)
 		resultCh <- struct {
@@ -312,7 +281,6 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 		}{output, err}
 	}()
 
-	// Wait for result or timeout
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
@@ -329,7 +297,6 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 			return nil, fmt.Errorf("failed to call function: %w", result.err)
 		}
 
-		// Log successful execution with execution time
 		execTime := time.Since(startTime)
 		e.logStore.AddLog(functionKey, LevelInfo,
 			fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
@@ -357,10 +324,8 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
 	functionKey := getFunctionKey(namespace, name)
 
-	// Log function loading
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Loading function with identifier: %s", identifier))
 
-	// Check if function is already loaded
 	e.pluginsMux.RLock()
 	_, alreadyLoaded := e.plugins[functionKey]
 	e.pluginsMux.RUnlock()
@@ -369,7 +334,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 		e.logger.Printf("Function %s already loaded", functionKey)
 		e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded")
 
-		// Update timestamp
 		e.pluginsMux.Lock()
 		e.pluginLastUsed[functionKey] = time.Now()
 		e.pluginsMux.Unlock()
@@ -377,7 +341,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 		return nil
 	}
 
-	// Get both the WASM bytes and version info
 	loadStart := time.Now()
 	wasmBytes, versionInfo, err := e.registry.Pull(namespace, name, identifier)
 	if err != nil {
@@ -390,7 +353,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 		fmt.Sprintf("Function pulled from registry (size: %d bytes, time: %v)",
 			len(wasmBytes), time.Since(loadStart)))
 
-	// Create plugin from wasm bytes with appropriate settings
 	initStart := time.Now()
 	plugin, err := createPlugin(wasmBytes, versionInfo)
 	if err != nil {
@@ -402,13 +364,10 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.logStore.AddLog(functionKey, LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
-	// Store the plugin
 	e.pluginsMux.Lock()
 	defer e.pluginsMux.Unlock()
 
-	// Double-check that it wasn't loaded while we were fetching
 	if _, exists := e.plugins[functionKey]; exists {
-		// Another goroutine loaded it already, close our copy
 		plugin.Close(context.TODO())
 		e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded by another request")
 		return nil
@@ -417,7 +376,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	e.plugins[functionKey] = plugin
 	e.pluginLastUsed[functionKey] = time.Now()
 
-	// Initialize circuit breaker
 	e.cbMux.Lock()
 	if _, exists := e.circuitBreakers[functionKey]; !exists {
 		e.circuitBreakers[functionKey] = newCircuitBreaker()
@@ -431,7 +389,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 }
 
 func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo) (*extism.Plugin, error) {
-	// Create the Extism manifest
 	manifest := extism.Manifest{
 		AllowedHosts: versionInfo.Settings.AllowedUrls,
 		Wasm: []extism.Wasm{
@@ -439,12 +396,10 @@ func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo) (*extism.
 		},
 	}
 
-	// Apply version settings to plugin config
 	config := extism.PluginConfig{
 		EnableWasi: versionInfo.Settings.Wasi,
 	}
 
-	// Initialize the plugin with version settings
 	return extism.NewPlugin(context.Background(), manifest, config, []extism.HostFunction{})
 }
 
@@ -453,7 +408,6 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 
 	buildStart := time.Now()
 
-	// Use default values if not provided
 	if namespace == "" {
 		namespace = "default"
 	}
@@ -461,25 +415,21 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 		name = filepath.Base(path)
 	}
 
-	// Build the function using the injected function service
 	buildResult, err := e.functionService.BuildFunction(path, config)
 	if err != nil {
 		e.logger.Errorf("Failed to build function: %v", err)
 		return nil, fmt.Errorf("failed to build function: %w", err)
 	}
 
-	// Read the built wasm file
 	wasmBytes, err := os.ReadFile(buildResult.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wasm file: %w", err)
 	}
 
-	// If no tag is provided, use the digest as the identifier
 	if tag == "" {
 		tag = buildResult.Digest
 	}
 
-	// Store in registry with version settings
 	if err := e.registry.Push(namespace, name, wasmBytes, buildResult.Digest, tag, config.FunctionSettings.VersionSettings); err != nil {
 		return nil, fmt.Errorf("failed to store in registry: %w", err)
 	}
@@ -499,7 +449,6 @@ func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifes
 func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 	e.logger.Printf("Reassigning tag %s to digest %s for function: %s/%s", tag, newDigest, namespace, name)
 
-	// Reassign the tag in the registry
 	if err := e.registry.ReassignTag(namespace, name, tag, newDigest); err != nil {
 		e.logger.Errorf("Failed to reassign tag: %v", err)
 		return fmt.Errorf("failed to reassign tag: %w", err)
@@ -513,10 +462,8 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logger.Printf("Unloading function: %s/%s", namespace, name)
 	functionKey := getFunctionKey(namespace, name)
 
-	// Log unload operation
 	e.logStore.AddLog(functionKey, LevelInfo, "Unloading function")
 
-	// Check if function is loaded
 	e.pluginsMux.RLock()
 	plugin, exists := e.plugins[functionKey]
 	e.pluginsMux.RUnlock()
@@ -528,18 +475,15 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 		return nil
 	}
 
-	// Acquire write lock to remove the plugin
 	e.pluginsMux.Lock()
 	defer e.pluginsMux.Unlock()
 
 	unloadStart := time.Now()
 
-	// Close the plugin and remove it from memory
 	plugin.Close(context.TODO())
 	delete(e.plugins, functionKey)
 	delete(e.pluginLastUsed, functionKey)
 
-	// Reset circuit breaker for this function
 	e.cbMux.Lock()
 	delete(e.circuitBreakers, functionKey)
 	e.cbMux.Unlock()
@@ -548,7 +492,6 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logger.Printf(successMsg)
 	e.logStore.AddLog(functionKey, LevelInfo, successMsg)
 
-	// Add one final log entry noting that this is the last log for this function
 	e.logStore.AddLog(functionKey, LevelInfo, "Function unloaded - this is the final log entry")
 
 	return nil
