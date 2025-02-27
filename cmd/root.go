@@ -51,7 +51,7 @@ func Execute() {
 		if cmd.Name() == "help" || cmd.Name() == "completion" {
 			return
 		}
-		
+
 		// Check if any command in the hierarchy has a plain flag set to true
 		plainFlag := false
 		cmd.Flags().Visit(func(f *pflag.Flag) {
@@ -59,7 +59,7 @@ func Execute() {
 				plainFlag = true
 			}
 		})
-		
+
 		if !plainFlag {
 			ui.PrintLogo()
 		}

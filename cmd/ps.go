@@ -32,10 +32,6 @@ is not running, it will display a warning and show no functions.`,
 		// Check if output should be machine-readable
 		plainFormat, _ := c.Flags().GetBool("plain")
 
-		if !plainFormat {
-			ui.PrintInfo("Operation", "Listing running functions")
-		}
-
 		// Get the engine client from the container
 		client, err := Container.Get("engineClient")
 		if err != nil {

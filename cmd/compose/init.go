@@ -20,7 +20,7 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 		Short: "Initialize a new compose file",
 		Long:  "Create a new ignition-compose.yml file with example services.",
 		RunE: func(c *cobra.Command, args []string) error {
-			ui.PrintInfo("Operation", "Creating compose file")
+			// Removed redundant operation line
 
 			// Create example compose file content
 			example := map[string]interface{}{

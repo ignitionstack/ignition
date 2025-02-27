@@ -57,10 +57,8 @@ func PrintLogo() {
 	}
 
 	// Print subtitle
-	subtitle := "WebAssembly Function Platform"
-	fmt.Println()
+	subtitle := "\nWebAssembly Function Platform"
 	fmt.Println(CenterText(SubtitleStyle.Render(subtitle)))
-	fmt.Println()
 }
 
 // PrintSuccess prints a success message with enhanced styling
@@ -91,7 +89,7 @@ func PrintWarning(message string) {
 
 // PrintInfo prints an info message with label and value in a cleaner format
 func PrintInfo(label, value string) {
-	labelStyle := DimStyle.Copy().Bold(true)
+	labelStyle := DimStyle.Bold(true)
 	fmt.Printf("%s %s\n",
 		labelStyle.Render(label+":"),
 		InfoStyle.Render(value))
@@ -128,7 +126,7 @@ func PrintHighlight(text string) {
 // PrintJSON prints formatted and syntax-highlighted JSON
 func PrintJSON(jsonStr string) {
 	// Use box styling to make JSON output stand out
-	jsonBox := BoxStyle.Copy().
+	jsonBox := BoxStyle.
 		BorderForeground(lipgloss.Color(InfoColor)).
 		Render(HighlightJSON(jsonStr))
 
@@ -261,8 +259,8 @@ func RenderTable(table *Table) string {
 		}
 	}
 
-	// Format string for header and rows
-	headerFormat := " "
+	// Format string for header and rows with no leading space
+	headerFormat := ""
 	for i, width := range table.ColumnWidth {
 		headerFormat += fmt.Sprintf("%%-%ds", width)
 		if i < len(table.ColumnWidth)-1 {
@@ -274,26 +272,29 @@ func RenderTable(table *Table) string {
 	var tableRows []string
 	tableRows = append(tableRows, TableHeaderStyle.Render(fmt.Sprintf(headerFormat, toInterfaceSlice(table.Headers)...)))
 
+	// Calculate the actual width for the separator
+	headerText := fmt.Sprintf(headerFormat, toInterfaceSlice(table.Headers)...)
+	separatorWidth := len(headerText)
+	separator := strings.Repeat("─", separatorWidth)
+	tableRows = append(tableRows, DimStyle.Render(separator))
+
 	// Add data rows with alternating styles for better readability
 	for i, row := range table.Rows {
 		style := TableRowStyle
 		if i%2 == 1 {
 			// Apply subtle alternating row coloring
-			style = style.Copy().Background(lipgloss.Color(AlternatingRowDark))
+			style = style.Background(lipgloss.Color(AlternatingRowDark))
 		}
 		tableRows = append(tableRows, style.Render(fmt.Sprintf(headerFormat, toInterfaceSlice(row)...)))
 	}
 
-	// Join rows into a table with a border
+	// Join rows into a table without a border
 	renderedTable := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
 
-	// Add a caption with record count
-	caption := fmt.Sprintf("Showing %d record(s)", len(table.Rows))
-	renderedTable = lipgloss.JoinVertical(lipgloss.Left,
-		renderedTable,
-		DimStyle.Render(caption))
+	// Removed record count caption for cleaner output
 
-	return BoxStyle.Render(renderedTable)
+	// Add vertical spacing around the table by wrapping in empty lines
+	return fmt.Sprintf("\n%s\n", renderedTable)
 }
 
 // Helper to convert string slice to interface slice for fmt.Sprintf
@@ -350,7 +351,7 @@ func (m ResultDisplayModel) View() string {
 	highlightedJSON := HighlightJSON(m.resultJSON)
 
 	// Add a border around the JSON for better visibility
-	jsonWithBorder := BoxStyle.Copy().
+	jsonWithBorder := BoxStyle.
 		BorderForeground(lipgloss.Color(InfoColor)).
 		Render(highlightedJSON)
 
@@ -374,7 +375,7 @@ func StyleServiceName(serviceName string) string {
 
 // PrintEmptyState shows a message when no data is available
 func PrintEmptyState(message string) {
-	box := BoxStyle.Copy().
+	box := BoxStyle.
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(DimTextColor)).
 		Align(lipgloss.Center).

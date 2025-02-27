@@ -30,7 +30,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(c *cobra.Command, args []string) error {
-			ui.PrintInfo("Operation", "Starting compose services")
+			// Removed redundant operation line
 
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
@@ -127,7 +127,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					// Engine is no longer running
 				}
 
-				ui.PrintInfo("Operation", "Shutting down and unloading functions...")
+				// Removed redundant operation line
 
 				var functionsToUnload []struct {
 					namespace string

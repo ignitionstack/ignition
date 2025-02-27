@@ -27,7 +27,7 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 		Short: "View logs from services defined in a compose file",
 		Long:  "View the logs from services defined in an ignition-compose.yml file.",
 		RunE: func(c *cobra.Command, args []string) error {
-			ui.PrintInfo("Operation", "Viewing service logs")
+			// Removed redundant operation line
 
 			// Parse the compose file
 			composeManifest, err := manifest.ParseComposeFile(filePath)

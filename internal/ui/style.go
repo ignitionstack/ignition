@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
 // Modern, consistent color scheme inspired by developer tools
@@ -17,13 +16,13 @@ var (
 	TertiaryColor  = "#10B981" // Emerald green
 
 	// Status colors
-	SuccessColor  = "#10B981" // Emerald green
-	ErrorColor    = "#EF4444" // Red
-	WarningColor  = "#F59E0B" // Amber
-	InfoColor     = "#3B82F6" // Blue
-	RunningColor  = "#10B981" // Green for running status
-	StoppedColor  = "#6B7280" // Gray for stopped status
-	PendingColor  = "#F59E0B" // Amber for pending status
+	SuccessColor = "#10B981" // Emerald green
+	ErrorColor   = "#EF4444" // Red
+	WarningColor = "#F59E0B" // Amber
+	InfoColor    = "#3B82F6" // Blue
+	RunningColor = "#10B981" // Green for running status
+	StoppedColor = "#6B7280" // Gray for stopped status
+	PendingColor = "#F59E0B" // Amber for pending status
 
 	// Text colors
 	HeaderColor  = "#F9FAFB" // Near white
@@ -32,7 +31,7 @@ var (
 	SubtleColor  = "#6B7280" // Very dim gray
 	LinkColor    = "#60A5FA" // Light blue for links/actions
 	AccentColor  = "#8B5CF6" // For backward compatibility
-	SelectColor  = "#FFFFFF" // For backward compatibility 
+	SelectColor  = "#FFFFFF" // For backward compatibility
 
 	// Border and accents
 	BorderColor        = "#374151" // Dark gray border
@@ -42,101 +41,96 @@ var (
 	AlternatingRowDark = "#1F2937" // Slightly lighter than background
 )
 
-// Detect terminal color capability
-var colorProfile = termenv.ColorProfile()
-var terminalSupportsRichColor = colorProfile != termenv.Ascii
+// NOTE: Terminal color capability detection is available if needed
+// Currently not used but kept here for reference
+// Example: termenv.ColorProfile() != termenv.Ascii
 
 // Style definitions
 var (
 	// Base styles
 	BaseStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextColor)).
-		Padding(0, 0, 1, 2)
+			Foreground(lipgloss.Color(TextColor)).
+			Padding(0, 0, 1, 2)
 
 	HeaderStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(HeaderColor)).
-		Bold(true)
+			Foreground(lipgloss.Color(HeaderColor)).
+			Bold(true)
 
 	// Semantic styles
 	SuccessStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(SuccessColor))
+			Foreground(lipgloss.Color(SuccessColor))
 
 	ErrorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ErrorColor))
+			Foreground(lipgloss.Color(ErrorColor))
 
 	WarningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(WarningColor))
+			Foreground(lipgloss.Color(WarningColor))
 
 	InfoStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(InfoColor))
+			Foreground(lipgloss.Color(InfoColor))
 
 	DimStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(DimTextColor))
+			Foreground(lipgloss.Color(DimTextColor))
 
 	LinkStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(LinkColor)).
-		Underline(true)
+			Foreground(lipgloss.Color(LinkColor)).
+			Underline(true)
 
-	// For backwards compatibility 
+	// For backwards compatibility
 	Highlight = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(AccentColor)).
-		Bold(true)
+			Foreground(lipgloss.Color(AccentColor)).
+			Bold(true)
 
 	SelectStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(SelectColor))
+			Foreground(lipgloss.Color(SelectColor))
 
 	// Component styles
 	TitleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(PrimaryColor)).
-		Bold(true).
-		MarginBottom(1)
+			Foreground(lipgloss.Color(PrimaryColor)).
+			Bold(true).
+			MarginBottom(1)
 
 	SubtitleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(SecondaryColor)).
-		MarginBottom(1)
+			Foreground(lipgloss.Color(SecondaryColor)).
+			MarginBottom(1)
 
 	SectionStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(HeaderColor)).
-		Bold(true).
-		MarginTop(1).
-		MarginBottom(1)
+			Foreground(lipgloss.Color(HeaderColor)).
+			Bold(true).
+			MarginTop(1).
+			MarginBottom(1)
 
 	BoxStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(BorderColor)).
-		Padding(1).
-		MarginTop(1).
-		MarginBottom(1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(BorderColor)).
+			Padding(1).
+			MarginTop(1).
+			MarginBottom(1)
 
 	// Table styles
 	TableHeaderStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(HeaderColor)).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(BorderColor)).
-		BorderBottom(true).
-		Padding(0, 1)
+				Bold(true).
+				Foreground(lipgloss.Color(HeaderColor))
 
 	TableRowStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextColor)).
-		Padding(0, 1)
+			Foreground(lipgloss.Color(TextColor))
 
 	// Status styles
 	RunningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(RunningColor))
+			Foreground(lipgloss.Color(RunningColor))
 
 	StoppedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(StoppedColor))
+			Foreground(lipgloss.Color(StoppedColor))
 
 	PendingStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(PendingColor))
+			Foreground(lipgloss.Color(PendingColor))
 )
 
 // Terminal width detection (for responsive layouts)
 func TerminalWidth() int {
 	// Safe default for terminals
 	width := 80
-	
+
 	// Try to detect actual width from environment variable
 	// Default to 80 columns if detection fails
 	return width
