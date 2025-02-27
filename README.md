@@ -101,6 +101,9 @@ Each template includes project structure, dependencies, and example code.
 ```bash
 # List all functions in a namespace
 ignition function ls my_namespace/my_function
+
+# List all running functions
+ignition ps
 ```
 
 ### Versioning with Tags
@@ -158,11 +161,11 @@ ignition compose up -f my-compose.yml
 ignition compose up -d
 ```
 
-### Check Status
+### Check Running Functions
 
 ```bash
-# List running functions from compose file
-ignition compose ps
+# List all running functions
+ignition ps
 ```
 
 ### Stop Services

@@ -18,7 +18,6 @@ func init() {
 	// Add compose subcommands
 	ComposeCmd.AddCommand(compose.NewComposeUpCommand(Container))
 	ComposeCmd.AddCommand(compose.NewComposeDownCommand(Container))
-	ComposeCmd.AddCommand(compose.NewComposePsCommand(Container))
 	ComposeCmd.AddCommand(compose.NewComposeInitCommand(Container))
 	ComposeCmd.AddCommand(compose.NewComposeLogsCommand(Container))
 
