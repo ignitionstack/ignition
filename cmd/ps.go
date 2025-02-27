@@ -102,7 +102,7 @@ is not running, it will display a warning and show no functions.`,
 			for _, fn := range runningFunctions {
 				table.AddRow(fn.Namespace, fn.Name, ui.StyleStatusValue("running"))
 			}
-			
+
 			// Render the table
 			fmt.Println(ui.RenderTable(table))
 		} else {
