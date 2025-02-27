@@ -281,18 +281,14 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	// Update last used timestamp
 	e.pluginsMux.RLock()
 	plugin, ok := e.plugins[functionKey]
-	e.pluginsMux.RUnlock()
-
 	if ok {
-		e.pluginsMux.Lock()
 		e.pluginLastUsed[functionKey] = time.Now()
-		e.pluginsMux.Unlock()
-	}
-
-	if !ok {
+	} else {
+		e.pluginsMux.RUnlock()
 		e.logStore.AddLog(functionKey, LevelError, "Function not loaded")
 		return nil, ErrFunctionNotLoaded
 	}
+	e.pluginsMux.RUnlock()
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
