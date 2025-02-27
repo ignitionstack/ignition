@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/chroma/v2/quick"
 	"github.com/atotto/clipboard"
@@ -10,36 +11,162 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Standard symbols for consistent appearance
+// Enhanced symbols with consistent appearance
 const (
-	SuccessSymbol = "✓"
-	ErrorSymbol   = "✗"
-	InfoSymbol    = "ℹ"
-	WarningSymbol = "⚠"
-	BulletSymbol  = "•"
+	SuccessSymbol    = "✓"
+	ErrorSymbol      = "✗"
+	InfoSymbol       = "ℹ"
+	WarningSymbol    = "⚠"
+	BulletSymbol     = "•"
+	ArrowRightSymbol = "→"
+	ArrowLeftSymbol  = "←"
+	CheckmarkSymbol  = "✓"
+	StartSymbol      = "○"
+	EndSymbol        = "●"
+	LoadingDots      = "..."
 )
 
-// PrintSuccess prints a success message with the standard success style
-func PrintSuccess(message string) {
-	fmt.Println(SuccessStyle.Bold(false).Render(SuccessSymbol + " " + message))
+// Command prompt symbol
+const CommandPrompt = "❯"
+
+// PrintLogo prints the Ignition logo banner
+func PrintLogo() {
+	width := TerminalWidth()
+	if width < 80 {
+		// Use compact logo for smaller terminals
+		fmt.Println(TitleStyle.Render("Ignition CLI"))
+		return
+	}
+
+	// Multi-line styled logo for larger terminals
+	logo := `
+█ █▀▀ █▄░█ █ ▀█▀ █ █▀█ █▄░█
+█ █▄█ █░▀█ █ ░█░ █ █▄█ █░▀█`
+
+	// Apply gradient colors to the logo
+	lines := strings.Split(logo, "\n")
+	colors := []string{PrimaryColor, SecondaryColor, InfoColor, TertiaryColor}
+
+	for i, line := range lines {
+		if len(line) > 0 {
+			colorIdx := i % len(colors)
+			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color(colors[colorIdx])).Render(line))
+		} else {
+			fmt.Println()
+		}
+	}
+
+	// Print subtitle
+	subtitle := "WebAssembly Function Platform"
+	fmt.Println()
+	fmt.Println(CenterText(SubtitleStyle.Render(subtitle)))
+	fmt.Println()
 }
 
-// PrintInfo prints an info message with label and value
+// PrintSuccess prints a success message with enhanced styling
+func PrintSuccess(message string) {
+	// Create a success box for important messages
+	fmt.Println(lipgloss.NewStyle().
+		Foreground(lipgloss.Color(SuccessColor)).
+		Bold(true).
+		Render(SuccessSymbol + " " + message))
+}
+
+// PrintError prints an error message with enhanced styling
+func PrintError(message string) {
+	// Add padding and make errors more visible with box styling
+	errorBox := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(ErrorColor)).
+		Padding(0, 1).
+		Render(ErrorStyle.Bold(true).Render(ErrorSymbol + " Error: " + message))
+
+	fmt.Println(errorBox)
+}
+
+// PrintWarning prints a warning message with enhanced styling
+func PrintWarning(message string) {
+	fmt.Println(WarningStyle.Bold(true).Render(WarningSymbol + " " + message))
+}
+
+// PrintInfo prints an info message with label and value in a cleaner format
 func PrintInfo(label, value string) {
+	labelStyle := DimStyle.Copy().Bold(true)
 	fmt.Printf("%s %s\n",
-		lipgloss.NewStyle().Foreground(lipgloss.Color(DimTextColor)).Render(label+":"),
+		labelStyle.Render(label+":"),
 		InfoStyle.Render(value))
 }
 
-// PrintMetadata prints metadata with an accent prefix
+// PrintMetadata prints metadata with styled label and value
 func PrintMetadata(label, value string) {
-	fmt.Printf("%s %s\n",
-		lipgloss.NewStyle().Foreground(lipgloss.Color(InfoColor)).Render(InfoSymbol),
-		lipgloss.NewStyle().Foreground(lipgloss.Color(DimTextColor)).Render(label+" "+value))
+	if value == "" {
+		fmt.Printf("%s %s\n",
+			InfoStyle.Render(InfoSymbol),
+			DimStyle.Bold(true).Render(label))
+	} else {
+		fmt.Printf("%s %s %s\n",
+			InfoStyle.Render(InfoSymbol),
+			DimStyle.Bold(true).Render(label),
+			BaseStyle.Render(value))
+	}
 }
 
+// PrintStep prints a step in a multi-step process
+func PrintStep(stepNumber int, totalSteps int, description string) {
+	progress := fmt.Sprintf("[%d/%d]", stepNumber, totalSteps)
+	fmt.Printf("%s %s %s\n",
+		InfoStyle.Render(progress),
+		TitleStyle.Render(ArrowRightSymbol),
+		HeaderStyle.Render(description))
+}
+
+// PrintHighlight prints highlighted text
 func PrintHighlight(text string) {
-	fmt.Printf("%s\n", lipgloss.NewStyle().Foreground(lipgloss.Color(AccentColor)).Render(text))
+	fmt.Println(TitleStyle.Render(text))
+}
+
+// PrintJSON prints formatted and syntax-highlighted JSON
+func PrintJSON(jsonStr string) {
+	// Use box styling to make JSON output stand out
+	jsonBox := BoxStyle.Copy().
+		BorderForeground(lipgloss.Color(InfoColor)).
+		Render(HighlightJSON(jsonStr))
+
+	fmt.Println(jsonBox)
+
+	// Add helpful message about copying
+	fmt.Println(DimStyle.Render("Tip: Use 'command | jq' to process this output"))
+}
+
+// PrintCommand shows a command that could be run
+func PrintCommand(command string) {
+	prompt := DimStyle.Render(CommandPrompt + " ")
+	fmt.Printf("%s%s\n", prompt, LinkStyle.Render(command))
+}
+
+// PrintTimestamp shows when an operation completed
+func PrintTimestamp(operation string, duration time.Duration) {
+	timestamp := time.Now().Format("15:04:05")
+	durationStr := ""
+	if duration > 0 {
+		durationStr = fmt.Sprintf(" (took %s)", duration.Round(time.Millisecond))
+	}
+
+	fmt.Printf("%s %s%s\n",
+		DimStyle.Render(timestamp),
+		operation,
+		DimStyle.Render(durationStr))
+}
+
+// PrintSeparator prints a horizontal separator line
+func PrintSeparator() {
+	width := TerminalWidth()
+	if width <= 0 {
+		width = 80
+	}
+
+	separator := strings.Repeat("─", width)
+	fmt.Println(DimStyle.Render(separator))
 }
 
 // Table represents a formatted table with headers and rows
@@ -103,28 +230,36 @@ func StyleStatusValue(status string) string {
 
 	switch status {
 	case "running":
-		return SuccessStyle.Render(status)
+		return RunningStyle.Render(SuccessSymbol + " " + status)
 	case "stopped", "error", "failed":
-		return ErrorStyle.Render(status)
+		return ErrorStyle.Render(ErrorSymbol + " " + status)
 	case "pending":
-		return InfoStyle.Render(status)
+		return PendingStyle.Render("⋯ " + status)
 	default:
 		return status
 	}
 }
 
-// RenderTable renders the table with consistent styling
+// RenderTable renders the table with enhanced styling
 func RenderTable(table *Table) string {
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(InfoColor)).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(DimTextColor)).
-		BorderBottom(true)
+	// Calculate total width for responsive sizing
+	totalWidth := 0
+	for _, width := range table.ColumnWidth {
+		totalWidth += width
+	}
 
-	tableRowStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		PaddingLeft(1)
+	// Adjust for terminal width
+	termWidth := TerminalWidth()
+	if totalWidth > termWidth && termWidth > 40 {
+		// Scale down column widths proportionally
+		scale := float64(termWidth-10) / float64(totalWidth)
+		for i := range table.ColumnWidth {
+			table.ColumnWidth[i] = int(float64(table.ColumnWidth[i]) * scale)
+			if table.ColumnWidth[i] < 10 {
+				table.ColumnWidth[i] = 10
+			}
+		}
+	}
 
 	// Format string for header and rows
 	headerFormat := " "
@@ -135,18 +270,30 @@ func RenderTable(table *Table) string {
 		}
 	}
 
-	// Add header row
+	// Add header row with enhanced styling
 	var tableRows []string
-	tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(headerFormat, toInterfaceSlice(table.Headers)...)))
+	tableRows = append(tableRows, TableHeaderStyle.Render(fmt.Sprintf(headerFormat, toInterfaceSlice(table.Headers)...)))
 
-	// Add data rows
-	for _, row := range table.Rows {
-		tableRows = append(tableRows, tableRowStyle.Render(fmt.Sprintf(headerFormat, toInterfaceSlice(row)...)))
+	// Add data rows with alternating styles for better readability
+	for i, row := range table.Rows {
+		style := TableRowStyle
+		if i%2 == 1 {
+			// Apply subtle alternating row coloring
+			style = style.Copy().Background(lipgloss.Color(AlternatingRowDark))
+		}
+		tableRows = append(tableRows, style.Render(fmt.Sprintf(headerFormat, toInterfaceSlice(row)...)))
 	}
 
-	// Join rows into a table
+	// Join rows into a table with a border
 	renderedTable := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
-	return lipgloss.JoinVertical(lipgloss.Left, "\n", renderedTable, "\n")
+
+	// Add a caption with record count
+	caption := fmt.Sprintf("Showing %d record(s)", len(table.Rows))
+	renderedTable = lipgloss.JoinVertical(lipgloss.Left,
+		renderedTable,
+		DimStyle.Render(caption))
+
+	return BoxStyle.Render(renderedTable)
 }
 
 // Helper to convert string slice to interface slice for fmt.Sprintf
@@ -191,17 +338,23 @@ func (m ResultDisplayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the result display model
+// View renders the result display model with enhanced styling
 func (m ResultDisplayModel) View() string {
 	var message string
 	if m.copied {
-		message = SuccessStyle.Render(SuccessSymbol + " Result copied to clipboard!")
+		message = SuccessStyle.Render(SuccessSymbol + " Copied to clipboard!")
 	} else {
-		message = lipgloss.NewStyle().Italic(true).Render("Press 'c' to copy, 'q' to quit.")
+		message = InfoStyle.Render("Press 'c' to copy, 'q' to quit")
 	}
 
 	highlightedJSON := HighlightJSON(m.resultJSON)
-	return fmt.Sprintf("%s\n\n%s", highlightedJSON, message)
+
+	// Add a border around the JSON for better visibility
+	jsonWithBorder := BoxStyle.Copy().
+		BorderForeground(lipgloss.Color(InfoColor)).
+		Render(highlightedJSON)
+
+	return fmt.Sprintf("%s\n\n%s", jsonWithBorder, message)
 }
 
 // HighlightJSON formats and highlights JSON string
@@ -214,23 +367,19 @@ func HighlightJSON(jsonStr string) string {
 	return builder.String()
 }
 
-// PrintError prints an error message with the standard error style
-func PrintError(message string) {
-	fmt.Println(ErrorStyle.Render(fmt.Sprintf(ErrorSymbol+" Error: %s", message)))
-}
-
-// PrintWarning prints a warning message with an appropriate style
-func PrintWarning(message string) {
-	warningStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFA500")). // Orange for warnings
-		Bold(true)
-	fmt.Println(warningStyle.Render(fmt.Sprintf(WarningSymbol+" Warning: %s", message)))
-}
-
 // StyleServiceName applies appropriate styling to service names
 func StyleServiceName(serviceName string) string {
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(AccentColor)).
-		Bold(true).
-		Render(serviceName)
+	return TitleStyle.Render(serviceName)
+}
+
+// PrintEmptyState shows a message when no data is available
+func PrintEmptyState(message string) {
+	box := BoxStyle.Copy().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(DimTextColor)).
+		Align(lipgloss.Center).
+		Width(40).
+		Render(DimStyle.Render(message))
+
+	fmt.Println(CenterText(box))
 }
