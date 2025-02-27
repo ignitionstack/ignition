@@ -21,7 +21,29 @@ func NewFunctionCallCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "call [namespace/name:reference]",
 		Short: "Call a function once using a temporary plugin instance",
-		Args:  cobra.ExactArgs(1),
+		Long: `Call a WebAssembly function with the specified payload.
+
+This command creates a temporary instance of the function, sends the provided payload 
+to the specified entrypoint, and returns the result. The function is loaded from the
+registry using the namespace/name:reference format, where:
+
+- namespace: The function's namespace (e.g., 'default')
+- name: The function's name (e.g., 'hello-world')
+- reference: Either a tag (like 'latest') or a digest hash
+
+The command requires a running engine to execute the function.`,
+		Example: `  # Call a function with default entrypoint
+  ignition call default/hello-world:latest
+
+  # Call with a JSON payload
+  ignition call default/hello-world:latest --payload '{"name": "World"}'
+
+  # Call with a specific entrypoint
+  ignition call default/hello-world:latest --entrypoint greet --payload '{"name": "World"}'
+
+  # Call using function digest instead of tag
+  ignition call default/hello-world:d7a8fbb307d7809469ca9abcb0082e4f`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			namespace, name, reference, err := parseNamespaceAndName(args[0])
 			if err != nil {

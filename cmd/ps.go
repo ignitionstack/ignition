@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/spf13/cobra"
@@ -14,7 +13,21 @@ import (
 var PsCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List running functions",
-	Long:  "List all running functions and their status.",
+	Long: `List all running functions currently loaded in the Ignition engine.
+
+This command connects to the running engine and displays details about all
+currently loaded and running WebAssembly functions, including:
+* Namespace
+* Function name
+* Running status
+
+The command requires that the Ignition engine is already running. If the engine
+is not running, it will display a warning and show no functions.`,
+	Example: `  # List all running functions
+  ignition ps
+
+  # List in plain format (useful for scripting)
+  ignition ps --plain`,
 	RunE: func(c *cobra.Command, args []string) error {
 		// Check if output should be machine-readable
 		plainFormat, _ := c.Flags().GetBool("plain")
@@ -45,7 +58,7 @@ var PsCmd = &cobra.Command{
 		if err := engineClient.Ping(ctx); err != nil {
 			engineRunning = false
 			if !plainFormat {
-				ui.PrintInfo("Warning", "Engine is not running. No functions will be shown.")
+				ui.PrintWarning("Engine is not running. No functions will be shown.")
 			}
 		}
 
@@ -81,43 +94,17 @@ var PsCmd = &cobra.Command{
 			return nil
 		}
 
-		// Define styles for pretty formatting
-		tableHeaderStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color(ui.InfoColor)).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(ui.DimTextColor)).
-			BorderBottom(true)
-
-		tableRowStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			PaddingLeft(1)
-
-		// Prepare table rows
-		var tableRows []string
-
-		// Add header row
-		tableRows = append(tableRows, tableHeaderStyle.Render(fmt.Sprintf(" %-20s %-20s %-15s",
-			"NAMESPACE", "NAME", "STATUS")))
+		// Create a table using the centralized table component
+		table := ui.NewTable([]string{"NAMESPACE", "NAME", "STATUS"})
 
 		// Add rows for all running functions
 		if engineRunning && len(runningFunctions) > 0 {
 			for _, fn := range runningFunctions {
-				statusText := lipgloss.NewStyle().
-					Foreground(lipgloss.Color(ui.SuccessColor)).
-					Render("running")
-
-				row := tableRowStyle.Render(fmt.Sprintf("%-20s %-20s %-15s",
-					fn.Namespace, fn.Name, statusText))
-				tableRows = append(tableRows, row)
+				table.AddRow(fn.Namespace, fn.Name, ui.StyleStatusValue("running"))
 			}
-		}
 
-		// Combine rows into a table for pretty output
-		if len(tableRows) > 1 {
-			table := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
-			output := lipgloss.JoinVertical(lipgloss.Left, "\n", table, "\n")
-			fmt.Println(output)
+			// Render the table
+			fmt.Println(ui.RenderTable(table))
 		} else {
 			ui.PrintInfo("Status", "No running functions")
 		}
