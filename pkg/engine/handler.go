@@ -125,7 +125,7 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	h.logger.Printf("Received load request for function: %s/%s (digest: %s)",
 		req.Namespace, req.Name, req.Digest)
 
-	if err := h.engine.LoadFunction(req.Namespace, req.Name, req.Digest); err != nil {
+	if err := h.engine.LoadFunction(req.Namespace, req.Name, req.Digest, req.Config); err != nil {
 		return err
 	}
 
@@ -276,15 +276,16 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 		Wasm: []extism.Wasm{
 			extism.WasmData{Data: wasmBytes},
 		},
+		Config: req.Config,
 	}
 
 	// Create and configure the plugin
-	config := extism.PluginConfig{
+	pluginConfig := extism.PluginConfig{
 		EnableWasi: versionInfo.Settings.Wasi,
 	}
 
 	// Initialize the plugin
-	plugin, err := extism.NewPlugin(context.Background(), manifest, config, []extism.HostFunction{})
+	plugin, err := extism.NewPlugin(context.Background(), manifest, pluginConfig, []extism.HostFunction{})
 	if err != nil {
 		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", err))
 	}

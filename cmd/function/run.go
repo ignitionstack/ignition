@@ -18,7 +18,8 @@ import (
 )
 
 func NewFunctionRunCommand() *cobra.Command {
-	var socketPath string
+	var runSocketPath string
+	var runConfigFlag []string
 	cmd := &cobra.Command{
 		Use:           "run [namespace/name:identifier]",
 		Short:         "Load and optionally run a WASM file from the registry on the engine",
@@ -36,11 +37,25 @@ func NewFunctionRunCommand() *cobra.Command {
 
 			go func() {
 				loadStart := time.Now()
-				req := map[string]string{
+
+				// Parse config flag values into a map
+				config := make(map[string]string)
+				for _, configItem := range runConfigFlag {
+					parts := splitKeyValue(configItem)
+					if len(parts) == 2 {
+						config[parts[0]] = parts[1]
+					}
+				}
+
+				req := map[string]interface{}{
 					"namespace": namespace,
 					"name":      name,
 					"digest":    identifier,
-					"tag":       identifier,
+				}
+
+				// Only add config if there are values
+				if len(config) > 0 {
+					req["config"] = config
 				}
 
 				reqBody, err := json.Marshal(req)
@@ -52,7 +67,7 @@ func NewFunctionRunCommand() *cobra.Command {
 				client := http.Client{
 					Transport: &http.Transport{
 						DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-							return net.Dial("unix", socketPath)
+							return net.Dial("unix", runSocketPath)
 						},
 					},
 				}
@@ -99,6 +114,17 @@ func NewFunctionRunCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	cmd.Flags().StringVarP(&runSocketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	cmd.Flags().StringArrayVarP(&runConfigFlag, "config", "c", []string{}, "Configuration values to pass to the function (format: key=value)")
 	return cmd
+}
+
+// Helper function to split a key=value string
+func splitKeyValue(s string) []string {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '=' {
+			return []string{s[:i], s[i+1:]}
+		}
+	}
+	return []string{s}
 }

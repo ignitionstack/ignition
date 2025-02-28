@@ -95,12 +95,17 @@ func (c *EngineClient) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag string) error {
+func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag string, config map[string]string) error {
 	// Create HTTP request body
 	reqBody := map[string]interface{}{
 		"namespace": namespace,
 		"name":      name,
 		"digest":    tag,
+	}
+
+	// Add config if provided
+	if len(config) > 0 {
+		reqBody["config"] = config
 	}
 
 	// Convert to JSON

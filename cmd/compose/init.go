@@ -28,7 +28,7 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 				"services": map[string]interface{}{
 					"api": map[string]interface{}{
 						"function": "my_namespace/api_service:latest",
-						"environment": map[string]string{
+						"config": map[string]string{
 							"DEBUG": "true",
 						},
 					},
