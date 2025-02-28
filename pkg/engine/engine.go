@@ -354,7 +354,7 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 			len(wasmBytes), time.Since(loadStart)))
 
 	initStart := time.Now()
-	plugin, err := createPlugin(wasmBytes, versionInfo, nil) // Pass nil for config as it will be added in the handler
+	plugin, err := createPlugin(wasmBytes, versionInfo, config) // Pass the actual config parameter
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
 		e.logger.Errorf(errMsg)
