@@ -50,14 +50,14 @@ ignition build -t my_namespace/my_function:latest my_function/
 
 **Method 1: Direct CLI Invocation**
 ```bash
-# Call with optional entrypoint (-e) and payload (-p)
-ignition call my_namespace/my_function -e greet -p "ignition"
+# Call with optional entrypoint (-e), payload (-p), and config (-c)
+ignition call my_namespace/my_function -e greet -p "ignition" -c key=value -c another=value
 ```
 
 **Method 2: HTTP API**
 ```bash
-# First, load the function into the engine
-ignition run my_namespace/my_function:latest
+# First, load the function into the engine (optionally with config)
+ignition run my_namespace/my_function:latest -c key=value -c another=value
 
 # Then call via HTTP (requires httpie or similar tool)
 http POST http://localhost:8080/my_namespace/my_function/greet payload=ignition
@@ -80,6 +80,28 @@ function:
     allowed_urls:      # External URLs the function can access
       - "https://api.example.com"
 ```
+
+### Function Configuration
+
+You can pass configuration values to functions at runtime:
+
+```bash
+# Using the run command
+ignition run my_namespace/my_function -c vowels=aeiou -c debug=true
+
+# Using the call command
+ignition call my_namespace/my_function -e count_vowels -p "Hello" -c vowels=aeiou
+
+# Using compose (in ignition-compose.yml)
+services:
+  my_service:
+    function: my_namespace/my_function:latest
+    config:
+      vowels: "aeiou"
+      debug: "true"
+```
+
+These values are accessible within your function via the Extism plugin config mechanism.
 
 ### Supported Languages
 
@@ -137,7 +159,7 @@ version: "1"
 services:
   api:
     function: my_namespace/api_service:latest
-    environment:
+    config:
       DEBUG: "true"
   processor:
     function: my_namespace/processor:v1.2.0
