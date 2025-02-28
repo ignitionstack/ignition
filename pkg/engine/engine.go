@@ -46,6 +46,10 @@ type Engine struct {
 	cbMux           sync.RWMutex
 
 	logStore *FunctionLogStore
+
+	// Track each function's current digest and configuration
+	pluginDigests map[string]string            // maps functionKey to current digest
+	pluginConfigs map[string]map[string]string // maps functionKey to current config
 }
 
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
@@ -92,6 +96,10 @@ func NewEngineWithDependencies(
 		defaultTimeout:  30 * time.Second,
 		circuitBreakers: make(map[string]*CircuitBreaker),
 		logStore:        NewFunctionLogStore(1000),
+
+		// Initialize maps for tracking digests and configs
+		pluginDigests: make(map[string]string),
+		pluginConfigs: make(map[string]map[string]string),
 	}
 }
 
@@ -147,6 +155,9 @@ func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 						plugin.Close(context.TODO())
 						delete(e.plugins, key)
 						delete(e.pluginLastUsed, key)
+						// Also clean up digest and config tracking
+						delete(e.pluginDigests, key)
+						delete(e.pluginConfigs, key)
 						e.logger.Printf("Plugin %s unloaded due to inactivity", key)
 					}
 				}
@@ -326,21 +337,13 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Loading function with identifier: %s", identifier))
 
-	e.pluginsMux.RLock()
-	_, alreadyLoaded := e.plugins[functionKey]
-	e.pluginsMux.RUnlock()
-
-	if alreadyLoaded {
-		e.logger.Printf("Function %s already loaded", functionKey)
-		e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded")
-
-		e.pluginsMux.Lock()
-		e.pluginLastUsed[functionKey] = time.Now()
-		e.pluginsMux.Unlock()
-
-		return nil
+	// Create a copy of the config map to store
+	configCopy := make(map[string]string)
+	for k, v := range config {
+		configCopy[k] = v
 	}
 
+	// First pull the function to get its actual digest
 	loadStart := time.Now()
 	wasmBytes, versionInfo, err := e.registry.Pull(namespace, name, identifier)
 	if err != nil {
@@ -353,8 +356,90 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 		fmt.Sprintf("Function pulled from registry (size: %d bytes, time: %v)",
 			len(wasmBytes), time.Since(loadStart)))
 
+	// Use the actual full digest from versionInfo
+	actualDigest := versionInfo.FullDigest
+
+	// Check if the function is already loaded
+	e.pluginsMux.RLock()
+	_, alreadyLoaded := e.plugins[functionKey]
+
+	// If already loaded, check if digest or config has changed
+	if alreadyLoaded {
+		currentDigest, hasDigest := e.pluginDigests[functionKey]
+		currentConfig, hasConfig := e.pluginConfigs[functionKey]
+		e.pluginsMux.RUnlock()
+
+		// Check if digest has changed (only if we have the current digest)
+		digestChanged := hasDigest && currentDigest != actualDigest
+
+		// Check if config has changed
+		configChanged := false
+		if hasConfig {
+			// If config length is different, it has changed
+			if len(currentConfig) != len(configCopy) {
+				configChanged = true
+			} else {
+				// Check each key-value pair
+				for k, v := range configCopy {
+					if currentValue, exists := currentConfig[k]; !exists || currentValue != v {
+						configChanged = true
+						break
+					}
+				}
+
+				// Double-check in case there's a key in currentConfig that's not in configCopy
+				if !configChanged {
+					for k := range currentConfig {
+						if _, exists := configCopy[k]; !exists {
+							configChanged = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// If neither digest nor config has changed, just update the last used timestamp
+		if !digestChanged && !configChanged {
+			e.logger.Printf("Function %s already loaded with same digest and config", functionKey)
+			e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded with same digest and config")
+
+			e.pluginsMux.Lock()
+			e.pluginLastUsed[functionKey] = time.Now()
+			e.pluginsMux.Unlock()
+
+			return nil
+		}
+
+		// Log what changed
+		if digestChanged {
+			e.logger.Printf("Function %s digest changed from %s to %s, reloading",
+				functionKey, currentDigest, actualDigest)
+			e.logStore.AddLog(functionKey, LevelInfo,
+				fmt.Sprintf("Function digest changed from %s to %s, reloading",
+					currentDigest, actualDigest))
+		}
+
+		if configChanged {
+			e.logger.Printf("Function %s configuration changed, reloading", functionKey)
+			e.logStore.AddLog(functionKey, LevelInfo, "Function configuration changed, reloading")
+		}
+
+		// Unload the function so we can reload it with the new digest/config
+		if err := e.UnloadFunction(namespace, name); err != nil {
+			errMsg := fmt.Sprintf("Failed to unload function before reload: %v", err)
+			e.logger.Errorf(errMsg)
+			e.logStore.AddLog(functionKey, LevelError, errMsg)
+			return fmt.Errorf("failed to unload function before reload: %w", err)
+		}
+	} else {
+		e.pluginsMux.RUnlock()
+	}
+
+	// We've already pulled the function from the registry above
+
 	initStart := time.Now()
-	plugin, err := createPlugin(wasmBytes, versionInfo, config) // Pass the actual config parameter
+	plugin, err := createPlugin(wasmBytes, versionInfo, configCopy)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
 		e.logger.Errorf(errMsg)
@@ -367,14 +452,18 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 	e.pluginsMux.Lock()
 	defer e.pluginsMux.Unlock()
 
+	// Check again if loaded (race condition check)
 	if _, exists := e.plugins[functionKey]; exists {
 		plugin.Close(context.TODO())
 		e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded by another request")
 		return nil
 	}
 
+	// Store the plugin and update tracking info
 	e.plugins[functionKey] = plugin
 	e.pluginLastUsed[functionKey] = time.Now()
+	e.pluginDigests[functionKey] = actualDigest
+	e.pluginConfigs[functionKey] = configCopy
 
 	e.cbMux.Lock()
 	if _, exists := e.circuitBreakers[functionKey]; !exists {
@@ -484,6 +573,10 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	plugin.Close(context.TODO())
 	delete(e.plugins, functionKey)
 	delete(e.pluginLastUsed, functionKey)
+
+	// Also clean up digest and config tracking
+	delete(e.pluginDigests, functionKey)
+	delete(e.pluginConfigs, functionKey)
 
 	e.cbMux.Lock()
 	delete(e.circuitBreakers, functionKey)
