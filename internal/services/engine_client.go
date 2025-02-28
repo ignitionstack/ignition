@@ -104,7 +104,7 @@ func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag st
 	}
 
 	// Add config if provided
-	if config != nil && len(config) > 0 {
+	if len(config) > 0 {
 		reqBody["config"] = config
 	}
 
