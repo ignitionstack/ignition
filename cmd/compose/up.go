@@ -225,7 +225,13 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 
 			namespace, funcName := nameParts[0], nameParts[1]
 
-			err := engineClient.LoadFunction(ctx, namespace, funcName, tag)
+			// Prefer Config over deprecated Environment field
+			config := service.Config
+			if config == nil && service.Environment != nil {
+				config = service.Environment
+			}
+
+			err := engineClient.LoadFunction(ctx, namespace, funcName, tag, config)
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to load function '%s' for service '%s'", service.Function, name)
 

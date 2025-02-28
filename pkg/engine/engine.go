@@ -320,7 +320,7 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	}
 }
 
-func (e *Engine) LoadFunction(namespace, name, identifier string) error {
+func (e *Engine) LoadFunction(namespace, name, identifier string, config map[string]string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
 	functionKey := getFunctionKey(namespace, name)
 
@@ -354,7 +354,7 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 			len(wasmBytes), time.Since(loadStart)))
 
 	initStart := time.Now()
-	plugin, err := createPlugin(wasmBytes, versionInfo)
+	plugin, err := createPlugin(wasmBytes, versionInfo, nil) // Pass nil for config as it will be added in the handler
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
 		e.logger.Errorf(errMsg)
@@ -388,19 +388,20 @@ func (e *Engine) LoadFunction(namespace, name, identifier string) error {
 	return nil
 }
 
-func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo) (*extism.Plugin, error) {
+func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
 	manifest := extism.Manifest{
 		AllowedHosts: versionInfo.Settings.AllowedUrls,
 		Wasm: []extism.Wasm{
 			extism.WasmData{Data: wasmBytes},
 		},
+		Config: config,
 	}
 
-	config := extism.PluginConfig{
+	pluginConfig := extism.PluginConfig{
 		EnableWasi: versionInfo.Settings.Wasi,
 	}
 
-	return extism.NewPlugin(context.Background(), manifest, config, []extism.HostFunction{})
+	return extism.NewPlugin(context.Background(), manifest, pluginConfig, []extism.HostFunction{})
 }
 
 func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {

@@ -47,15 +47,17 @@ type FunctionRequest struct {
 // LoadRequest represents a request to load a function
 type LoadRequest struct {
 	FunctionRequest
-	Digest string `json:"digest" validate:"required"`
+	Digest string            `json:"digest" validate:"required"`
+	Config map[string]string `json:"config,omitempty"`
 }
 
 // OneOffCallRequest represents a request to call a function once
 type OneOffCallRequest struct {
 	FunctionRequest
-	Reference  string `json:"reference" validate:"required"`
-	Entrypoint string `json:"entrypoint" validate:"required"`
-	Payload    string `json:"payload"`
+	Reference  string            `json:"reference" validate:"required"`
+	Entrypoint string            `json:"entrypoint" validate:"required"`
+	Payload    string            `json:"payload"`
+	Config     map[string]string `json:"config,omitempty"`
 }
 
 // ReassignTagRequest represents a request to reassign a tag

@@ -80,7 +80,7 @@ func TestLoadFunction(t *testing.T) {
 	defer cleanupTest(tmpDir)
 
 	// Test loading non-existent function
-	err := engine.LoadFunction("test-namespace", "non-existent", "latest")
+	err := engine.LoadFunction("test-namespace", "non-existent", "latest", nil)
 	assert.Error(t, err)
 
 	// Verify no plugin was loaded
@@ -134,7 +134,7 @@ func TestIntegration(t *testing.T) {
 
 	if buildResult != nil {
 		// Load function
-		err = engine.LoadFunction("test-namespace", "test-function", "latest")
+		err = engine.LoadFunction("test-namespace", "test-function", "latest", nil)
 		require.Error(t, err) // Expected error since build failed
 
 		// Call function

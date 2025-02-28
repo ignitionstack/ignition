@@ -13,8 +13,10 @@ import (
 )
 
 var (
-	entrypoint string
-	payload    string
+	entrypoint     string
+	payload        string
+	callSocketPath string
+	callConfigFlag []string
 )
 
 func NewFunctionCallCommand() *cobra.Command {
@@ -50,7 +52,16 @@ The command requires a running engine to execute the function.`,
 				return fmt.Errorf("invalid function name format: %w", err)
 			}
 
-			req := map[string]string{
+			// Parse config flag values into a map
+			config := make(map[string]string)
+			for _, configItem := range callConfigFlag {
+				parts := splitKeyValue(configItem)
+				if len(parts) == 2 {
+					config[parts[0]] = parts[1]
+				}
+			}
+
+			req := map[string]interface{}{
 				"namespace":  namespace,
 				"name":       name,
 				"reference":  reference,
@@ -58,10 +69,15 @@ The command requires a running engine to execute the function.`,
 				"payload":    payload,
 			}
 
+			// Only add config if there are values
+			if len(config) > 0 {
+				req["config"] = config
+			}
+
 			client := http.Client{
 				Transport: &http.Transport{
 					Dial: func(_, _ string) (net.Conn, error) {
-						return net.Dial("unix", socketPath)
+						return net.Dial("unix", callSocketPath)
 					},
 				},
 			}
@@ -105,7 +121,8 @@ The command requires a running engine to execute the function.`,
 
 	cmd.Flags().StringVarP(&entrypoint, "entrypoint", "e", "handler", "the entrypoint wasm function")
 	cmd.Flags().StringVarP(&payload, "payload", "p", "", "the payload to send to the entrypoint")
-	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	cmd.Flags().StringVarP(&callSocketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	cmd.Flags().StringArrayVarP(&callConfigFlag, "config", "c", []string{}, "Configuration values to pass to the function (format: key=value)")
 
 	return cmd
 }

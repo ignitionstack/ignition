@@ -9,9 +9,9 @@ import (
 )
 
 type EngineClient interface {
-	LoadFunction(ctx context.Context, namespace, name, tag string) error
+	LoadFunction(ctx context.Context, namespace, name, tag string, config map[string]string) error
 	UnloadFunction(ctx context.Context, namespace, name string) error
-	CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error)
+	CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte, config map[string]string) ([]byte, error)
 	BuildFunction(ctx context.Context, request *types.BuildRequest) (*types.BuildResult, error)
 }
 
@@ -25,12 +25,12 @@ func (c *HTTPEngineClient) BuildFunction(ctx context.Context, request *types.Bui
 	return &types.BuildResult{}, nil
 }
 
-func (c *HTTPEngineClient) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
+func (c *HTTPEngineClient) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte, config map[string]string) ([]byte, error) {
 	// TODO: Implement this method
 	return []byte{}, nil
 }
 
-func (c *HTTPEngineClient) LoadFunction(ctx context.Context, namespace, name, tag string) error {
+func (c *HTTPEngineClient) LoadFunction(ctx context.Context, namespace, name, tag string, config map[string]string) error {
 	// TODO: Implement this method
 	return nil
 }
