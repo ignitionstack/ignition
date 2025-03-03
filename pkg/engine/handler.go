@@ -11,6 +11,8 @@ import (
 
 	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
+	"github.com/ignitionstack/ignition/pkg/engine/components"
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	"github.com/ignitionstack/ignition/pkg/types"
 )
@@ -18,12 +20,12 @@ import (
 // Handlers contains HTTP handlers for engine endpoints
 type Handlers struct {
 	engine    *Engine
-	logger    Logger
+	logger    logging.Logger
 	validator *validator.Validate
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(engine *Engine, logger Logger) *Handlers {
+func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	return &Handlers{
 		engine:    engine,
 		logger:    logger,
@@ -177,11 +179,11 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list loaded functions")
 
-	// Get all loaded functions
-	h.engine.pluginsMux.RLock()
-	loadedFunctions := make([]types.LoadedFunction, 0, len(h.engine.plugins))
+	// Get list of loaded functions from the plugin manager
+	functionKeys := h.engine.pluginManager.ListLoadedFunctions()
 
-	for key := range h.engine.plugins {
+	loadedFunctions := make([]types.LoadedFunction, 0, len(functionKeys))
+	for _, key := range functionKeys {
 		parts := strings.Split(key, "/")
 		if len(parts) == 2 {
 			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
@@ -190,7 +192,6 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 			})
 		}
 	}
-	h.engine.pluginsMux.RUnlock()
 
 	return h.writeJSONResponse(w, loadedFunctions)
 }
@@ -238,7 +239,11 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 	h.logger.Printf("Received call request for function: %s/%s, entrypoint: %s",
 		namespace, name, entrypoint)
 
-	output, err := h.engine.CallFunction(namespace, name, entrypoint, []byte(req.Payload))
+	// Create a context from the request that will be canceled if the client disconnects
+	ctx := r.Context()
+
+	// Try calling the function with the request context
+	output, err := h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
 	if err != nil {
 		if err == ErrFunctionNotLoaded {
 			// Check if this function was previously loaded but was unloaded due to TTL
@@ -287,21 +292,26 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 				tagToLoad = latestVersion.FullDigest
 			}
 
-			// Load the function with the chosen tag and previous config
-			if err := h.engine.LoadFunction(namespace, name, tagToLoad, previousConfig); err != nil {
+			// Load the function with the chosen tag and previous config using context
+			if err := h.engine.LoadFunctionWithContext(ctx, namespace, name, tagToLoad, previousConfig); err != nil {
 				return fmt.Errorf("failed to reload function: %w", err)
 			}
 
-			// Try calling the function again
-			output, err = h.engine.CallFunction(namespace, name, entrypoint, []byte(req.Payload))
+			// Try calling the function again with context
+			output, err = h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
 			if err != nil {
 				return err
 			}
 		} else {
+			// Check for context cancellation
+			if ctx.Err() != nil {
+				return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+			}
 			return err
 		}
 	}
 
+	// Set appropriate headers and write the response
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(output)
 	return err
@@ -317,45 +327,131 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 	h.logger.Printf("Received one-off call request for function: %s/%s (reference: %s, entrypoint: %s)",
 		req.Namespace, req.Name, req.Reference, req.Entrypoint)
 
-	// Fetch the function from the registry
-	wasmBytes, versionInfo, err := h.engine.GetRegistry().Pull(req.Namespace, req.Name, req.Reference)
-	if err != nil {
-		if err == registry.ErrFunctionNotFound || err == registry.ErrVersionNotFound {
-			return NewNotFoundError(err.Error())
+	// Get context from the request for cancellation support
+	ctx := r.Context()
+
+	// Create a channel for the result
+	type pullResult struct {
+		wasmBytes   []byte
+		versionInfo *registry.VersionInfo
+		err         error
+	}
+
+	// Fetch the function from the registry in a goroutine
+	pullCh := make(chan pullResult, 1)
+	go func() {
+		wasmBytes, versionInfo, err := h.engine.GetRegistry().Pull(req.Namespace, req.Name, req.Reference)
+		select {
+		case pullCh <- pullResult{wasmBytes, versionInfo, err}:
+		case <-ctx.Done():
+			// Context cancelled, but we need to send something to avoid goroutine leak
+			select {
+			case pullCh <- pullResult{nil, nil, ctx.Err()}:
+			default:
+			}
 		}
-		return err
+	}()
+
+	// Wait for result or context cancellation
+	var result pullResult
+	select {
+	case result = <-pullCh:
+	case <-ctx.Done():
+		result = <-pullCh // Clean up goroutine
 	}
 
-	// Create a manifest for the function
-	manifest := extism.Manifest{
-		AllowedHosts: versionInfo.Settings.AllowedUrls,
-		Wasm: []extism.Wasm{
-			extism.WasmData{Data: wasmBytes},
-		},
-		Config: req.Config,
+	// Check for errors
+	if result.err != nil {
+		if result.err == registry.ErrFunctionNotFound || result.err == registry.ErrVersionNotFound {
+			return NewNotFoundError(result.err.Error())
+		}
+		if ctx.Err() != nil {
+			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+		return result.err
 	}
 
-	// Create and configure the plugin
-	pluginConfig := extism.PluginConfig{
-		EnableWasi: versionInfo.Settings.Wasi,
+	wasmBytes, versionInfo := result.wasmBytes, result.versionInfo
+
+	// Initialize the plugin in a goroutine
+	type pluginResult struct {
+		plugin *extism.Plugin
+		err    error
 	}
 
-	// Initialize the plugin
-	plugin, err := extism.NewPlugin(context.Background(), manifest, pluginConfig, []extism.HostFunction{})
-	if err != nil {
-		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", err))
+	pluginCh := make(chan pluginResult, 1)
+	go func() {
+		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, req.Config)
+		select {
+		case pluginCh <- pluginResult{plugin, err}:
+		case <-ctx.Done():
+			if plugin != nil && err == nil {
+				plugin.Close(context.Background()) // Clean up resources
+			}
+			select {
+			case pluginCh <- pluginResult{nil, ctx.Err()}:
+			default:
+			}
+		}
+	}()
+
+	// Wait for plugin creation or context cancellation
+	var pluginRes pluginResult
+	select {
+	case pluginRes = <-pluginCh:
+	case <-ctx.Done():
+		pluginRes = <-pluginCh // Clean up goroutine
 	}
+
+	// Check for errors
+	if pluginRes.err != nil {
+		if ctx.Err() != nil {
+			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", pluginRes.err))
+	}
+
+	plugin := pluginRes.plugin
 	defer plugin.Close(context.Background())
 
-	// Call the function
-	_, output, err := plugin.Call(req.Entrypoint, []byte(req.Payload))
-	if err != nil {
-		return NewInternalServerError(fmt.Sprintf("Failed to call function: %v", err))
+	// Call the function in a goroutine
+	type callResult struct {
+		output []byte
+		err    error
+	}
+
+	callCh := make(chan callResult, 1)
+	go func() {
+		_, output, err := plugin.Call(req.Entrypoint, []byte(req.Payload))
+		select {
+		case callCh <- callResult{output, err}:
+		case <-ctx.Done():
+			select {
+			case callCh <- callResult{nil, ctx.Err()}:
+			default:
+			}
+		}
+	}()
+
+	// Wait for call result or context cancellation
+	var callRes callResult
+	select {
+	case callRes = <-callCh:
+	case <-ctx.Done():
+		callRes = <-callCh // Clean up goroutine
+	}
+
+	// Check for errors
+	if callRes.err != nil {
+		if ctx.Err() != nil {
+			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+		return NewInternalServerError(fmt.Sprintf("Failed to call function: %v", callRes.err))
 	}
 
 	// Return the output
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(output)
+	_, err := w.Write(callRes.output)
 	return err
 }
 
@@ -381,10 +477,12 @@ func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) err
 
 // handleStatus returns the current status of the engine
 func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
-	// In a real implementation, this would gather actual metrics
+	// Get the count of loaded functions from the plugin manager
+	loadedCount := h.engine.pluginManager.GetLoadedFunctionCount()
+
 	status := map[string]interface{}{
 		"status":           "running",
-		"loaded_functions": len(h.engine.plugins),
+		"loaded_functions": loadedCount,
 	}
 
 	return h.writeJSONResponse(w, status)
@@ -424,12 +522,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 	h.logger.Printf("Received logs request for function: %s/%s", namespace, name)
 
 	// Check if function exists and is loaded
-	functionKey := getFunctionKey(namespace, name)
-	h.engine.pluginsMux.RLock()
-	_, exists := h.engine.plugins[functionKey]
-	h.engine.pluginsMux.RUnlock()
-
-	if !exists {
+	if !h.engine.IsLoaded(namespace, name) {
 		return NewNotFoundError(fmt.Sprintf("Function %s/%s is not loaded", namespace, name))
 	}
 
@@ -468,7 +561,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 
 // getEngineLogs retrieves logs for a specific function from the engine's log store
 func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
-	functionKey := getFunctionKey(namespace, name)
+	functionKey := components.GetFunctionKey(namespace, name)
 
 	// Retrieve logs from the engine's log store
 	logs := h.engine.logStore.GetLogs(functionKey, since, tail)

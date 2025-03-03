@@ -9,18 +9,20 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 )
 
 type Server struct {
 	socketPath   string
 	httpAddr     string
 	handlers     *Handlers
-	logger       Logger
+	logger       logging.Logger
 	httpServer   *http.Server
 	socketServer *http.Server
 }
 
-func NewServer(socketPath, httpAddr string, handlers *Handlers, logger Logger) *Server {
+func NewServer(socketPath, httpAddr string, handlers *Handlers, logger logging.Logger) *Server {
 	return &Server{
 		socketPath: socketPath,
 		httpAddr:   httpAddr,

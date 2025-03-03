@@ -5,27 +5,25 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func setupTestEngine(t *testing.T) (*Engine, string) {
-	// Create a temporary directory for the test
 	tmpDir, err := os.MkdirTemp("", "ignition-test-*")
 	require.NoError(t, err)
 
-	// Set up a temporary socket path and http address
 	socketPath := filepath.Join(tmpDir, "ignition.sock")
-	httpAddr := "localhost:0" // Use port 0 to get a random available port
+	httpAddr := "localhost:0"
 	registryDir := filepath.Join(tmpDir, ".ignition")
 
-	// Create registry directory
 	err = os.MkdirAll(registryDir, 0755)
 	require.NoError(t, err)
 
-	// Create new engine instance with the temp directory
-	engine, err := NewEngine(socketPath, httpAddr, registryDir)
+	logger := logging.NewStdLogger(os.Stdout)
+	engine, err := NewEngineWithLogger(socketPath, httpAddr, registryDir, logger)
 	require.NoError(t, err)
 
 	return engine, tmpDir
@@ -41,7 +39,8 @@ func TestNewEngine(t *testing.T) {
 
 	assert.NotNil(t, engine)
 	assert.NotNil(t, engine.registry)
-	assert.NotNil(t, engine.plugins)
+	assert.NotNil(t, engine.pluginManager)
+	assert.NotNil(t, engine.circuitBreakers)
 	assert.NotNil(t, engine.logger)
 	assert.Equal(t, filepath.Join(tmpDir, "ignition.sock"), engine.socketPath)
 	assert.Equal(t, "localhost:0", engine.httpAddr)
@@ -84,9 +83,8 @@ func TestLoadFunction(t *testing.T) {
 	assert.Error(t, err)
 
 	// Verify no plugin was loaded
-	engine.pluginsMux.RLock()
-	assert.Equal(t, 0, len(engine.plugins))
-	engine.pluginsMux.RUnlock()
+	loadedCount := engine.pluginManager.GetLoadedFunctionCount()
+	assert.Equal(t, 0, loadedCount)
 }
 
 func TestCallFunction(t *testing.T) {
