@@ -265,7 +265,7 @@ func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 	}
 
 	if finalResult != nil {
-		finalResult.BuildTime = time.Since(buildStart)
+		finalResult.BuildTime = time.Since(buildStart).String()
 		program.Send(spinner.ResultMsg{Result: *finalResult})
 	}
 }
@@ -338,5 +338,5 @@ func displayBuildResults(result types.BuildResult, tags []TagInfo) {
 	}
 	ui.PrintMetadata("Hash ›", result.Digest)
 	fmt.Println()
-	ui.PrintInfo("Build time", result.BuildTime.Round(time.Millisecond).String())
+	ui.PrintInfo("Build time", result.BuildTime)
 }

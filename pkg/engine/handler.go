@@ -249,7 +249,7 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 		Digest:    result.Digest,
 		Tag:       result.Tag,
 		Status:    "success",
-		BuildTime: result.BuildTime.String(),
+		BuildTime: result.BuildTime,
 	}
 
 	return h.writeJSONResponse(w, response)

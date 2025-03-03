@@ -22,12 +22,12 @@ type BuildResponse struct {
 
 // BuildResult contains information about a successful build.
 type BuildResult struct {
-	Name      string        `json:"name"`
-	Namespace string        `json:"namespace"`
-	Digest    string        `json:"digest"`
-	BuildTime time.Duration `json:"build_time"`
-	Tag       string        `json:"tag"`
-	Reused    bool          `json:"reused"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Digest    string `json:"digest"`
+	BuildTime string `json:"build_time"`
+	Tag       string `json:"tag"`
+	Reused    bool   `json:"reused"`
 }
 
 // LoadResult contains information about a successful load operation.
