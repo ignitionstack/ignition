@@ -9,7 +9,7 @@ import (
 type ExtendedBuildRequest struct {
 	// Embed the build request from types package
 	types.BuildRequest
-	
+
 	// Add the manifest field
 	Manifest manifest.FunctionManifest `json:"manifest"`
 }

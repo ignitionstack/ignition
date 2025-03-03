@@ -23,7 +23,7 @@ type DefaultFunctionManager struct {
 }
 
 // NewFunctionManager creates a new function manager
-func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, registry registry.Registry, 
+func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, registry registry.Registry,
 	functionSvc services.FunctionService, defaultTimeout time.Duration) *DefaultFunctionManager {
 	return &DefaultFunctionManager{
 		loader:         loader,

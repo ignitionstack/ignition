@@ -128,11 +128,11 @@ is not running, it will display a warning and show no functions.`,
 			// Show explanation notes for different function statuses
 			if unloadedFunctionsExist || stoppedFunctionsExist {
 				fmt.Println()
-				
+
 				if unloadedFunctionsExist {
 					ui.PrintInfo("Note", "Functions with 'unloaded' status are available but not currently loaded in memory")
 				}
-				
+
 				if stoppedFunctionsExist {
 					ui.PrintInfo("Note", "Functions with 'stopped' status will not be automatically reloaded when called")
 				}

@@ -235,11 +235,13 @@ func NewRegistry(dbRepo repository.DBRepository, config AppConfig) registry.Regi
 }
 
 func NewEngine(params EngineParams) *engine.Engine {
+	options := engine.DefaultEngineOptions()
 	return engine.NewEngineWithDependencies(
 		params.Config.SocketPath,
 		params.Config.HTTPAddr,
 		params.Registry,
 		params.FunctionService,
 		params.Logger,
+		options,
 	)
 }

@@ -11,16 +11,83 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-type PluginManager struct {
-	plugins         map[string]*extism.Plugin
-	pluginLastUsed  map[string]time.Time
-	pluginsMux      sync.RWMutex
-	ttlDuration     time.Duration
-	cleanupInterval time.Duration
-	cleanupTicker   *time.Ticker
-	logger          logging.Logger
+// PluginManager manages function plugins lifecycle
+type PluginManager interface {
+	// Get a plugin by key
+	GetPlugin(key string) (*extism.Plugin, bool)
 
-	// Using separate mutexes for different maps to reduce contention
+	// Store a plugin
+	StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string)
+
+	// Remove a plugin
+	RemovePlugin(key string) bool
+
+	// Stop a function (prevents auto-reload)
+	StopFunction(key string) bool
+
+	// Check if a function is stopped
+	IsFunctionStopped(key string) bool
+
+	// Clear stopped status
+	ClearStoppedStatus(key string)
+
+	// Check if a plugin is loaded
+	IsPluginLoaded(key string) bool
+
+	// Check if a plugin was previously loaded
+	WasPreviouslyLoaded(key string) (bool, map[string]string)
+
+	// Check if config has changed
+	HasConfigChanged(key string, newConfig map[string]string) bool
+
+	// Check if digest has changed
+	HasDigestChanged(key string, newDigest string) bool
+
+	// Get plugin digest
+	GetPluginDigest(key string) (string, bool)
+
+	// Get plugin config
+	GetPluginConfig(key string) (map[string]string, bool)
+
+	// Start cleanup routine
+	StartCleanup(ctx context.Context)
+
+	// Shutdown and cleanup resources
+	Shutdown()
+
+	// Get log store
+	GetLogStore() *logging.FunctionLogStore
+
+	// List loaded functions
+	ListLoadedFunctions() []string
+
+	// Get loaded function count
+	GetLoadedFunctionCount() int
+
+	// Get previously loaded functions
+	GetPreviouslyLoadedFunctions() map[string]bool
+
+	// Get stopped functions
+	GetStoppedFunctions() map[string]bool
+}
+
+// PluginManagerSettings defines configurable options for the plugin manager
+type PluginManagerSettings struct {
+	// How long to keep unused plugins loaded
+	TTL time.Duration
+
+	// How often to run the plugin cleanup routine
+	CleanupInterval time.Duration
+}
+
+// defaultPluginManager implements the PluginManager interface
+type defaultPluginManager struct {
+	// Primary plugin storage
+	plugins        map[string]*extism.Plugin
+	pluginLastUsed map[string]time.Time
+	pluginsMux     sync.RWMutex
+
+	// Plugin state and metadata
 	pluginDigests       map[string]string
 	pluginDigestsMux    sync.RWMutex
 	pluginConfigs       map[string]map[string]string
@@ -30,25 +97,21 @@ type PluginManager struct {
 	stoppedFunctions    map[string]bool
 	stoppedFunctionsMux sync.RWMutex
 
+	// Configuration
+	ttlDuration     time.Duration
+	cleanupInterval time.Duration
+	cleanupTicker   *time.Ticker
+
+	// Dependencies
+	logger   logging.Logger
 	logStore *logging.FunctionLogStore
 }
 
-type PluginOptions struct {
-	TTL              time.Duration
-	CleanupInterval  time.Duration
-	LogStoreCapacity int
-}
+// NewPluginManager creates a new plugin manager with the specified settings
+func NewPluginManager(logger logging.Logger, options PluginManagerSettings) PluginManager {
+	logStoreCapacity := 1000 // Default value
 
-func DefaultPluginOptions() PluginOptions {
-	return PluginOptions{
-		TTL:              10 * time.Minute,
-		CleanupInterval:  1 * time.Minute,
-		LogStoreCapacity: 1000,
-	}
-}
-
-func NewPluginManager(logger logging.Logger, options PluginOptions) *PluginManager {
-	return &PluginManager{
+	return &defaultPluginManager{
 		plugins:          make(map[string]*extism.Plugin),
 		pluginLastUsed:   make(map[string]time.Time),
 		ttlDuration:      options.TTL,
@@ -58,11 +121,11 @@ func NewPluginManager(logger logging.Logger, options PluginOptions) *PluginManag
 		pluginConfigs:    make(map[string]map[string]string),
 		previouslyLoaded: make(map[string]bool),
 		stoppedFunctions: make(map[string]bool),
-		logStore:         logging.NewFunctionLogStore(options.LogStoreCapacity),
+		logStore:         logging.NewFunctionLogStore(logStoreCapacity),
 	}
 }
 
-func (pm *PluginManager) StartCleanup(ctx context.Context) {
+func (pm *defaultPluginManager) StartCleanup(ctx context.Context) {
 	// Get cleanup interval from options, defaulting to 1 minute
 	cleanupInterval := pm.cleanupInterval
 	if cleanupInterval == 0 {
@@ -93,7 +156,7 @@ func (pm *PluginManager) StartCleanup(ctx context.Context) {
 	}()
 }
 
-func (pm *PluginManager) cleanupUnusedPlugins() {
+func (pm *defaultPluginManager) cleanupUnusedPlugins() {
 	pm.pluginsMux.Lock()
 	defer pm.pluginsMux.Unlock()
 
@@ -113,7 +176,7 @@ func (pm *PluginManager) cleanupUnusedPlugins() {
 	}
 }
 
-func (pm *PluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
+func (pm *defaultPluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 	pm.pluginsMux.RLock()
 	plugin, ok := pm.plugins[key]
 	pm.pluginsMux.RUnlock()
@@ -134,7 +197,7 @@ func (pm *PluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 	return plugin, ok
 }
 
-func (pm *PluginManager) StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string) {
+func (pm *defaultPluginManager) StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string) {
 	// Handle plugin map updates with its own lock
 	func() {
 		pm.pluginsMux.Lock()
@@ -180,7 +243,7 @@ func (pm *PluginManager) StorePlugin(key string, plugin *extism.Plugin, digest s
 	}
 }
 
-func (pm *PluginManager) RemovePlugin(key string) bool {
+func (pm *defaultPluginManager) RemovePlugin(key string) bool {
 	pm.pluginsMux.Lock()
 	defer pm.pluginsMux.Unlock()
 
@@ -199,43 +262,43 @@ func (pm *PluginManager) RemovePlugin(key string) bool {
 }
 
 // StopFunction permanently stops a function and prevents automatic reloading
-func (pm *PluginManager) StopFunction(key string) bool {
+func (pm *defaultPluginManager) StopFunction(key string) bool {
 	// First unload the plugin if it's loaded
 	removed := pm.RemovePlugin(key)
-	
+
 	// Mark the function as stopped to prevent automatic reload
 	pm.stoppedFunctionsMux.Lock()
 	pm.stoppedFunctions[key] = true
 	pm.stoppedFunctionsMux.Unlock()
-	
+
 	if pm.logStore != nil {
 		pm.logStore.AddLog(key, logging.LevelInfo, "Function stopped and will not be automatically reloaded")
 	}
-	
+
 	return removed
 }
 
 // IsFunctionStopped checks if a function has been explicitly stopped
-func (pm *PluginManager) IsFunctionStopped(key string) bool {
+func (pm *defaultPluginManager) IsFunctionStopped(key string) bool {
 	pm.stoppedFunctionsMux.RLock()
 	defer pm.stoppedFunctionsMux.RUnlock()
-	
+
 	stopped, exists := pm.stoppedFunctions[key]
 	return exists && stopped
 }
 
 // ClearStoppedStatus removes the stopped status from a function, allowing it to be loaded again
-func (pm *PluginManager) ClearStoppedStatus(key string) {
+func (pm *defaultPluginManager) ClearStoppedStatus(key string) {
 	pm.stoppedFunctionsMux.Lock()
 	delete(pm.stoppedFunctions, key)
 	pm.stoppedFunctionsMux.Unlock()
-	
+
 	if pm.logStore != nil {
 		pm.logStore.AddLog(key, logging.LevelInfo, "Function's stopped status cleared, can be loaded again")
 	}
 }
 
-func (pm *PluginManager) IsPluginLoaded(key string) bool {
+func (pm *defaultPluginManager) IsPluginLoaded(key string) bool {
 	pm.pluginsMux.RLock()
 	_, exists := pm.plugins[key]
 	pm.pluginsMux.RUnlock()
@@ -243,14 +306,14 @@ func (pm *PluginManager) IsPluginLoaded(key string) bool {
 	return exists
 }
 
-func (pm *PluginManager) WasPreviouslyLoaded(key string) (bool, map[string]string) {
+func (pm *defaultPluginManager) WasPreviouslyLoaded(key string) (bool, map[string]string) {
 	pm.previouslyLoadedMux.RLock()
 	wasLoaded, exists := pm.previouslyLoaded[key]
 	pm.previouslyLoadedMux.RUnlock()
 
 	// Get the last known config for this function
 	var config map[string]string
-	pm.pluginsMux.RLock()
+	pm.pluginConfigsMux.RLock()
 	lastConfig, hasConfig := pm.pluginConfigs[key]
 	if hasConfig {
 		// Make a copy of the config
@@ -259,13 +322,13 @@ func (pm *PluginManager) WasPreviouslyLoaded(key string) (bool, map[string]strin
 			config[k] = v
 		}
 	}
-	pm.pluginsMux.RUnlock()
+	pm.pluginConfigsMux.RUnlock()
 
 	return exists && wasLoaded, config
 }
 
 // HasConfigChanged compares stored config with a new config to check for changes
-func (pm *PluginManager) HasConfigChanged(key string, newConfig map[string]string) bool {
+func (pm *defaultPluginManager) HasConfigChanged(key string, newConfig map[string]string) bool {
 	pm.pluginConfigsMux.RLock()
 	currentConfig, hasConfig := pm.pluginConfigs[key]
 	pm.pluginConfigsMux.RUnlock()
@@ -293,7 +356,7 @@ func (pm *PluginManager) HasConfigChanged(key string, newConfig map[string]strin
 	return false
 }
 
-func (pm *PluginManager) HasDigestChanged(key string, newDigest string) bool {
+func (pm *defaultPluginManager) HasDigestChanged(key string, newDigest string) bool {
 	pm.pluginDigestsMux.RLock()
 	currentDigest, hasDigest := pm.pluginDigests[key]
 	pm.pluginDigestsMux.RUnlock()
@@ -317,11 +380,11 @@ func CreatePlugin(wasmBytes []byte, versionInfo *registry.VersionInfo, config ma
 	return extism.NewPlugin(context.Background(), manifest, pluginConfig, []extism.HostFunction{})
 }
 
-func (pm *PluginManager) GetLogStore() *logging.FunctionLogStore {
+func (pm *defaultPluginManager) GetLogStore() *logging.FunctionLogStore {
 	return pm.logStore
 }
 
-func (pm *PluginManager) GetPluginDigest(key string) (string, bool) {
+func (pm *defaultPluginManager) GetPluginDigest(key string) (string, bool) {
 	pm.pluginDigestsMux.RLock()
 	digest, exists := pm.pluginDigests[key]
 	pm.pluginDigestsMux.RUnlock()
@@ -329,7 +392,7 @@ func (pm *PluginManager) GetPluginDigest(key string) (string, bool) {
 	return digest, exists
 }
 
-func (pm *PluginManager) GetPluginConfig(key string) (map[string]string, bool) {
+func (pm *defaultPluginManager) GetPluginConfig(key string) (map[string]string, bool) {
 	pm.pluginConfigsMux.RLock()
 	config, exists := pm.pluginConfigs[key]
 
@@ -347,7 +410,7 @@ func (pm *PluginManager) GetPluginConfig(key string) (map[string]string, bool) {
 }
 
 // GetPreviouslyLoadedFunctions returns a map of all functions that have been previously loaded
-func (pm *PluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
+func (pm *defaultPluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 	pm.previouslyLoadedMux.RLock()
 	defer pm.previouslyLoadedMux.RUnlock()
 
@@ -361,7 +424,7 @@ func (pm *PluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 }
 
 // GetStoppedFunctions returns a map of all functions that have been stopped
-func (pm *PluginManager) GetStoppedFunctions() map[string]bool {
+func (pm *defaultPluginManager) GetStoppedFunctions() map[string]bool {
 	pm.stoppedFunctionsMux.RLock()
 	defer pm.stoppedFunctionsMux.RUnlock()
 
@@ -374,7 +437,7 @@ func (pm *PluginManager) GetStoppedFunctions() map[string]bool {
 	return result
 }
 
-func (pm *PluginManager) Shutdown() {
+func (pm *defaultPluginManager) Shutdown() {
 	if pm.cleanupTicker != nil {
 		pm.cleanupTicker.Stop()
 	}
@@ -389,7 +452,7 @@ func (pm *PluginManager) Shutdown() {
 }
 
 // ListLoadedFunctions returns a list of currently loaded function keys
-func (pm *PluginManager) ListLoadedFunctions() []string {
+func (pm *defaultPluginManager) ListLoadedFunctions() []string {
 	pm.pluginsMux.RLock()
 	defer pm.pluginsMux.RUnlock()
 
@@ -402,7 +465,7 @@ func (pm *PluginManager) ListLoadedFunctions() []string {
 }
 
 // GetLoadedFunctionCount returns the number of currently loaded functions
-func (pm *PluginManager) GetLoadedFunctionCount() int {
+func (pm *defaultPluginManager) GetLoadedFunctionCount() int {
 	pm.pluginsMux.RLock()
 	defer pm.pluginsMux.RUnlock()
 
