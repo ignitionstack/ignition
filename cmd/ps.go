@@ -82,8 +82,12 @@ is not running, it will display a warning and show no functions.`,
 			// Print all functions
 			if engineRunning && len(runningFunctions) > 0 {
 				for _, fn := range runningFunctions {
-					status := "running"
-					if fn.Status == "unloaded" {
+					status := fn.Status
+					if status == "" {
+						status = "running"
+					} else if status == "stopped" {
+						status = "stopped"
+					} else if status == "unloaded" {
 						status = "unloaded"
 					}
 					fmt.Printf(dataFormat, fn.Namespace, fn.Name, status)
@@ -100,6 +104,7 @@ is not running, it will display a warning and show no functions.`,
 		// Add rows for all functions
 		if engineRunning && len(runningFunctions) > 0 {
 			unloadedFunctionsExist := false
+			stoppedFunctionsExist := false
 
 			for _, fn := range runningFunctions {
 				var statusStyle string
@@ -107,6 +112,9 @@ is not running, it will display a warning and show no functions.`,
 				if fn.Status == "unloaded" {
 					statusStyle = ui.StyleStatusValue("unloaded")
 					unloadedFunctionsExist = true
+				} else if fn.Status == "stopped" {
+					statusStyle = ui.StyleStatusValue("stopped")
+					stoppedFunctionsExist = true
 				} else {
 					statusStyle = ui.StyleStatusValue("running")
 				}
@@ -117,9 +125,17 @@ is not running, it will display a warning and show no functions.`,
 			// Render the table
 			fmt.Println(ui.RenderTable(table))
 
-			if unloadedFunctionsExist {
+			// Show explanation notes for different function statuses
+			if unloadedFunctionsExist || stoppedFunctionsExist {
 				fmt.Println()
-				ui.PrintInfo("Note", "Functions with 'unloaded' status are available but not currently loaded in memory")
+				
+				if unloadedFunctionsExist {
+					ui.PrintInfo("Note", "Functions with 'unloaded' status are available but not currently loaded in memory")
+				}
+				
+				if stoppedFunctionsExist {
+					ui.PrintInfo("Note", "Functions with 'stopped' status will not be automatically reloaded when called")
+				}
 			}
 		} else {
 			ui.PrintInfo("Status", "No functions found")

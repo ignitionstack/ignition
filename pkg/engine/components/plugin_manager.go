@@ -27,6 +27,8 @@ type PluginManager struct {
 	pluginConfigsMux    sync.RWMutex
 	previouslyLoaded    map[string]bool
 	previouslyLoadedMux sync.RWMutex
+	stoppedFunctions    map[string]bool
+	stoppedFunctionsMux sync.RWMutex
 
 	logStore *logging.FunctionLogStore
 }
@@ -55,6 +57,7 @@ func NewPluginManager(logger logging.Logger, options PluginOptions) *PluginManag
 		pluginDigests:    make(map[string]string),
 		pluginConfigs:    make(map[string]map[string]string),
 		previouslyLoaded: make(map[string]bool),
+		stoppedFunctions: make(map[string]bool),
 		logStore:         logging.NewFunctionLogStore(options.LogStoreCapacity),
 	}
 }
@@ -195,6 +198,43 @@ func (pm *PluginManager) RemovePlugin(key string) bool {
 	return false
 }
 
+// StopFunction permanently stops a function and prevents automatic reloading
+func (pm *PluginManager) StopFunction(key string) bool {
+	// First unload the plugin if it's loaded
+	removed := pm.RemovePlugin(key)
+	
+	// Mark the function as stopped to prevent automatic reload
+	pm.stoppedFunctionsMux.Lock()
+	pm.stoppedFunctions[key] = true
+	pm.stoppedFunctionsMux.Unlock()
+	
+	if pm.logStore != nil {
+		pm.logStore.AddLog(key, logging.LevelInfo, "Function stopped and will not be automatically reloaded")
+	}
+	
+	return removed
+}
+
+// IsFunctionStopped checks if a function has been explicitly stopped
+func (pm *PluginManager) IsFunctionStopped(key string) bool {
+	pm.stoppedFunctionsMux.RLock()
+	defer pm.stoppedFunctionsMux.RUnlock()
+	
+	stopped, exists := pm.stoppedFunctions[key]
+	return exists && stopped
+}
+
+// ClearStoppedStatus removes the stopped status from a function, allowing it to be loaded again
+func (pm *PluginManager) ClearStoppedStatus(key string) {
+	pm.stoppedFunctionsMux.Lock()
+	delete(pm.stoppedFunctions, key)
+	pm.stoppedFunctionsMux.Unlock()
+	
+	if pm.logStore != nil {
+		pm.logStore.AddLog(key, logging.LevelInfo, "Function's stopped status cleared, can be loaded again")
+	}
+}
+
 func (pm *PluginManager) IsPluginLoaded(key string) bool {
 	pm.pluginsMux.RLock()
 	_, exists := pm.plugins[key]
@@ -314,6 +354,20 @@ func (pm *PluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 	// Make a copy to avoid concurrency issues
 	result := make(map[string]bool, len(pm.previouslyLoaded))
 	for k, v := range pm.previouslyLoaded {
+		result[k] = v
+	}
+
+	return result
+}
+
+// GetStoppedFunctions returns a map of all functions that have been stopped
+func (pm *PluginManager) GetStoppedFunctions() map[string]bool {
+	pm.stoppedFunctionsMux.RLock()
+	defer pm.stoppedFunctionsMux.RUnlock()
+
+	// Make a copy to avoid concurrency issues
+	result := make(map[string]bool, len(pm.stoppedFunctions))
+	for k, v := range pm.stoppedFunctions {
 		result[k] = v
 	}
 
