@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// NewComposeInitCommand creates a new cobra command for compose init
+// NewComposeInitCommand creates a new cobra command for compose init.
 func NewComposeInitCommand(container *di.Container) *cobra.Command {
 	var outputPath string
 

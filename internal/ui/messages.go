@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Enhanced symbols with consistent appearance
+// Enhanced symbols with consistent appearance.
 const (
 	SuccessSymbol    = "✓"
 	ErrorSymbol      = "✗"
@@ -26,10 +26,10 @@ const (
 	LoadingDots      = "..."
 )
 
-// Command prompt symbol
+// Command prompt symbol.
 const CommandPrompt = "❯"
 
-// PrintLogo prints the Ignition logo banner
+// PrintLogo prints the Ignition logo banner.
 func PrintLogo() {
 	width := TerminalWidth()
 	if width < 80 {

@@ -12,7 +12,16 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// MockPluginManager is a mock implementation of PluginManager for testing
+// Constants for common circuit breaker states
+const (
+	circuitStateClosed = "closed"
+	circuitStateOpen   = "open"
+	
+	// Default capacity for log store
+	defaultLogStoreCapacity = 100
+)
+
+// MockPluginManager is a mock implementation of PluginManager for testing.
 type MockPluginManager struct {
 	plugins map[string]*extism.Plugin
 	mutex   sync.RWMutex
@@ -59,7 +68,7 @@ type MockPluginManager struct {
 	logStore *logging.FunctionLogStore
 }
 
-// NewMockPluginManager creates a new mock plugin manager
+// NewMockPluginManager creates a new mock plugin manager.
 func NewMockPluginManager() *MockPluginManager {
 	return &MockPluginManager{
 		plugins: make(map[string]*extism.Plugin),
@@ -74,11 +83,11 @@ func NewMockPluginManager() *MockPluginManager {
 			configs:          make(map[string]map[string]string),
 			digests:          make(map[string]string),
 		},
-		logStore: logging.NewFunctionLogStore(100),
+		logStore: logging.NewFunctionLogStore(defaultLogStoreCapacity),
 	}
 }
 
-// GetPlugin implements PluginManager.GetPlugin
+// GetPlugin implements PluginManager.GetPlugin.
 func (m *MockPluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -89,7 +98,7 @@ func (m *MockPluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 	return plugin, exists
 }
 
-// StorePlugin implements PluginManager.StorePlugin
+// StorePlugin implements PluginManager.StorePlugin.
 func (m *MockPluginManager) StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -284,7 +293,7 @@ func (m *MockPluginManager) GetPluginConfig(key string) (map[string]string, bool
 }
 
 // StartCleanup implements PluginManager.StartCleanup
-func (m *MockPluginManager) StartCleanup(ctx context.Context) {
+func (m *MockPluginManager) StartCleanup(_ context.Context) {
 	m.Calls.StartCleanup++
 	// Do nothing in the mock
 }
@@ -383,7 +392,7 @@ type MockCircuitBreaker struct {
 // NewMockCircuitBreaker creates a new mock circuit breaker
 func NewMockCircuitBreaker() *MockCircuitBreaker {
 	return &MockCircuitBreaker{
-		State: "closed",
+		State: circuitStateClosed,
 	}
 }
 
@@ -392,7 +401,7 @@ func (m *MockCircuitBreaker) RecordSuccess() {
 	m.Calls.RecordSuccess++
 
 	if m.State == "half-open" {
-		m.State = "closed"
+		m.State = circuitStateClosed
 		m.FailureCount = 0
 	}
 }
@@ -407,11 +416,11 @@ func (m *MockCircuitBreaker) RecordFailure() bool {
 
 	m.FailureCount++
 
-	if m.State == "closed" && m.FailureCount >= 5 {
-		m.State = "open"
+	if m.State == circuitStateClosed && m.FailureCount >= 5 {
+		m.State = circuitStateOpen
 	}
 
-	return m.State == "open"
+	return m.State == circuitStateOpen
 }
 
 // IsOpen implements CircuitBreaker.IsOpen
@@ -422,14 +431,14 @@ func (m *MockCircuitBreaker) IsOpen() bool {
 		return m.Behavior.IsOpenFunc()
 	}
 
-	return m.State == "open"
+	return m.State == circuitStateOpen
 }
 
 // Reset implements CircuitBreaker.Reset
 func (m *MockCircuitBreaker) Reset() {
 	m.Calls.Reset++
 
-	m.State = "closed"
+	m.State = circuitStateClosed
 	m.FailureCount = 0
 }
 

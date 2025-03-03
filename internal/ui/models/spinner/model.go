@@ -12,7 +12,7 @@ import (
 	"github.com/muesli/reflow/indent"
 )
 
-// cleanErrorMessage removes common prefixes from error messages to provide.
+// cleanErrorMessage removes common prefixes from error messages to provide
 // more concise and user-friendly error messages
 func cleanErrorMessage(errMsg string) string {
 	prefixes := []string{
@@ -60,12 +60,12 @@ func (m SpinnerModel) HasError() bool {
 	return m.err != nil
 }
 
-// HasResult checks if the spinner has a result
+// HasResult checks if the spinner has a result.
 func (m SpinnerModel) HasResult() bool {
 	return m.result != nil
 }
 
-// SetResult sets the result and marks the spinner as done
+// SetResult sets the result and marks the spinner as done.
 func (m *SpinnerModel) SetResult(result interface{}) {
 	m.result = result
 }

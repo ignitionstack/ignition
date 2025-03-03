@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// CircuitBreaker defines the interface for a circuit breaker
+// CircuitBreaker defines the interface for a circuit breaker.
 type CircuitBreaker interface {
 	// Record a successful operation
 	RecordSuccess()
@@ -53,8 +53,8 @@ type defaultCircuitBreaker struct {
 	resetTimeout     time.Duration
 }
 
-// NewCircuitBreaker creates a new circuit breaker with default settings
-func NewCircuitBreaker() *defaultCircuitBreaker {
+// NewCircuitBreaker creates a new circuit breaker with default settings.
+func NewCircuitBreaker() CircuitBreaker {
 	return &defaultCircuitBreaker{
 		state:            StateClosed,
 		failures:         0,
@@ -64,8 +64,8 @@ func NewCircuitBreaker() *defaultCircuitBreaker {
 	}
 }
 
-// NewCircuitBreakerWithOptions creates a new circuit breaker with custom settings
-func NewCircuitBreakerWithOptions(failureThreshold int, resetTimeout time.Duration) *defaultCircuitBreaker {
+// NewCircuitBreakerWithOptions creates a new circuit breaker with custom settings.
+func NewCircuitBreakerWithOptions(failureThreshold int, resetTimeout time.Duration) CircuitBreaker {
 	return &defaultCircuitBreaker{
 		state:            StateClosed,
 		failures:         0,

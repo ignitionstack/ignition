@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ComposeCmd represents the compose command
+// ComposeCmd represents the compose command.
 var ComposeCmd = &cobra.Command{
 	Use:   "compose",
 	Short: "Manage multiple functions with compose files",

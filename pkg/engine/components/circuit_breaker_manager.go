@@ -55,11 +55,16 @@ func NewCircuitBreakerManagerWithOptions(settings CircuitBreakerSettings) Circui
 	}
 }
 
-// GetCircuitBreaker retrieves a circuit breaker by key, creating it if it doesn't exist
+// GetCircuitBreaker retrieves a circuit breaker by key, creating it if it doesn't exist.
 func (cbm *defaultCircuitBreakerManager) GetCircuitBreaker(key string) CircuitBreaker {
 	// Try to get existing circuit breaker
 	if cb, exists := cbm.circuitBreakers.Load(key); exists {
-		return cb.(CircuitBreaker)
+		circuitBreaker, ok := cb.(CircuitBreaker)
+		if !ok {
+			// This should never happen, but let's be defensive
+			panic("invalid type in circuit breaker map")
+		}
+		return circuitBreaker
 	}
 
 	// Create a new circuit breaker with default settings
@@ -70,7 +75,12 @@ func (cbm *defaultCircuitBreakerManager) GetCircuitBreaker(key string) CircuitBr
 
 	// Try to store it (may fail if another goroutine created one concurrently)
 	actualCB, _ := cbm.circuitBreakers.LoadOrStore(key, newCB)
-	return actualCB.(CircuitBreaker)
+	circuitBreaker, ok := actualCB.(CircuitBreaker)
+	if !ok {
+		// This should never happen, but let's be defensive
+		panic("invalid type in circuit breaker map")
+	}
+	return circuitBreaker
 }
 
 // RemoveCircuitBreaker removes a circuit breaker from the manager
@@ -78,31 +88,44 @@ func (cbm *defaultCircuitBreakerManager) RemoveCircuitBreaker(key string) {
 	cbm.circuitBreakers.Delete(key)
 }
 
-// Reset resets all circuit breakers to their initial state
+// Reset resets all circuit breakers to their initial state.
 func (cbm *defaultCircuitBreakerManager) Reset() {
 	// Iterate through all circuit breakers and reset them
 	cbm.circuitBreakers.Range(func(_, value interface{}) bool {
-		cb := value.(CircuitBreaker)
+		cb, ok := value.(CircuitBreaker)
+		if !ok {
+			// This should never happen, but let's be defensive
+			return true
+		}
 		cb.Reset()
 		return true // continue iteration
 	})
 }
 
-// GetCircuitBreakerState gets the state of a specific circuit breaker
+// GetCircuitBreakerState gets the state of a specific circuit breaker.
 func (cbm *defaultCircuitBreakerManager) GetCircuitBreakerState(key string) string {
 	if cb, exists := cbm.circuitBreakers.Load(key); exists {
-		return cb.(CircuitBreaker).GetState()
+		circuitBreaker, ok := cb.(CircuitBreaker)
+		if !ok {
+			// This should never happen, but let's be defensive
+			return ""
+		}
+		return circuitBreaker.GetState()
 	}
 	return ""
 }
 
-// GetAllCircuitBreakers returns all circuit breakers as a map
-// This is used primarily for testing and monitoring
+// GetAllCircuitBreakers returns all circuit breakers as a map.
+// This is used primarily for testing and monitoring.
 func (cbm *defaultCircuitBreakerManager) GetAllCircuitBreakers() map[string]CircuitBreaker {
 	result := make(map[string]CircuitBreaker)
 
 	cbm.circuitBreakers.Range(func(key, value interface{}) bool {
-		result[key.(string)] = value.(CircuitBreaker)
+		k, kOk := key.(string)
+		v, vOk := value.(CircuitBreaker)
+		if kOk && vOk {
+			result[k] = v
+		}
 		return true
 	})
 

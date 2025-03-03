@@ -17,13 +17,13 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// EngineClient is a client for communicating with the Ignition engine
+// EngineClient is a client for communicating with the Ignition engine.
 type EngineClient struct {
 	socketPath string
 	httpClient *http.Client
 }
 
-// EngineFunctionDetails represents basic information about a function for the EngineClient
+// EngineFunctionDetails represents basic information about a function for the EngineClient.
 type EngineFunctionDetails struct {
 	Namespace string
 	Name      string
@@ -53,7 +53,7 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 	}, nil
 }
 
-// Ping checks if the engine is running
+// Ping checks if the engine is running.
 func (c *EngineClient) Ping(ctx context.Context) error {
 	// Create a context with a short timeout to avoid long hangs
 	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -188,7 +188,7 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 	return nil
 }
 
-// StopFunction stops a function and prevents it from being automatically reloaded
+// StopFunction stops a function and prevents it from being automatically reloaded.
 func (c *EngineClient) StopFunction(ctx context.Context, namespace, name string) error {
 	// Create HTTP request body
 	reqBody := map[string]interface{}{

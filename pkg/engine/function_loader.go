@@ -176,7 +176,7 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 }
 
 // createAndStorePlugin creates a new plugin instance and stores it in the plugin manager
-//nolint:whitespace
+//nolint:whitespace // Complex function signature with many parameters causes whitespace linting issues
 func (l *FunctionLoader) createAndStorePlugin(
     ctx context.Context, key string, wasm []byte, vi *registry.VersionInfo, 
     cfg map[string]string, dg string) error {

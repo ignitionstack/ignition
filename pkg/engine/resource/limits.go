@@ -27,8 +27,8 @@ const (
 	Gigabyte             = Megabyte * 1024
 )
 
-// ResourceLimits defines execution resource limits for functions
-type ResourceLimits struct {
+// Limits defines execution resource limits for functions.
+type Limits struct {
 	// Memory limits
 	MemoryLimit MemoryLimit // Maximum memory for a plugin instance
 
@@ -43,9 +43,9 @@ type ResourceLimits struct {
 	PluginCleanupInterval time.Duration // How often to check for idle plugins
 }
 
-// DefaultResourceLimits returns a set of reasonable default resource limits
-func DefaultResourceLimits() ResourceLimits {
-	return ResourceLimits{
+// DefaultLimits returns a set of reasonable default resource limits.
+func DefaultLimits() Limits {
+	return Limits{
 		// Memory limits
 		MemoryLimit: 128 * Megabyte,
 
@@ -61,17 +61,17 @@ func DefaultResourceLimits() ResourceLimits {
 	}
 }
 
-// ResourceManager handles resource allocation and limiting
-type ResourceManager struct {
-	limits        ResourceLimits
+// Manager handles resource allocation and limiting.
+type Manager struct {
+	limits        Limits
 	executionSem  chan struct{}            // Semaphore for limiting concurrent executions
 	functionSems  map[string]chan struct{} // Per-function semaphores
 	functionSemMu sync.Mutex               // Mutex for the functionSems map
 }
 
-// NewResourceManager creates a new resource manager with the specified limits
-func NewResourceManager(limits ResourceLimits) *ResourceManager {
-	return &ResourceManager{
+// NewManager creates a new resource manager with the specified limits.
+func NewManager(limits Limits) *Manager {
+	return &Manager{
 		limits:       limits,
 		executionSem: make(chan struct{}, limits.MaxConcurrentCalls),
 		functionSems: make(map[string]chan struct{}),
@@ -80,7 +80,7 @@ func NewResourceManager(limits ResourceLimits) *ResourceManager {
 
 // AcquireExecution attempts to acquire a global execution slot
 // Returns true if successful, false if the maximum concurrent calls limit was reached
-func (rm *ResourceManager) AcquireExecution(ctx context.Context) error {
+func (rm *Manager) AcquireExecution(ctx context.Context) error {
 	select {
 	case rm.executionSem <- struct{}{}:
 		return nil
@@ -90,7 +90,7 @@ func (rm *ResourceManager) AcquireExecution(ctx context.Context) error {
 }
 
 // ReleaseExecution releases a global execution slot
-func (rm *ResourceManager) ReleaseExecution() {
+func (rm *Manager) ReleaseExecution() {
 	select {
 	case <-rm.executionSem:
 	default:
@@ -100,7 +100,7 @@ func (rm *ResourceManager) ReleaseExecution() {
 }
 
 // AcquireFunctionExecution attempts to acquire a function-specific execution slot
-func (rm *ResourceManager) AcquireFunctionExecution(ctx context.Context, functionKey string) error {
+func (rm *Manager) AcquireFunctionExecution(ctx context.Context, functionKey string) error {
 	// Get or create the function semaphore
 	sem := rm.getFunctionSemaphore(functionKey)
 
@@ -114,7 +114,7 @@ func (rm *ResourceManager) AcquireFunctionExecution(ctx context.Context, functio
 }
 
 // ReleaseFunctionExecution releases a function-specific execution slot
-func (rm *ResourceManager) ReleaseFunctionExecution(functionKey string) {
+func (rm *Manager) ReleaseFunctionExecution(functionKey string) {
 	rm.functionSemMu.Lock()
 	sem, exists := rm.functionSems[functionKey]
 	rm.functionSemMu.Unlock()
@@ -134,7 +134,7 @@ func (rm *ResourceManager) ReleaseFunctionExecution(functionKey string) {
 }
 
 // getFunctionSemaphore gets or creates a semaphore for a function
-func (rm *ResourceManager) getFunctionSemaphore(functionKey string) chan struct{} {
+func (rm *Manager) getFunctionSemaphore(functionKey string) chan struct{} {
 	rm.functionSemMu.Lock()
 	defer rm.functionSemMu.Unlock()
 
@@ -149,7 +149,7 @@ func (rm *ResourceManager) getFunctionSemaphore(functionKey string) chan struct{
 
 // WithResourceLimits executes a function with resource limits
 // Acquires both global and function-specific execution slots
-func (rm *ResourceManager) WithResourceLimits(ctx context.Context, functionKey string, operation func() (interface{}, error)) (interface{}, error) {
+func (rm *Manager) WithResourceLimits(ctx context.Context, functionKey string, operation func() (interface{}, error)) (interface{}, error) {
 	// Acquire global execution slot
 	if err := rm.AcquireExecution(ctx); err != nil {
 		return nil, err

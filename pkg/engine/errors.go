@@ -8,9 +8,9 @@ import (
 
 // Common engine errors
 var (
-	ErrEngineNotInitialized = fmt.Errorf("engine is not initialized")
-	ErrFunctionNotLoaded    = fmt.Errorf("function is not loaded")
-	ErrFunctionNotFound     = fmt.Errorf("function not found")
+	ErrEngineNotInitialized = errors.New("engine is not initialized")
+	ErrFunctionNotLoaded    = errors.New("function is not loaded")
+	ErrFunctionNotFound     = errors.New("function not found")
 )
 
 // Error represents an internal engine error

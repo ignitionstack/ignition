@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// BuildRequest represents a request to build a function
+// BuildRequest represents a request to build a function.
 type BuildRequest struct {
 	Namespace string `json:"namespace" validate:"required"`
 	Name      string `json:"name" validate:"required"`
@@ -12,7 +12,7 @@ type BuildRequest struct {
 	Tag       string `json:"tag"`
 }
 
-// BuildResponse represents the response from a build operation
+// BuildResponse represents the response from a build operation.
 type BuildResponse struct {
 	Digest    string `json:"digest"`
 	Tag       string `json:"tag"`
@@ -20,7 +20,7 @@ type BuildResponse struct {
 	BuildTime string `json:"build_time"`
 }
 
-// BuildResult contains information about a successful build
+// BuildResult contains information about a successful build.
 type BuildResult struct {
 	Name      string
 	Namespace string
@@ -30,7 +30,7 @@ type BuildResult struct {
 	Reused    bool
 }
 
-// LoadResult contains information about a successful load operation
+// LoadResult contains information about a successful load operation.
 type LoadResult struct {
 	Namespace string
 	Name      string
@@ -38,13 +38,13 @@ type LoadResult struct {
 	LoadTime  time.Duration
 }
 
-// FunctionRequest is a base request with function identification
+// FunctionRequest is a base request with function identification.
 type FunctionRequest struct {
 	Namespace string `json:"namespace" validate:"required"`
 	Name      string `json:"name" validate:"required"`
 }
 
-// LoadRequest represents a request to load a function
+// LoadRequest represents a request to load a function.
 type LoadRequest struct {
 	FunctionRequest
 	Digest    string            `json:"digest" validate:"required"`

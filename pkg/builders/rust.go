@@ -69,7 +69,7 @@ func (r rustBuilder) Build(path string) (*BuildResult, error) {
 	}
 
 	return &BuildResult{
-		OutputPath: filepath.Join(path, "target", "wasm32-wasip1", "release", fmt.Sprintf("%s.wasm", strings.Replace(cargoConfig.Package.Name, "-", "_", -1))),
+		OutputPath: filepath.Join(path, "target", "wasm32-wasip1", "release", fmt.Sprintf("%s.wasm", strings.ReplaceAll(cargoConfig.Package.Name, "-", "_"))),
 	}, nil
 }
 

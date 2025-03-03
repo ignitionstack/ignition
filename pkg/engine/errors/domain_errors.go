@@ -62,13 +62,13 @@ const (
 	CodeExecutionFailed    Code = "execution_failed"
 )
 
-// DomainError represents a domain-specific error
+// DomainError represents a domain-specific error.
 type DomainError struct {
 	// The error domain (engine, function, registry, etc.)
-	Err_Domain Domain
+	ErrDomain Domain
 
 	// Error code unique within the domain
-	Err_Code Code
+	ErrCode Code
 
 	// Human-readable error message
 	Message string
@@ -82,10 +82,10 @@ type DomainError struct {
 	Cause error
 }
 
-// Error returns the error message
+// Error returns the error message.
 func (e *DomainError) Error() string {
 	// Basic message including domain and code
-	msg := fmt.Sprintf("[%s:%s] %s", e.Err_Domain, e.Err_Code, e.Message)
+	msg := fmt.Sprintf("[%s:%s] %s", e.ErrDomain, e.ErrCode, e.Message)
 
 	// Add function details if available
 	if e.Namespace != "" && e.Name != "" {
@@ -105,11 +105,11 @@ func (e *DomainError) Unwrap() error {
 	return e.Cause
 }
 
-// New creates a new DomainError
+// New creates a new DomainError.
 func New(domain Domain, code Code, message string) *DomainError {
 	return &DomainError{
-		Err_Domain: domain,
-		Err_Code:   code,
+		ErrDomain: domain,
+		ErrCode:   code,
 		Message:    message,
 	}
 }
@@ -138,21 +138,21 @@ func (e *DomainError) WithDetails(details map[string]interface{}) *DomainError {
 	return e
 }
 
-// Wrap wraps an error with domain context
+// Wrap wraps an error with domain context.
 func Wrap(domain Domain, code Code, message string, err error) *DomainError {
 	return &DomainError{
-		Err_Domain: domain,
-		Err_Code:   code,
+		ErrDomain: domain,
+		ErrCode:   code,
 		Message:    message,
 		Cause:      err,
 	}
 }
 
-// Is checks if an error is a DomainError with the specified domain and code
+// Is checks if an error is a DomainError with the specified domain and code.
 func Is(err error, domain Domain, code Code) bool {
 	var de *DomainError
 	if errors.As(err, &de) {
-		return de.Err_Domain == domain && de.Err_Code == code
+		return de.ErrDomain == domain && de.ErrCode == code
 	}
 	return false
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 
-// Repository defines a generic repository interface for storing and retrieving entities
+// Repository defines a generic repository interface for storing and retrieving entities.
 type Repository[T any] interface {
 	// Get retrieves an entity by ID
 	Get(ctx context.Context, id string) (T, error)
@@ -26,14 +26,14 @@ type Repository[T any] interface {
 	Exists(ctx context.Context, id string) (bool, error)
 }
 
-// InMemoryRepository is a simple in-memory implementation of Repository
+// InMemoryRepository is a simple in-memory implementation of Repository.
 // This is useful for testing and for simple use cases
 type InMemoryRepository[T any] struct {
 	data  map[string]T
 	mutex sync.RWMutex
 }
 
-// NewInMemoryRepository creates a new in-memory repository
+// NewInMemoryRepository creates a new in-memory repository.
 func NewInMemoryRepository[T any]() *InMemoryRepository[T] {
 	return &InMemoryRepository[T]{
 		data: make(map[string]T),

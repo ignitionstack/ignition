@@ -7,13 +7,13 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 
-// Result represents a generic result with error
+// Result represents a generic result with error.
 type Result[T any] struct {
 	Value T
 	Err   error
 }
 
-// ExecuteWithTimeout runs an operation with a timeout
+// ExecuteWithTimeout runs an operation with a timeout.
 // If the operation completes within the timeout, its result is returned
 // If the timeout is reached, a timeout error is returned
 func ExecuteWithTimeout[T any](timeout time.Duration, operation func() (T, error)) (T, error) {
@@ -23,7 +23,7 @@ func ExecuteWithTimeout[T any](timeout time.Duration, operation func() (T, error
 	return ExecuteWithContext(ctx, operation)
 }
 
-// ExecuteWithContext runs an operation with context cancellation support
+// ExecuteWithContext runs an operation with context cancellation support.
 // If the operation completes before context cancellation, its result is returned
 // If the context is cancelled, a cancellation error is returned
 func ExecuteWithContext[T any](ctx context.Context, operation func() (T, error)) (T, error) {
@@ -59,7 +59,7 @@ func ExecuteWithContext[T any](ctx context.Context, operation func() (T, error))
 	}
 }
 
-// WithBackpressure executes an operation with a semaphore to limit concurrency
+// WithBackpressure executes an operation with a semaphore to limit concurrency.
 func WithBackpressure[T any](ctx context.Context, semaphore chan struct{}, operation func() (T, error)) (T, error) {
 	var zero T
 
@@ -83,7 +83,7 @@ func WithBackpressure[T any](ctx context.Context, semaphore chan struct{}, opera
 	}
 }
 
-// NewLimiter creates a semaphore channel for limiting concurrent operations
+// NewLimiter creates a semaphore channel for limiting concurrent operations.
 func NewLimiter(maxConcurrent int) chan struct{} {
 	if maxConcurrent <= 0 {
 		maxConcurrent = 100 // Default to a reasonable limit

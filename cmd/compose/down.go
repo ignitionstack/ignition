@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewComposeDownCommand creates a new cobra command for compose down
+// NewComposeDownCommand creates a new cobra command for compose down.
 func NewComposeDownCommand(container *di.Container) *cobra.Command {
 	var filePath string
 	var dryRun bool
@@ -135,7 +135,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 	return cmd
 }
 
-// unloadFunctions unloads all functions in the provided list
+// unloadFunctions unloads all functions in the provided list.
 func unloadFunctions(ctx context.Context, functions []struct {
 	namespace string
 	name      string

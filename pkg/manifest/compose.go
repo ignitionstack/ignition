@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,7 +66,7 @@ func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 
 	// Validate the manifest
 	if len(manifest.Services) == 0 {
-		return nil, fmt.Errorf("compose file must contain at least one service")
+		return nil, errors.New("compose file must contain at least one service")
 	}
 
 	for name, service := range manifest.Services {

@@ -146,7 +146,7 @@ func validateAndPrepareBuildDir(args []string) (string, error) {
 	return absPath, nil
 }
 
-// loadFunctionManifest loads and parses the function manifest file
+// loadFunctionManifest loads and parses the function manifest file.
 func loadFunctionManifest(absPath string) (manifest.FunctionManifest, error) {
 	var functionConfig manifest.FunctionManifest
 
@@ -171,7 +171,7 @@ func loadFunctionManifest(absPath string) (manifest.FunctionManifest, error) {
 	return functionConfig, nil
 }
 
-// parseTags parses tag information from command line flags
+// parseTags parses tag information from command line flags.
 func parseTags(cmd *cobra.Command, absPath string) ([]TagInfo, error) {
 	var tags []TagInfo
 
@@ -200,7 +200,7 @@ func parseTags(cmd *cobra.Command, absPath string) ([]TagInfo, error) {
 	return tags, nil
 }
 
-// parseNamespaceAndName parses a tag string into namespace, name, and tag components
+// parseNamespaceAndName parses a tag string into namespace, name, and tag components.
 func parseNamespaceAndName(input string) (namespace, name, tag string, err error) {
 	// Split into namespace/name and tag
 	parts := strings.Split(input, ":")
@@ -235,7 +235,7 @@ func parseNamespaceAndName(input string) (namespace, name, tag string, err error
 	return namespace, name, tag, nil
 }
 
-// createEngineClient creates an HTTP client for communicating with the engine over Unix socket
+// createEngineClient creates an HTTP client for communicating with the engine over Unix socket.
 func createEngineClient(socketPath string) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
@@ -246,7 +246,7 @@ func createEngineClient(socketPath string) *http.Client {
 	}
 }
 
-// runBuild executes the build process and updates the spinner with progress
+// runBuild executes the build process and updates the spinner with progress.
 func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 	functionConfig manifest.FunctionManifest, client *http.Client) {
 	buildStart := time.Now()
@@ -269,7 +269,7 @@ func runBuild(program *tea.Program, absPath string, tags []TagInfo,
 	}
 }
 
-// sendBuildRequest sends a single build request to the engine
+// sendBuildRequest sends a single build request to the engine.
 func sendBuildRequest(client *http.Client, tagInfo TagInfo,
 	absPath string, functionConfig manifest.FunctionManifest) (*types.BuildResult, error) {
 	// Create request body

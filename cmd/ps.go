@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// PsCmd creates a new cobra command for listing running functions
+// PsCmd creates a new cobra command for listing running functions.
 var PsCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List running functions",

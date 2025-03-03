@@ -41,7 +41,7 @@ Key capabilities:
   ignition function list`,
 }
 
-// Container holds the dependency injection container
+// Container holds the dependency injection container.
 var Container = di.NewContainer()
 
 func Execute() {
