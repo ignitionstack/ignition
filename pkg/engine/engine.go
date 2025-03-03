@@ -50,6 +50,10 @@ type Engine struct {
 	// Track each function's current digest and configuration
 	pluginDigests map[string]string
 	pluginConfigs map[string]map[string]string
+	
+	// Track functions that were previously loaded (even after unload)
+	previouslyLoaded     map[string]bool
+	previouslyLoadedMux  sync.RWMutex
 }
 
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
@@ -92,13 +96,14 @@ func NewEngineWithDependencies(
 		initialized:     true,
 
 		pluginLastUsed:  make(map[string]time.Time),
-		ttlDuration:     30 * time.Minute,
+		ttlDuration:     1 * time.Minute,
 		defaultTimeout:  30 * time.Second,
 		circuitBreakers: make(map[string]*CircuitBreaker),
 		logStore:        NewFunctionLogStore(1000),
 
-		pluginDigests: make(map[string]string),
-		pluginConfigs: make(map[string]map[string]string),
+		pluginDigests:     make(map[string]string),
+		pluginConfigs:     make(map[string]map[string]string),
+		previouslyLoaded: make(map[string]bool),
 	}
 }
 
@@ -151,13 +156,17 @@ func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 			for key, lastUsed := range e.pluginLastUsed {
 				if now.Sub(lastUsed) > e.ttlDuration {
 					if plugin, exists := e.plugins[key]; exists {
+						// Store last used configuration for potential reload later
+						// We keep the config in pluginConfigs even after unloading
+						// The configuration will be used if we need to reload the function
+						
 						plugin.Close(context.TODO())
 						delete(e.plugins, key)
 						delete(e.pluginLastUsed, key)
-
 						delete(e.pluginDigests, key)
-						delete(e.pluginConfigs, key)
-						e.logger.Printf("Plugin %s unloaded due to inactivity", key)
+						// Deliberately NOT removing the config: delete(e.pluginConfigs, key)
+						
+						e.logger.Printf("Plugin %s unloaded due to inactivity, preserving configuration for potential reload", key)
 					}
 				}
 			}
@@ -182,6 +191,29 @@ func (e *Engine) IsLoaded(namespace, name string) bool {
 	e.pluginsMux.RUnlock()
 
 	return exists
+}
+
+func (e *Engine) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
+	functionKey := getFunctionKey(namespace, name)
+
+	e.previouslyLoadedMux.RLock()
+	wasLoaded, exists := e.previouslyLoaded[functionKey]
+	e.previouslyLoadedMux.RUnlock()
+
+	// Get the last known config for this function
+	var config map[string]string
+	e.pluginsMux.RLock()
+	lastConfig, hasConfig := e.pluginConfigs[functionKey]
+	if hasConfig {
+		// Make a copy of the config
+		config = make(map[string]string, len(lastConfig))
+		for k, v := range lastConfig {
+			config[k] = v
+		}
+	}
+	e.pluginsMux.RUnlock()
+
+	return exists && wasLoaded, config
 }
 
 func (e *Engine) GetRegistry() registry.Registry {
@@ -335,6 +367,11 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 	functionKey := getFunctionKey(namespace, name)
 
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Loading function with identifier: %s", identifier))
+	
+	// Mark the function as having been loaded before
+	e.previouslyLoadedMux.Lock()
+	e.previouslyLoaded[functionKey] = true
+	e.previouslyLoadedMux.Unlock()
 
 	// Create a copy of the config map
 	configCopy := make(map[string]string)
@@ -556,12 +593,15 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 
 	unloadStart := time.Now()
 
+	// Save the current configuration before unloading
+	// We're keeping the config in pluginConfigs even after unloading
+	// This ensures the configuration is preserved when manually unloading too
+	
 	plugin.Close(context.TODO())
 	delete(e.plugins, functionKey)
 	delete(e.pluginLastUsed, functionKey)
-
 	delete(e.pluginDigests, functionKey)
-	delete(e.pluginConfigs, functionKey)
+	// Deliberately NOT removing the config: delete(e.pluginConfigs, functionKey)
 
 	e.cbMux.Lock()
 	delete(e.circuitBreakers, functionKey)
