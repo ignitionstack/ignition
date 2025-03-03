@@ -241,9 +241,65 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 	output, err := h.engine.CallFunction(namespace, name, entrypoint, []byte(req.Payload))
 	if err != nil {
 		if err == ErrFunctionNotLoaded {
-			return NewNotFoundError("Function not loaded")
+			// Check if this function was previously loaded but was unloaded due to TTL
+
+			// Check if the function exists in the registry
+			metadata, err := h.engine.GetRegistry().Get(namespace, name)
+			if err != nil {
+				if err == registry.ErrFunctionNotFound {
+					return NewNotFoundError("Function not found in registry")
+				}
+				return fmt.Errorf("failed to fetch function metadata: %w", err)
+			}
+
+			// Check if this function was ever loaded before and get previous config
+			wasLoaded, previousConfig := h.engine.WasPreviouslyLoaded(namespace, name)
+			if !wasLoaded {
+				return NewNotFoundError("Function not loaded")
+			}
+
+			// Function was loaded before, try to reload it
+			h.logger.Printf("Function %s/%s was previously loaded, attempting to reload with previous config", namespace, name)
+
+			// Find the latest version to load
+			if len(metadata.Versions) == 0 {
+				return NewNotFoundError("No versions available for this function")
+			}
+
+			// Try to find a version with the "latest" tag
+			var tagToLoad string
+			for _, version := range metadata.Versions {
+				for _, tag := range version.Tags {
+					if tag == "latest" {
+						tagToLoad = "latest"
+						break
+					}
+				}
+				if tagToLoad != "" {
+					break
+				}
+			}
+
+			// If no "latest" tag found, use the most recent version's digest
+			if tagToLoad == "" {
+				// Versions should be sorted with most recent first
+				latestVersion := metadata.Versions[0]
+				tagToLoad = latestVersion.FullDigest
+			}
+
+			// Load the function with the chosen tag and previous config
+			if err := h.engine.LoadFunction(namespace, name, tagToLoad, previousConfig); err != nil {
+				return fmt.Errorf("failed to reload function: %w", err)
+			}
+
+			// Try calling the function again
+			output, err = h.engine.CallFunction(namespace, name, entrypoint, []byte(req.Payload))
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
 		}
-		return err
 	}
 
 	w.Header().Set("Content-Type", "application/json")
