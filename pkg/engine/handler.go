@@ -128,7 +128,8 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	h.logger.Printf("Received load request for function: %s/%s (digest: %s)",
 		req.Namespace, req.Name, req.Digest)
 
-	if err := h.engine.LoadFunctionWithForce(req.Namespace, req.Name, req.Digest, req.Config, req.ForceLoad); err != nil {
+	ctx := r.Context()
+	if err := h.engine.LoadFunctionWithForce(ctx, req.Namespace, req.Name, req.Digest, req.Config, req.ForceLoad); err != nil {
 		return err
 	}
 
@@ -282,65 +283,8 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 	output, err := h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
 	if err != nil {
 		if err == ErrFunctionNotLoaded {
-			// Check if this function was previously loaded but was unloaded due to TTL
-
-			// Check if the function exists in the registry
-			metadata, err := h.engine.GetRegistry().Get(namespace, name)
-			if err != nil {
-				if err == registry.ErrFunctionNotFound {
-					return NewNotFoundError("Function not found in registry")
-				}
-				return fmt.Errorf("failed to fetch function metadata: %w", err)
-			}
-
-			// Check if this function was ever loaded before and get previous config
-			wasLoaded, previousConfig := h.engine.WasPreviouslyLoaded(namespace, name)
-			if !wasLoaded {
-				return NewNotFoundError("Function not loaded")
-			}
-			
-			// Check if function is explicitly stopped - prevent auto-reload
-			if h.engine.IsFunctionStopped(namespace, name) {
-				h.logger.Printf("Function %s/%s is stopped and will not be auto-reloaded", namespace, name)
-				return NewNotFoundError("Function was explicitly stopped and will not be auto-reloaded")
-			}
-
-			// Function was loaded before, try to reload it
-			h.logger.Printf("Function %s/%s was previously loaded, attempting to reload with previous config", namespace, name)
-
-			// Find the latest version to load
-			if len(metadata.Versions) == 0 {
-				return NewNotFoundError("No versions available for this function")
-			}
-
-			// Try to find a version with the "latest" tag
-			var tagToLoad string
-			for _, version := range metadata.Versions {
-				for _, tag := range version.Tags {
-					if tag == "latest" {
-						tagToLoad = "latest"
-						break
-					}
-				}
-				if tagToLoad != "" {
-					break
-				}
-			}
-
-			// If no "latest" tag found, use the most recent version's digest
-			if tagToLoad == "" {
-				// Versions should be sorted with most recent first
-				latestVersion := metadata.Versions[0]
-				tagToLoad = latestVersion.FullDigest
-			}
-
-			// Load the function with the chosen tag and previous config using context
-			if err := h.engine.LoadFunctionWithContext(ctx, namespace, name, tagToLoad, previousConfig); err != nil {
-				return fmt.Errorf("failed to reload function: %w", err)
-			}
-
-			// Try calling the function again with context
-			output, err = h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
+			// Check if we should auto-reload the function
+			output, err = h.handleFunctionAutoReload(ctx, namespace, name, entrypoint, req.Payload)
 			if err != nil {
 				return err
 			}
@@ -357,6 +301,69 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(output)
 	return err
+}
+
+// handleFunctionAutoReload attempts to auto-reload a previously loaded function
+func (h *Handlers) handleFunctionAutoReload(ctx context.Context, namespace, name, entrypoint, payload string) ([]byte, error) {
+	// Check if the function exists in the registry
+	metadata, err := h.engine.GetRegistry().Get(namespace, name)
+	if err != nil {
+		if err == registry.ErrFunctionNotFound {
+			return nil, NewNotFoundError("Function not found in registry")
+		}
+		return nil, fmt.Errorf("failed to fetch function metadata: %w", err)
+	}
+
+	// Check if this function was ever loaded before and get previous config
+	wasLoaded, previousConfig := h.engine.WasPreviouslyLoaded(namespace, name)
+	if !wasLoaded {
+		return nil, NewNotFoundError("Function not loaded")
+	}
+	
+	// Check if function is explicitly stopped - prevent auto-reload
+	if h.engine.IsFunctionStopped(namespace, name) {
+		h.logger.Printf("Function %s/%s is stopped and will not be auto-reloaded", namespace, name)
+		return nil, NewNotFoundError("Function was explicitly stopped and will not be auto-reloaded")
+	}
+
+	// Function was loaded before, try to reload it
+	h.logger.Printf("Function %s/%s was previously loaded, attempting to reload with previous config", namespace, name)
+
+	// Find the latest version to load
+	if len(metadata.Versions) == 0 {
+		return nil, NewNotFoundError("No versions available for this function")
+	}
+
+	// First try to find a version with the "latest" tag
+	tagToLoad := h.findLatestTag(metadata)
+
+	// Load the function with the chosen tag and previous config
+	if err := h.engine.LoadFunctionWithContext(ctx, namespace, name, tagToLoad, previousConfig); err != nil {
+		return nil, fmt.Errorf("failed to reload function: %w", err)
+	}
+
+	// Try calling the function again
+	return h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(payload))
+}
+
+// findLatestTag looks for the latest tag in metadata, falling back to the most recent digest
+func (h *Handlers) findLatestTag(metadata *registry.FunctionMetadata) string {
+	// Try to find a version with the "latest" tag
+	for _, version := range metadata.Versions {
+		for _, tag := range version.Tags {
+			if tag == "latest" {
+				return "latest"
+			}
+		}
+	}
+	
+	// If no "latest" tag found, use the most recent version's digest
+	// (Versions should be sorted with most recent first)
+	if len(metadata.Versions) > 0 {
+		return metadata.Versions[0].FullDigest
+	}
+	
+	return ""
 }
 
 // handleOneOffCall handles one-off function calls
