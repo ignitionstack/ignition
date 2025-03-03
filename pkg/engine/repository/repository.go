@@ -26,8 +26,7 @@ type Repository[T any] interface {
 	Exists(ctx context.Context, id string) (bool, error)
 }
 
-// InMemoryRepository is a simple in-memory implementation of Repository.
-// This is useful for testing and for simple use cases
+// This is useful for testing and for simple use cases.
 type InMemoryRepository[T any] struct {
 	data  map[string]T
 	mutex sync.RWMutex
@@ -40,7 +39,7 @@ func NewInMemoryRepository[T any]() *InMemoryRepository[T] {
 	}
 }
 
-// Get retrieves an entity by ID
+// Get retrieves an entity by ID.
 func (r *InMemoryRepository[T]) Get(ctx context.Context, id string) (T, error) {
 	var zero T
 
@@ -63,7 +62,7 @@ func (r *InMemoryRepository[T]) Get(ctx context.Context, id string) (T, error) {
 	return entity, nil
 }
 
-// GetAll retrieves all entities
+// GetAll retrieves all entities.
 func (r *InMemoryRepository[T]) GetAll(ctx context.Context) ([]T, error) {
 	// Check context cancellation
 	select {
@@ -83,7 +82,7 @@ func (r *InMemoryRepository[T]) GetAll(ctx context.Context) ([]T, error) {
 	return entities, nil
 }
 
-// Save stores an entity
+// Save stores an entity.
 func (r *InMemoryRepository[T]) Save(ctx context.Context, id string, entity T) error {
 	// Check context cancellation
 	select {
@@ -99,7 +98,7 @@ func (r *InMemoryRepository[T]) Save(ctx context.Context, id string, entity T) e
 	return nil
 }
 
-// Delete removes an entity by ID
+// Delete removes an entity by ID.
 func (r *InMemoryRepository[T]) Delete(ctx context.Context, id string) error {
 	// Check context cancellation
 	select {
@@ -121,7 +120,7 @@ func (r *InMemoryRepository[T]) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// Exists checks if an entity exists
+// Exists checks if an entity exists.
 func (r *InMemoryRepository[T]) Exists(ctx context.Context, id string) (bool, error) {
 	// Check context cancellation
 	select {
@@ -137,7 +136,7 @@ func (r *InMemoryRepository[T]) Exists(ctx context.Context, id string) (bool, er
 	return exists, nil
 }
 
-// Clear removes all entities
+// Clear removes all entities.
 func (r *InMemoryRepository[T]) Clear() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

@@ -13,9 +13,7 @@ type Result[T any] struct {
 	Err   error
 }
 
-// ExecuteWithTimeout runs an operation with a timeout.
-// If the operation completes within the timeout, its result is returned
-// If the timeout is reached, a timeout error is returned
+// If the timeout is reached, a timeout error is returned.
 func ExecuteWithTimeout[T any](timeout time.Duration, operation func() (T, error)) (T, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -23,9 +21,7 @@ func ExecuteWithTimeout[T any](timeout time.Duration, operation func() (T, error
 	return ExecuteWithContext(ctx, operation)
 }
 
-// ExecuteWithContext runs an operation with context cancellation support.
-// If the operation completes before context cancellation, its result is returned
-// If the context is cancelled, a cancellation error is returned
+// If the context is cancelled, a cancellation error is returned.
 func ExecuteWithContext[T any](ctx context.Context, operation func() (T, error)) (T, error) {
 	var zero T
 

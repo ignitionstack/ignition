@@ -2,6 +2,7 @@ package function
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -87,7 +88,12 @@ The command requires a running engine to execute the function.`,
 				return fmt.Errorf("failed to encode request: %w", err)
 			}
 
-			resp, err := client.Post("http://unix/call-once", "application/json", bytes.NewBuffer(reqBytes))
+			httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://unix/call-once", bytes.NewBuffer(reqBytes))
+			if err != nil {
+				return fmt.Errorf("failed to create request: %w", err)
+			}
+			httpReq.Header.Set("Content-Type", "application/json")
+			resp, err := client.Do(httpReq)
 			if err != nil {
 				return fmt.Errorf("failed to call function: %w", err)
 			}

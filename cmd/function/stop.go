@@ -92,7 +92,10 @@ Stopped functions will still appear in 'ignition ps' but with a "stopped" status
 				return err
 			}
 
-			finalModel := m.(spinner.SpinnerModel)
+			finalModel, ok := m.(spinner.Model)
+			if !ok {
+				return fmt.Errorf("unexpected model type returned from spinner")
+			}
 			if finalModel.HasError() {
 				err := finalModel.GetError()
 				return err

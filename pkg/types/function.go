@@ -22,20 +22,20 @@ type BuildResponse struct {
 
 // BuildResult contains information about a successful build.
 type BuildResult struct {
-	Name      string
-	Namespace string
-	Digest    string
-	BuildTime time.Duration
-	Tag       string
-	Reused    bool
+	Name      string        `json:"name"`
+	Namespace string        `json:"namespace"`
+	Digest    string        `json:"digest"`
+	BuildTime time.Duration `json:"build_time"`
+	Tag       string        `json:"tag"`
+	Reused    bool          `json:"reused"`
 }
 
 // LoadResult contains information about a successful load operation.
 type LoadResult struct {
-	Namespace string
-	Name      string
-	Digest    string
-	LoadTime  time.Duration
+	Namespace string        `json:"namespace"`
+	Name      string        `json:"name"`
+	Digest    string        `json:"digest"`
+	LoadTime  time.Duration `json:"load_time"`
 }
 
 // FunctionRequest is a base request with function identification.
@@ -52,7 +52,7 @@ type LoadRequest struct {
 	ForceLoad bool              `json:"force_load,omitempty"`
 }
 
-// OneOffCallRequest represents a request to call a function once
+// OneOffCallRequest represents a request to call a function once..
 type OneOffCallRequest struct {
 	FunctionRequest
 	Reference  string            `json:"reference" validate:"required"`
@@ -61,19 +61,19 @@ type OneOffCallRequest struct {
 	Config     map[string]string `json:"config,omitempty"`
 }
 
-// ReassignTagRequest represents a request to reassign a tag
+// ReassignTagRequest represents a request to reassign a tag..
 type ReassignTagRequest struct {
 	FunctionRequest
 	Tag    string `json:"tag" validate:"required"`
 	Digest string `json:"digest" validate:"required"`
 }
 
-// ListResponse represents the response from a list operation
+// ListResponse represents the response from a list operation.
 type ListResponse struct {
 	Functions []FunctionInfo `json:"functions"`
 }
 
-// FunctionInfo provides summary information about a function
+// FunctionInfo provides summary information about a function.
 type FunctionInfo struct {
 	Namespace    string   `json:"namespace"`
 	Name         string   `json:"name"`
@@ -81,7 +81,7 @@ type FunctionInfo struct {
 	Tags         []string `json:"tags,omitempty"`
 }
 
-// PluginOptions defines configuration options for plugins
+// PluginOptions defines configuration options for plugins.
 type PluginOptions struct {
 	EnableWasi    bool     `json:"enable_wasi"`
 	AllowedHosts  []string `json:"allowed_hosts"`
@@ -90,7 +90,7 @@ type PluginOptions struct {
 	TimeoutMillis int      `json:"timeout_millis"`
 }
 
-// LoadedFunction represents a function that is currently loaded in memory
+// LoadedFunction represents a function that is currently loaded in memory.
 type LoadedFunction struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`

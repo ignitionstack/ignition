@@ -36,8 +36,7 @@ func WithDetails(err error, details string) error {
 	return fmt.Errorf("%s: %w", details, err)
 }
 
-// CleanErrorMessage removes common verbose prefixes from error messages.
-// to produce more concise error messages for the user
+// to produce more concise error messages for the user.
 func CleanErrorMessage(err error) string {
 	if err == nil {
 		return ""

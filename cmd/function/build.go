@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -105,7 +106,7 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check for build errors
-	finalModel, ok := model.(spinner.SpinnerModel)
+	finalModel, ok := model.(spinner.Model)
 	if !ok {
 		return fmt.Errorf("unexpected model type: %T", model)
 	}
@@ -205,14 +206,14 @@ func parseNamespaceAndName(input string) (namespace, name, tag string, err error
 	// Split into namespace/name and tag
 	parts := strings.Split(input, ":")
 	if len(parts) > 2 {
-		return "", "", "", fmt.Errorf("invalid format: expected namespace/name[:tag]")
+		return "", "", "", errors.New("invalid format: expected namespace/name[:tag]")
 	}
 
 	// Extract namespace and name
 	namespaceName := parts[0]
 	namespaceNameParts := strings.Split(namespaceName, "/")
 	if len(namespaceNameParts) != 2 {
-		return "", "", "", fmt.Errorf("invalid format: expected namespace/name[:tag]")
+		return "", "", "", errors.New("invalid format: expected namespace/name[:tag]")
 	}
 
 	namespace = strings.TrimSpace(namespaceNameParts[0])
@@ -229,7 +230,7 @@ func parseNamespaceAndName(input string) (namespace, name, tag string, err error
 		namespace = "default"
 	}
 	if name == "" {
-		return "", "", "", fmt.Errorf("name cannot be empty")
+		return "", "", "", errors.New("name cannot be empty")
 	}
 
 	return namespace, name, tag, nil
@@ -291,7 +292,7 @@ func sendBuildRequest(client *http.Client, tagInfo TagInfo,
 
 	// Create the request
 	req, err := http.NewRequest(
-		"POST",
+		http.MethodPost,
 		"http://unix/build",
 		bytes.NewBuffer(jsonData),
 	)
@@ -325,7 +326,7 @@ func sendBuildRequest(client *http.Client, tagInfo TagInfo,
 	return &buildResult, nil
 }
 
-// displayBuildResults shows the build results to the user
+// displayBuildResults shows the build results to the user.
 func displayBuildResults(result types.BuildResult, tags []TagInfo) {
 	ui.PrintSuccess("Function built successfully")
 	fmt.Println()

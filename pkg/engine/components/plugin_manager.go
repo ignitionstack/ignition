@@ -12,7 +12,7 @@ import (
 
 // The PluginManager interface is defined in interfaces.go
 
-// PluginManagerSettings defines configurable options for the plugin manager
+// PluginManagerSettings defines configurable options for the plugin manager.
 type PluginManagerSettings struct {
 	// How long to keep unused plugins loaded
 	TTL time.Duration
@@ -21,7 +21,7 @@ type PluginManagerSettings struct {
 	CleanupInterval time.Duration
 }
 
-// defaultPluginManager implements the PluginManager interface
+// defaultPluginManager implements the PluginManager interface.
 type defaultPluginManager struct {
 	// Primary plugin storage
 	plugins        map[string]*extism.Plugin
@@ -48,7 +48,7 @@ type defaultPluginManager struct {
 	logStore *logging.FunctionLogStore
 }
 
-// NewPluginManager creates a new plugin manager with the specified settings
+// NewPluginManager creates a new plugin manager with the specified settings.
 func NewPluginManager(logger logging.Logger, options PluginManagerSettings) PluginManager {
 	logStoreCapacity := 1000 // Default value
 
@@ -202,7 +202,7 @@ func (pm *defaultPluginManager) RemovePlugin(key string) bool {
 	return false
 }
 
-// StopFunction permanently stops a function and prevents automatic reloading
+// StopFunction permanently stops a function and prevents automatic reloading.
 func (pm *defaultPluginManager) StopFunction(key string) bool {
 	// First unload the plugin if it's loaded
 	removed := pm.RemovePlugin(key)
@@ -219,7 +219,7 @@ func (pm *defaultPluginManager) StopFunction(key string) bool {
 	return removed
 }
 
-// IsFunctionStopped checks if a function has been explicitly stopped
+// IsFunctionStopped checks if a function has been explicitly stopped.
 func (pm *defaultPluginManager) IsFunctionStopped(key string) bool {
 	pm.stoppedFunctionsMux.RLock()
 	defer pm.stoppedFunctionsMux.RUnlock()
@@ -228,7 +228,7 @@ func (pm *defaultPluginManager) IsFunctionStopped(key string) bool {
 	return exists && stopped
 }
 
-// ClearStoppedStatus removes the stopped status from a function, allowing it to be loaded again
+// ClearStoppedStatus removes the stopped status from a function, allowing it to be loaded again.
 func (pm *defaultPluginManager) ClearStoppedStatus(key string) {
 	pm.stoppedFunctionsMux.Lock()
 	delete(pm.stoppedFunctions, key)
@@ -268,7 +268,7 @@ func (pm *defaultPluginManager) WasPreviouslyLoaded(key string) (bool, map[strin
 	return exists && wasLoaded, config
 }
 
-// HasConfigChanged compares stored config with a new config to check for changes
+// HasConfigChanged compares stored config with a new config to check for changes.
 func (pm *defaultPluginManager) HasConfigChanged(key string, newConfig map[string]string) bool {
 	pm.pluginConfigsMux.RLock()
 	currentConfig, hasConfig := pm.pluginConfigs[key]
@@ -350,7 +350,7 @@ func (pm *defaultPluginManager) GetPluginConfig(key string) (map[string]string, 
 	return configCopy, exists
 }
 
-// GetPreviouslyLoadedFunctions returns a map of all functions that have been previously loaded
+// GetPreviouslyLoadedFunctions returns a map of all functions that have been previously loaded.
 func (pm *defaultPluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 	pm.previouslyLoadedMux.RLock()
 	defer pm.previouslyLoadedMux.RUnlock()
@@ -364,7 +364,7 @@ func (pm *defaultPluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 	return result
 }
 
-// GetStoppedFunctions returns a map of all functions that have been stopped
+// GetStoppedFunctions returns a map of all functions that have been stopped.
 func (pm *defaultPluginManager) GetStoppedFunctions() map[string]bool {
 	pm.stoppedFunctionsMux.RLock()
 	defer pm.stoppedFunctionsMux.RUnlock()
@@ -392,7 +392,7 @@ func (pm *defaultPluginManager) Shutdown() {
 	}
 }
 
-// ListLoadedFunctions returns a list of currently loaded function keys
+// ListLoadedFunctions returns a list of currently loaded function keys.
 func (pm *defaultPluginManager) ListLoadedFunctions() []string {
 	pm.pluginsMux.RLock()
 	defer pm.pluginsMux.RUnlock()
@@ -405,7 +405,7 @@ func (pm *defaultPluginManager) ListLoadedFunctions() []string {
 	return keys
 }
 
-// GetLoadedFunctionCount returns the number of currently loaded functions
+// GetLoadedFunctionCount returns the number of currently loaded functions.
 func (pm *defaultPluginManager) GetLoadedFunctionCount() int {
 	pm.pluginsMux.RLock()
 	defer pm.pluginsMux.RUnlock()
@@ -413,8 +413,7 @@ func (pm *defaultPluginManager) GetLoadedFunctionCount() int {
 	return len(pm.plugins)
 }
 
-// GetFunctionKey returns a string key from namespace and name
-// This is kept for backward compatibility, consider using FunctionID directly
+// This is kept for backward compatibility, consider using FunctionID directly.
 func GetFunctionKey(namespace, name string) string {
 	id := FunctionID{Namespace: namespace, Name: name}
 	return id.String()

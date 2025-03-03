@@ -21,7 +21,7 @@ func (a *assemblyscriptBuilder) VerifyDependencies() error {
 		if errors.As(err, &exitErr) {
 			return fmt.Errorf("npx verification failed: %v\n%s", exitErr.Error(), stderr.String())
 		}
-		return fmt.Errorf("npx is not installed. Please install Node.js and npm from https://nodejs.org")
+		return errors.New("npx is not installed. Please install Node.js and npm from https://nodejs.org")
 	}
 
 	// Check for assemblyscript compiler
@@ -30,7 +30,7 @@ func (a *assemblyscriptBuilder) VerifyDependencies() error {
 	ascCmd.Stderr = &ascStderr
 
 	if err := ascCmd.Run(); err != nil {
-		return fmt.Errorf("assemblyscript compiler (asc) not found. Please install it using 'npm install assemblyscript'")
+		return errors.New("assemblyscript compiler (asc) not found. Please install it using 'npm install assemblyscript'")
 	}
 
 	return nil
@@ -59,7 +59,7 @@ func (a *assemblyscriptBuilder) Build(path string) (*BuildResult, error) {
 	}
 
 	if sourceFile == "" {
-		return nil, fmt.Errorf("no TypeScript (.ts) file found in the directory")
+		return nil, errors.New("no TypeScript (.ts) file found in the directory")
 	}
 
 	outputFile := "plugin.wasm"

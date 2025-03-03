@@ -22,7 +22,7 @@ func (p *pythonBuilder) VerifyDependencies() error {
 			return fmt.Errorf("extism-py verification failed: %v\n%s", exitErr.Error(), stderr.String())
 		}
 		// If the error is not an ExitError, it likely means extism-py isn't installed
-		return fmt.Errorf("extism-py is not installed. Please install it by following the documentation: https://github.com/extism/python-pdk")
+		return errors.New("extism-py is not installed. Please install it by following the documentation: https://github.com/extism/python-pdk")
 	}
 	return nil
 }
@@ -66,7 +66,7 @@ func (p *pythonBuilder) Build(path string) (*BuildResult, error) {
 		}
 
 		if sourceFile == "" {
-			return nil, fmt.Errorf("no Python (.py) file found in the directory or plugin/__init__.py structure")
+			return nil, errors.New("no Python (.py) file found in the directory or plugin/__init__.py structure")
 		}
 
 		// Build WASM using extism-py with the discovered file

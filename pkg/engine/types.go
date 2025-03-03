@@ -12,7 +12,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// FunctionLifecycle defines the core function lifecycle operations
+// FunctionLifecycle defines the core function lifecycle operations.
 type FunctionLifecycle interface {
 	// Load a function
 	LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string) error
@@ -30,7 +30,7 @@ type FunctionLifecycle interface {
 	StopFunction(namespace, name string) error
 }
 
-// FunctionState provides function state information
+// FunctionState provides function state information.
 type FunctionState interface {
 	// Check if function is currently loaded
 	IsLoaded(namespace, name string) bool
@@ -42,7 +42,7 @@ type FunctionState interface {
 	IsStopped(namespace, name string) bool
 }
 
-// FunctionManager handles function operations including building
+// FunctionManager handles function operations including building.
 type FunctionManager interface {
 	FunctionLifecycle
 	FunctionState
@@ -54,19 +54,19 @@ type FunctionManager interface {
 	ReassignTag(namespace, name, tag, newDigest string) error
 }
 
-// RegistryOperator provides access to the registry
+// RegistryOperator provides access to the registry.
 type RegistryOperator interface {
 	// Get access to the registry
 	GetRegistry() registry.Registry
 }
 
-// Type aliases for component interfaces
+// Type aliases for component interfaces.
 type PluginManager = components.PluginManager
 type PluginManagerSettings = components.PluginManagerSettings
 type CircuitBreaker = components.CircuitBreaker
 type CircuitBreakerManager = components.CircuitBreakerManager
 
-// ExecutionContext represents a function execution context
+// ExecutionContext represents a function execution context.
 type ExecutionContext struct {
 	// Context for cancellation and timeout
 	Context context.Context
@@ -83,7 +83,7 @@ type ExecutionContext struct {
 	Config map[string]string
 }
 
-// ExecutionResult represents the result of a function execution
+// ExecutionResult represents the result of a function execution.
 type ExecutionResult struct {
 	// Execution output
 	Output []byte

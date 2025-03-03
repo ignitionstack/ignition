@@ -1,4 +1,4 @@
-package localRegistry
+package localregistry
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ func (s *localStorage) WriteWASMFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("failed to create directories: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write WASM file: %w", err)
 	}
 	return nil

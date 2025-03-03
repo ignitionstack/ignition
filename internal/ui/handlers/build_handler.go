@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -52,12 +53,19 @@ func (h *BuildHandler) BuildWithSpinner(
 		return nil, err
 	}
 
-	finalModel := model.(spinner.SpinnerModel)
+	finalModel, ok := model.(spinner.Model)
+	if !ok {
+		return nil, errors.New("unexpected model type returned from spinner")
+	}
 	if finalModel.HasError() {
 		return nil, finalModel.GetError()
 	}
 
-	result := finalModel.GetResult().(types.BuildResult)
+	modelResult := finalModel.GetResult()
+	result, ok := modelResult.(types.BuildResult)
+	if !ok {
+		return nil, errors.New("unexpected result type: expected types.BuildResult")
+	}
 	return &result, nil
 }
 

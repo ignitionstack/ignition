@@ -18,7 +18,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// Alias logging levels for backward compatibility
+// Alias logging levels for backward compatibility.
 const (
 	LevelInfo    = logging.LevelInfo
 	LevelWarning = logging.LevelWarning
@@ -26,8 +26,7 @@ const (
 	LevelDebug   = logging.LevelDebug
 )
 
-// Engine is the main entrypoint for the engine package
-// It implements the FunctionManager and RegistryOperator interfaces
+// It implements the FunctionManager and RegistryOperator interfaces.
 type Engine struct {
 	// Core dependencies
 	registry       registry.Registry
@@ -54,20 +53,20 @@ type Engine struct {
 	options *Options
 }
 
-// NewEngine creates a new engine instance with default logger and options
+// NewEngine creates a new engine instance with default logger and options.
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
 	logger := logging.NewStdLogger(os.Stdout)
 	options := DefaultEngineOptions()
 	return NewEngineWithOptions(socketPath, httpAddr, registryDir, logger, options)
 }
 
-// NewEngineWithLogger creates a new engine instance with custom logger
+// NewEngineWithLogger creates a new engine instance with custom logger.
 func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger logging.Logger) (*Engine, error) {
 	options := DefaultEngineOptions()
 	return NewEngineWithOptions(socketPath, httpAddr, registryDir, logger, options)
 }
 
-// NewEngineWithOptions creates a new engine instance with custom logger and options
+// NewEngineWithOptions creates a new engine instance with custom logger and options.
 func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, logger logging.Logger, options *Options) (*Engine, error) {
 	registry, err := setupRegistry(registryDir)
 	if err != nil {
@@ -86,7 +85,7 @@ func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, logge
 	), nil
 }
 
-// NewEngineWithDependencies creates a new engine with custom dependencies
+// NewEngineWithDependencies creates a new engine with custom dependencies.
 func NewEngineWithDependencies(
 	socketPath,
 	httpAddr string,
@@ -131,7 +130,7 @@ func NewEngineWithDependencies(
 	}
 }
 
-// setupRegistry initializes the registry with a badger database
+// setupRegistry initializes the registry with a badger database.
 func setupRegistry(registryDir string) (registry.Registry, error) {
 	opts := badger.DefaultOptions(filepath.Join(registryDir, "registry.db"))
 	opts.Logger = nil
@@ -168,7 +167,7 @@ func (e *Engine) Start() error {
 	return e.startServer()
 }
 
-// validateState ensures the engine is properly initialized
+// validateState ensures the engine is properly initialized.
 func (e *Engine) validateState() error {
 	if !e.initialized {
 		return ErrEngineNotInitialized
@@ -176,13 +175,13 @@ func (e *Engine) validateState() error {
 	return nil
 }
 
-// initializeComponents starts all background processes and cleanup routines
+// initializeComponents starts all background processes and cleanup routines.
 func (e *Engine) initializeComponents(ctx context.Context) {
 	// Start the plugin manager's cleanup routine
 	e.pluginManager.StartCleanup(ctx)
 }
 
-// startServer creates and starts the HTTP server
+// startServer creates and starts the HTTP server.
 func (e *Engine) startServer() error {
 	handlers := NewHandlers(e, e.logger)
 	server := NewServer(e.socketPath, e.httpAddr, handlers, e.logger)

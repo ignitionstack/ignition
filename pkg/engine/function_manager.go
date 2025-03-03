@@ -13,7 +13,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// DefaultFunctionManager implements the FunctionManager interface
+// DefaultFunctionManager implements the FunctionManager interface.
 type DefaultFunctionManager struct {
 	loader         *FunctionLoader
 	executor       *FunctionExecutor
@@ -22,7 +22,7 @@ type DefaultFunctionManager struct {
 	defaultTimeout time.Duration
 }
 
-// NewFunctionManager creates a new function manager
+// NewFunctionManager creates a new function manager.
 func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, registry registry.Registry,
 	functionSvc services.FunctionService, defaultTimeout time.Duration) *DefaultFunctionManager {
 	return &DefaultFunctionManager{
@@ -34,47 +34,47 @@ func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, regi
 	}
 }
 
-// LoadFunction loads a function
+// LoadFunction loads a function.
 func (m *DefaultFunctionManager) LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
 	return m.loader.LoadFunction(ctx, namespace, name, identifier, config)
 }
 
-// LoadFunctionWithForce loads a function with force option
+// LoadFunctionWithForce loads a function with force option.
 func (m *DefaultFunctionManager) LoadFunctionWithForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	return m.loader.LoadFunctionWithForce(ctx, namespace, name, identifier, config, force)
 }
 
-// CallFunction calls a function
+// CallFunction calls a function.
 func (m *DefaultFunctionManager) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	return m.executor.CallFunction(ctx, namespace, name, entrypoint, payload)
 }
 
-// UnloadFunction unloads a function
+// UnloadFunction unloads a function.
 func (m *DefaultFunctionManager) UnloadFunction(namespace, name string) error {
 	return m.loader.UnloadFunction(namespace, name)
 }
 
-// StopFunction stops a function
+// StopFunction stops a function.
 func (m *DefaultFunctionManager) StopFunction(namespace, name string) error {
 	return m.loader.StopFunction(namespace, name)
 }
 
-// IsLoaded checks if a function is loaded
+// IsLoaded checks if a function is loaded.
 func (m *DefaultFunctionManager) IsLoaded(namespace, name string) bool {
 	return m.loader.IsLoaded(namespace, name)
 }
 
-// WasPreviouslyLoaded checks if a function was previously loaded
+// WasPreviouslyLoaded checks if a function was previously loaded.
 func (m *DefaultFunctionManager) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
 	return m.loader.WasPreviouslyLoaded(namespace, name)
 }
 
-// IsStopped checks if a function is stopped
+// IsStopped checks if a function is stopped.
 func (m *DefaultFunctionManager) IsStopped(namespace, name string) bool {
 	return m.loader.IsStopped(namespace, name)
 }
 
-// BuildFunction builds a function
+// BuildFunction builds a function.
 func (m *DefaultFunctionManager) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {
 	buildStart := time.Now()
 
@@ -112,7 +112,7 @@ func (m *DefaultFunctionManager) BuildFunction(namespace, name, path, tag string
 	}, nil
 }
 
-// ReassignTag reassigns a tag to a new digest
+// ReassignTag reassigns a tag to a new digest.
 func (m *DefaultFunctionManager) ReassignTag(namespace, name, tag, newDigest string) error {
 	if err := m.registry.ReassignTag(namespace, name, tag, newDigest); err != nil {
 		return fmt.Errorf("failed to reassign tag: %w", err)

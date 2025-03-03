@@ -18,14 +18,14 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// Handlers contains HTTP handlers for engine endpoints
+// Handlers contains HTTP handlers for engine endpoints.
 type Handlers struct {
 	engine    *Engine // The engine instance that provides all functionality
 	logger    logging.Logger
 	validator *validator.Validate
 }
 
-// NewHandlers creates a new Handlers instance
+// NewHandlers creates a new Handlers instance.
 func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	return &Handlers{
 		engine:    engine,
@@ -34,8 +34,7 @@ func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	}
 }
 
-// Route Configuration
-// UnixSocketHandler returns a HTTP handler for unix socket endpoints
+// UnixSocketHandler returns a HTTP handler for unix socket endpoints.
 func (h *Handlers) UnixSocketHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -68,7 +67,7 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 	return mux
 }
 
-// HTTPHandler returns a HTTP handler for public endpoints
+// HTTPHandler returns a HTTP handler for public endpoints.
 func (h *Handlers) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -90,8 +89,7 @@ func (h *Handlers) HTTPHandler() http.Handler {
 	return mux
 }
 
-// Utility methods for request/response handling
-// decodeJSONRequest decodes a JSON request body into a struct
+// decodeJSONRequest decodes a JSON request body into a struct.
 func (h *Handlers) decodeJSONRequest(r *http.Request, v interface{}) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return NewBadRequestError("Invalid request body")
@@ -99,7 +97,7 @@ func (h *Handlers) decodeJSONRequest(r *http.Request, v interface{}) error {
 	return nil
 }
 
-// decodeAndValidate decodes and validates a request
+// decodeAndValidate decodes and validates a request.
 func (h *Handlers) decodeAndValidate(r *http.Request, v interface{}) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return NewBadRequestError("Invalid request body")
@@ -112,14 +110,13 @@ func (h *Handlers) decodeAndValidate(r *http.Request, v interface{}) error {
 	return nil
 }
 
-// writeJSONResponse writes a JSON response
+// writeJSONResponse writes a JSON response.
 func (h *Handlers) writeJSONResponse(w http.ResponseWriter, data interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(data)
 }
 
-// Handler Implementations
-// handleLoad loads a function into memory
+// handleLoad loads a function into memory.
 func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	var req types.LoadRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -137,7 +134,7 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"message": "Function loaded successfully"})
 }
 
-// handleList lists functions in the registry
+// handleList lists functions in the registry.
 func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
 	var req types.FunctionRequest
 	if err := h.decodeJSONRequest(r, &req); err != nil {
@@ -166,7 +163,7 @@ func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, metadata)
 }
 
-// handleListAll lists all functions in the registry
+// handleListAll lists all functions in the registry.
 func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list all functions")
 
@@ -178,7 +175,7 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, functions)
 }
 
-// handleLoadedFunctions lists currently loaded, previously loaded, and stopped functions
+// handleLoadedFunctions lists currently loaded, previously loaded, and stopped functions.
 func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list loaded functions")
 
@@ -234,7 +231,7 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 	return h.writeJSONResponse(w, loadedFunctions)
 }
 
-// handleBuild builds a function and stores it in the registry
+// handleBuild builds a function and stores it in the registry.
 func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 	var req ExtendedBuildRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -258,7 +255,7 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, response)
 }
 
-// handleFunctionCall handles function calls via HTTP
+// handleFunctionCall handles function calls via HTTP.
 func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) error {
 	// Parse the request
 	callParams, payload, err := h.parseFunctionCallRequest(r)
@@ -280,14 +277,14 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 	return h.sendFunctionResponse(w, output)
 }
 
-// functionCallParams contains the parsed parameters of a function call
+// functionCallParams contains the parsed parameters of a function call.
 type functionCallParams struct {
 	namespace  string
 	name       string
 	entrypoint string
 }
 
-// parseFunctionCallRequest parses the HTTP request for a function call
+// parseFunctionCallRequest parses the HTTP request for a function call.
 func (h *Handlers) parseFunctionCallRequest(r *http.Request) (*functionCallParams, string, error) {
 	// Parse path: /namespace/name/entrypoint
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
@@ -311,7 +308,7 @@ func (h *Handlers) parseFunctionCallRequest(r *http.Request) (*functionCallParam
 	}, req.Payload, nil
 }
 
-// executeFunction attempts to call a function, trying auto-reload if needed
+// executeFunction attempts to call a function, trying auto-reload if needed.
 func (h *Handlers) executeFunction(ctx context.Context, params *functionCallParams, payload string) ([]byte, error) {
 	// Try calling the function with the request context
 	output, err := h.engine.CallFunctionWithContext(
@@ -341,14 +338,14 @@ func (h *Handlers) executeFunction(ctx context.Context, params *functionCallPara
 	return output, nil
 }
 
-// sendFunctionResponse sends the function output as the HTTP response
+// sendFunctionResponse sends the function output as the HTTP response.
 func (h *Handlers) sendFunctionResponse(w http.ResponseWriter, output []byte) error {
 	w.Header().Set("Content-Type", "application/json")
 	_, err := w.Write(output)
 	return err
 }
 
-// handleFunctionAutoReload attempts to auto-reload a previously loaded function
+// handleFunctionAutoReload attempts to auto-reload a previously loaded function.
 func (h *Handlers) handleFunctionAutoReload(ctx context.Context, namespace, name, entrypoint, payload string) ([]byte, error) {
 	// Validate preconditions for auto-reload
 	if err := h.validateAutoReloadPreconditions(namespace, name); err != nil {
@@ -373,7 +370,7 @@ func (h *Handlers) handleFunctionAutoReload(ctx context.Context, namespace, name
 	return h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(payload))
 }
 
-// validateAutoReloadPreconditions checks if auto-reload is allowed for this function
+// validateAutoReloadPreconditions checks if auto-reload is allowed for this function.
 func (h *Handlers) validateAutoReloadPreconditions(namespace, name string) error {
 	// Check if this function was ever loaded before
 	wasLoaded, _ := h.engine.WasPreviouslyLoaded(namespace, name)
@@ -390,7 +387,7 @@ func (h *Handlers) validateAutoReloadPreconditions(namespace, name string) error
 	return nil
 }
 
-// getMetadataAndConfig retrieves function metadata and previous configuration
+// getMetadataAndConfig retrieves function metadata and previous configuration.
 func (h *Handlers) getMetadataAndConfig(namespace, name string) (*registry.FunctionMetadata, map[string]string, error) {
 	// Check if the function exists in the registry
 	metadata, err := h.engine.GetRegistry().Get(namespace, name)
@@ -412,7 +409,7 @@ func (h *Handlers) getMetadataAndConfig(namespace, name string) (*registry.Funct
 	return metadata, previousConfig, nil
 }
 
-// reloadFunction reloads a function with the latest tag and previous configuration
+// reloadFunction reloads a function with the latest tag and previous configuration.
 func (h *Handlers) reloadFunction(ctx context.Context, metadata *registry.FunctionMetadata, namespace, name string, previousConfig map[string]string) error {
 	// Find the best tag to load
 	tagToLoad := h.findLatestTag(metadata)
@@ -425,7 +422,7 @@ func (h *Handlers) reloadFunction(ctx context.Context, metadata *registry.Functi
 	return nil
 }
 
-// findLatestTag looks for the latest tag in metadata, falling back to the most recent digest
+// findLatestTag looks for the latest tag in metadata, falling back to the most recent digest.
 func (h *Handlers) findLatestTag(metadata *registry.FunctionMetadata) string {
 	// Try to find a version with the "latest" tag
 	for _, version := range metadata.Versions {
@@ -445,7 +442,7 @@ func (h *Handlers) findLatestTag(metadata *registry.FunctionMetadata) string {
 	return ""
 }
 
-// handleOneOffCall handles one-off function calls by splitting the process into clear stages
+// handleOneOffCall handles one-off function calls by splitting the process into clear stages.
 func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) error {
 	// Parse and validate the request
 	req, err := h.parseOneOffCallRequest(r)
@@ -472,7 +469,7 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 	return err
 }
 
-// parseOneOffCallRequest parses and validates the one-off call request
+// parseOneOffCallRequest parses and validates the one-off call request.
 func (h *Handlers) parseOneOffCallRequest(r *http.Request) (*types.OneOffCallRequest, error) {
 	var req types.OneOffCallRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -481,10 +478,7 @@ func (h *Handlers) parseOneOffCallRequest(r *http.Request) (*types.OneOffCallReq
 	return &req, nil
 }
 
-// executeOneOffCall processes a one-off call request through the necessary stages:
-// 1. Pull the function from registry
-// 2. Create a plugin
-// 3. Call the function
+// 3. Call the function.
 func (h *Handlers) executeOneOffCall(ctx context.Context, req *types.OneOffCallRequest) ([]byte, error) {
 	// Stage 1: Pull the function
 	wasmBytes, versionInfo, err := h.pullFunction(ctx, req.Namespace, req.Name, req.Reference)
@@ -503,7 +497,7 @@ func (h *Handlers) executeOneOffCall(ctx context.Context, req *types.OneOffCallR
 	return h.callFunction(ctx, plugin, req.Entrypoint, req.Payload)
 }
 
-// pullFunction pulls a function from the registry with cancellation support
+// pullFunction pulls a function from the registry with cancellation support.
 func (h *Handlers) pullFunction(ctx context.Context, namespace, name, reference string) ([]byte, *registry.VersionInfo, error) {
 	// Define result type
 	type pullResult struct {
@@ -551,7 +545,7 @@ func (h *Handlers) pullFunction(ctx context.Context, namespace, name, reference 
 	return result.wasmBytes, result.versionInfo, nil
 }
 
-// createPlugin creates an Extism plugin from WASM bytes with cancellation support
+// createPlugin creates an Extism plugin from WASM bytes with cancellation support.
 func (h *Handlers) createPlugin(ctx context.Context, wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
 	// Define result type
 	type pluginResult struct {
@@ -597,7 +591,7 @@ func (h *Handlers) createPlugin(ctx context.Context, wasmBytes []byte, versionIn
 	return pluginRes.plugin, nil
 }
 
-// callFunction calls a function in a plugin with cancellation support
+// callFunction calls a function in a plugin with cancellation support.
 func (h *Handlers) callFunction(ctx context.Context, plugin *extism.Plugin, entrypoint string, payload string) ([]byte, error) {
 	// Define result type
 	type callResult struct {
@@ -640,7 +634,7 @@ func (h *Handlers) callFunction(ctx context.Context, plugin *extism.Plugin, entr
 	return callRes.output, nil
 }
 
-// handleReassignTag handles tag reassignment requests
+// handleReassignTag handles tag reassignment requests.
 func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) error {
 	var req types.ReassignTagRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -660,7 +654,7 @@ func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) err
 	return h.writeJSONResponse(w, map[string]string{"message": "Tag reassigned successfully"})
 }
 
-// handleStatus returns the current status of the engine
+// handleStatus returns the current status of the engine.
 func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
 	// Get the count of loaded functions from the plugin manager
 	loadedCount := h.engine.pluginManager.GetLoadedFunctionCount()
@@ -673,12 +667,12 @@ func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, status)
 }
 
-// handleHealth is a simple health check endpoint
+// handleHealth is a simple health check endpoint.
 func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"status": "ok"})
 }
 
-// handleUnload unloads a function from memory
+// handleUnload unloads a function from memory.
 func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
 	var req types.FunctionRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -694,7 +688,7 @@ func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"message": "Function unloaded successfully"})
 }
 
-// handleStop stops a function and prevents automatic reloading
+// handleStop stops a function and prevents automatic reloading.
 func (h *Handlers) handleStop(w http.ResponseWriter, r *http.Request) error {
 	var req types.FunctionRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -710,7 +704,7 @@ func (h *Handlers) handleStop(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"message": "Function stopped successfully"})
 }
 
-// handleFunctionLogs returns logs for a specific function
+// handleFunctionLogs returns logs for a specific function.
 func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) error {
 	// Parse path: /logs/namespace/name
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/logs/"), "/")
@@ -760,7 +754,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 	return h.writeJSONResponse(w, logs)
 }
 
-// getEngineLogs retrieves logs for a specific function from the engine's log store
+// getEngineLogs retrieves logs for a specific function from the engine's log store.
 func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
 	functionKey := components.GetFunctionKey(namespace, name)
 

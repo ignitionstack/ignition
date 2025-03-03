@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,7 +79,7 @@ func TestLoadFunction(t *testing.T) {
 	defer cleanupTest(tmpDir)
 
 	// Create context for loading
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Test loading non-existent function
 	err := engine.LoadFunctionWithContext(ctx, "test-namespace", "non-existent", "latest", nil)
@@ -96,7 +95,7 @@ func TestCallFunction(t *testing.T) {
 	defer cleanupTest(tmpDir)
 
 	// Create context for function call
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Test calling non-existent function
 	output, err := engine.CallFunctionWithContext(ctx, "test-namespace", "non-existent", "test", []byte("test-payload"))
@@ -139,7 +138,7 @@ func TestIntegration(t *testing.T) {
 
 	if buildResult != nil {
 		// Create context for operations
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Load function
 		err = engine.LoadFunctionWithContext(ctx, "test-namespace", "test-function", "latest", nil)

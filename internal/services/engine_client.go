@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ignitionstack/ignition/pkg/types"
@@ -28,6 +29,13 @@ type EngineFunctionDetails struct {
 	Namespace string
 	Name      string
 	Status    string
+}
+
+// FunctionReference represents a reference to a function with its service name.
+type FunctionReference struct {
+	Namespace string
+	Name      string
+	Service   string
 }
 
 func NewEngineClientWithDefaults() *EngineClient {
@@ -81,9 +89,9 @@ func (c *EngineClient) Ping(ctx context.Context) error {
 
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "connect: no such file or directory") {
-			return fmt.Errorf("engine is not running (socket file not found)")
+			return errors.New("engine is not running (socket file not found)")
 		} else if strings.Contains(errMsg, "connect: connection refused") {
-			return fmt.Errorf("engine is not running (connection refused)")
+			return errors.New("engine is not running (connection refused)")
 		}
 
 		return fmt.Errorf("cannot connect to the engine: %w", err)
@@ -146,7 +154,8 @@ func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag st
 	return nil
 }
 
-func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name string) error {
+// sendNamespaceNameRequest is a helper function to send a request with namespace and name.
+func (c *EngineClient) sendNamespaceNameRequest(ctx context.Context, endpoint, action string, namespace, name string) error {
 	// Create HTTP request body
 	reqBody := map[string]interface{}{
 		"namespace": namespace,
@@ -156,79 +165,45 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 	// Convert to JSON
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to marshal unload request: %w", err)
+		return fmt.Errorf("failed to marshal %s request: %w", action, err)
 	}
 
-	// Create HTTP request to the unload endpoint
+	// Create HTTP request to the endpoint
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		"http://unix/unload", // This endpoint would need to be implemented in the engine
+		"http://unix/"+endpoint,
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create unload request: %w", err)
+		return fmt.Errorf("failed to create %s request: %w", action, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send unload request: %w", err)
+		return fmt.Errorf("failed to send %s request: %w", action, err)
 	}
 	defer resp.Body.Close()
 
 	// Check response
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to unload function (status code %d): %s",
-			resp.StatusCode, string(responseBody))
+		return fmt.Errorf("failed to %s function (status code %d): %s",
+			action, resp.StatusCode, string(responseBody))
 	}
 
 	return nil
 }
 
+func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name string) error {
+	return c.sendNamespaceNameRequest(ctx, "unload", "unload", namespace, name)
+}
+
 // StopFunction stops a function and prevents it from being automatically reloaded.
 func (c *EngineClient) StopFunction(ctx context.Context, namespace, name string) error {
-	// Create HTTP request body
-	reqBody := map[string]interface{}{
-		"namespace": namespace,
-		"name":      name,
-	}
-
-	// Convert to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal stop request: %w", err)
-	}
-
-	// Create HTTP request to the stop endpoint
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		"http://unix/stop",
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create stop request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send stop request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to stop function (status code %d): %s",
-			resp.StatusCode, string(responseBody))
-	}
-
-	return nil
+	return c.sendNamespaceNameRequest(ctx, "stop", "stop", namespace, name)
 }
 
 func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetails, error) {
@@ -329,4 +304,36 @@ func (c *EngineClient) GetFunctionLogs(ctx context.Context, namespace, name stri
 	}
 
 	return logs, nil
+}
+
+// UnloadFunctions unloads all functions in the provided list.
+func (c *EngineClient) UnloadFunctions(ctx context.Context, functions []FunctionReference) error {
+	var unloadErrs []string
+	var unloadErrsMu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, function := range functions {
+		wg.Add(1)
+		go func(namespace, name, serviceName string) {
+			defer wg.Done()
+
+			err := c.UnloadFunction(ctx, namespace, name)
+			if err != nil {
+				unloadErrsMu.Lock()
+				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v",
+					namespace, name, serviceName, err))
+				unloadErrsMu.Unlock()
+			}
+		}(function.Namespace, function.Name, function.Service)
+	}
+
+	// Wait for all unload operations to complete
+	wg.Wait()
+
+	// Check for errors
+	if len(unloadErrs) > 0 {
+		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
+	}
+
+	return nil
 }

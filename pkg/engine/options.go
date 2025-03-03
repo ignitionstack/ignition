@@ -6,7 +6,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/components"
 )
 
-// Options defines configurable options for the engine
+// Options defines configurable options for the engine.
 type Options struct {
 	// Default timeout for function operations
 	DefaultTimeout time.Duration
@@ -21,7 +21,7 @@ type Options struct {
 	PluginManagerSettings components.PluginManagerSettings
 }
 
-// DefaultEngineOptions returns a new Options with default values
+// DefaultEngineOptions returns a new Options with default values.
 func DefaultEngineOptions() *Options {
 	return &Options{
 		DefaultTimeout:   30 * time.Second,
@@ -37,25 +37,25 @@ func DefaultEngineOptions() *Options {
 	}
 }
 
-// WithDefaultTimeout sets the default timeout
+// WithDefaultTimeout sets the default timeout.
 func (o *Options) WithDefaultTimeout(timeout time.Duration) *Options {
 	o.DefaultTimeout = timeout
 	return o
 }
 
-// WithLogStoreCapacity sets the log store capacity
+// WithLogStoreCapacity sets the log store capacity.
 func (o *Options) WithLogStoreCapacity(capacity int) *Options {
 	o.LogStoreCapacity = capacity
 	return o
 }
 
-// WithCircuitBreakerSettings sets the circuit breaker settings
+// WithCircuitBreakerSettings sets the circuit breaker settings.
 func (o *Options) WithCircuitBreakerSettings(settings components.CircuitBreakerSettings) *Options {
 	o.CircuitBreakerSettings = settings
 	return o
 }
 
-// WithPluginManagerSettings sets the plugin manager settings
+// WithPluginManagerSettings sets the plugin manager settings.
 func (o *Options) WithPluginManagerSettings(settings components.PluginManagerSettings) *Options {
 	o.PluginManagerSettings = settings
 	return o

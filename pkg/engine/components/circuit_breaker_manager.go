@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// CircuitBreakerManager manages circuit breakers for functions
+// CircuitBreakerManager manages circuit breakers for functions.
 type CircuitBreakerManager interface {
 	// Get a circuit breaker for a function
 	GetCircuitBreaker(key string) CircuitBreaker
@@ -23,13 +23,13 @@ type CircuitBreakerManager interface {
 	GetAllCircuitBreakers() map[string]CircuitBreaker
 }
 
-// CircuitBreakerSettings holds configuration for circuit breakers
+// CircuitBreakerSettings holds configuration for circuit breakers.
 type CircuitBreakerSettings struct {
 	FailureThreshold int
 	ResetTimeout     time.Duration
 }
 
-// defaultCircuitBreakerManager implements the CircuitBreakerManager interface
+// defaultCircuitBreakerManager implements the CircuitBreakerManager interface.
 type defaultCircuitBreakerManager struct {
 	// Using sync.Map for better concurrent access patterns
 	circuitBreakers sync.Map
@@ -39,7 +39,7 @@ type defaultCircuitBreakerManager struct {
 	resetTimeout     time.Duration
 }
 
-// NewCircuitBreakerManager creates a new circuit breaker manager with default settings
+// NewCircuitBreakerManager creates a new circuit breaker manager with default settings.
 func NewCircuitBreakerManager() CircuitBreakerManager {
 	return &defaultCircuitBreakerManager{
 		failureThreshold: 5,
@@ -47,7 +47,7 @@ func NewCircuitBreakerManager() CircuitBreakerManager {
 	}
 }
 
-// NewCircuitBreakerManagerWithOptions creates a new circuit breaker manager with custom settings
+// NewCircuitBreakerManagerWithOptions creates a new circuit breaker manager with custom settings.
 func NewCircuitBreakerManagerWithOptions(settings CircuitBreakerSettings) CircuitBreakerManager {
 	return &defaultCircuitBreakerManager{
 		failureThreshold: settings.FailureThreshold,
@@ -83,7 +83,7 @@ func (cbm *defaultCircuitBreakerManager) GetCircuitBreaker(key string) CircuitBr
 	return circuitBreaker
 }
 
-// RemoveCircuitBreaker removes a circuit breaker from the manager
+// RemoveCircuitBreaker removes a circuit breaker from the manager.
 func (cbm *defaultCircuitBreakerManager) RemoveCircuitBreaker(key string) {
 	cbm.circuitBreakers.Delete(key)
 }

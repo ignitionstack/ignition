@@ -60,7 +60,7 @@ func PrintLogo() {
 	fmt.Println(CenterText(SubtitleStyle.Render(subtitle)))
 }
 
-// PrintSuccess prints a success message with enhanced styling
+// PrintSuccess prints a success message with enhanced styling.
 func PrintSuccess(message string) {
 	// Create a success box for important messages
 	fmt.Println(lipgloss.NewStyle().
@@ -69,7 +69,7 @@ func PrintSuccess(message string) {
 		Render(SuccessSymbol + " " + message))
 }
 
-// PrintError prints an error message with enhanced styling
+// PrintError prints an error message with enhanced styling.
 func PrintError(message string) {
 	// Add padding and make errors more visible with box styling
 	errorBox := lipgloss.NewStyle().
@@ -81,12 +81,12 @@ func PrintError(message string) {
 	fmt.Println(errorBox)
 }
 
-// PrintWarning prints a warning message with enhanced styling
+// PrintWarning prints a warning message with enhanced styling.
 func PrintWarning(message string) {
 	fmt.Println(WarningStyle.Bold(true).Render(WarningSymbol + " " + message))
 }
 
-// PrintInfo prints an info message with label and value in a cleaner format
+// PrintInfo prints an info message with label and value in a cleaner format.
 func PrintInfo(label, value string) {
 	labelStyle := DimStyle.Bold(true)
 	fmt.Printf("%s %s\n",
@@ -94,7 +94,7 @@ func PrintInfo(label, value string) {
 		InfoStyle.Render(value))
 }
 
-// PrintMetadata prints metadata with styled label and value
+// PrintMetadata prints metadata with styled label and value.
 func PrintMetadata(label, value string) {
 	if value == "" {
 		fmt.Printf("%s %s\n",
@@ -108,7 +108,7 @@ func PrintMetadata(label, value string) {
 	}
 }
 
-// PrintStep prints a step in a multi-step process
+// PrintStep prints a step in a multi-step process.
 func PrintStep(stepNumber int, totalSteps int, description string) {
 	progress := fmt.Sprintf("[%d/%d]", stepNumber, totalSteps)
 	fmt.Printf("%s %s %s\n",
@@ -117,12 +117,12 @@ func PrintStep(stepNumber int, totalSteps int, description string) {
 		HeaderStyle.Render(description))
 }
 
-// PrintHighlight prints highlighted text
+// PrintHighlight prints highlighted text.
 func PrintHighlight(text string) {
 	fmt.Println(TitleStyle.Render(text))
 }
 
-// PrintJSON prints formatted and syntax-highlighted JSON
+// PrintJSON prints formatted and syntax-highlighted JSON.
 func PrintJSON(jsonStr string) {
 	// Use box styling to make JSON output stand out
 	jsonBox := BoxStyle.
@@ -135,13 +135,13 @@ func PrintJSON(jsonStr string) {
 	fmt.Println(DimStyle.Render("Tip: Use 'command | jq' to process this output"))
 }
 
-// PrintCommand shows a command that could be run
+// PrintCommand shows a command that could be run.
 func PrintCommand(command string) {
 	prompt := DimStyle.Render(CommandPrompt + " ")
 	fmt.Printf("%s%s\n", prompt, LinkStyle.Render(command))
 }
 
-// PrintTimestamp shows when an operation completed
+// PrintTimestamp shows when an operation completed.
 func PrintTimestamp(operation string, duration time.Duration) {
 	timestamp := time.Now().Format("15:04:05")
 	durationStr := ""
@@ -155,7 +155,7 @@ func PrintTimestamp(operation string, duration time.Duration) {
 		DimStyle.Render(durationStr))
 }
 
-// PrintSeparator prints a horizontal separator line
+// PrintSeparator prints a horizontal separator line.
 func PrintSeparator() {
 	width := TerminalWidth()
 	if width <= 0 {
@@ -166,14 +166,14 @@ func PrintSeparator() {
 	fmt.Println(DimStyle.Render(separator))
 }
 
-// Table represents a formatted table with headers and rows
+// Table represents a formatted table with headers and rows.
 type Table struct {
 	Headers     []string
 	Rows        [][]string
 	ColumnWidth []int
 }
 
-// NewTable creates a new table with the given headers
+// NewTable creates a new table with the given headers.
 func NewTable(headers []string) *Table {
 	columnWidth := make([]int, len(headers))
 	for i, h := range headers {
@@ -186,7 +186,7 @@ func NewTable(headers []string) *Table {
 	}
 }
 
-// AddRow adds a new row to the table
+// AddRow adds a new row to the table.
 func (t *Table) AddRow(values ...string) {
 	if len(values) != len(t.Headers) {
 		panic(fmt.Sprintf("Row has %d values, expected %d", len(values), len(t.Headers)))
@@ -202,7 +202,7 @@ func (t *Table) AddRow(values ...string) {
 	t.Rows = append(t.Rows, values)
 }
 
-// AddRowWithStyles adds a row with styled values
+// AddRowWithStyles adds a row with styled values.
 func (t *Table) AddRowWithStyles(values []string, styles []lipgloss.Style) []string {
 	if len(values) != len(t.Headers) {
 		panic(fmt.Sprintf("Row has %d values, expected %d", len(values), len(t.Headers)))
@@ -221,7 +221,20 @@ func (t *Table) AddRowWithStyles(values []string, styles []lipgloss.Style) []str
 	return styledValues
 }
 
-// StyleStatusValue applies appropriate styling based on status value
+// StyleServiceName styles a service name for log output.
+func StyleServiceName(serviceName string) string {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color(InfoColor)).
+		Bold(true).
+		Render(serviceName)
+}
+
+// PrintServiceLog prints a log line with a styled service name prefix.
+func PrintServiceLog(serviceName, logLine string) {
+	fmt.Printf("%s | %s\n", StyleServiceName(serviceName), logLine)
+}
+
+// StyleStatusValue applies appropriate styling based on status value.
 func StyleStatusValue(status string) string {
 	status = strings.ToLower(status)
 
@@ -241,7 +254,7 @@ func StyleStatusValue(status string) string {
 	}
 }
 
-// RenderTable renders the table with enhanced styling
+// RenderTable renders the table with enhanced styling.
 func RenderTable(table *Table) string {
 	// Calculate total width for responsive sizing
 	totalWidth := 0
@@ -300,7 +313,7 @@ func RenderTable(table *Table) string {
 	return fmt.Sprintf("\n%s\n", renderedTable)
 }
 
-// Helper to convert string slice to interface slice for fmt.Sprintf
+// Helper to convert string slice to interface slice for fmt.Sprintf.
 func toInterfaceSlice(ss []string) []interface{} {
 	is := make([]interface{}, len(ss))
 	for i, s := range ss {
@@ -309,24 +322,24 @@ func toInterfaceSlice(ss []string) []interface{} {
 	return is
 }
 
-// ResultDisplayModel handles displaying JSON results with copy functionality
+// ResultDisplayModel handles displaying JSON results with copy functionality.
 type ResultDisplayModel struct {
 	resultJSON string
 	copied     bool
 	quit       bool
 }
 
-// NewResultDisplayModel creates a new result display model
+// NewResultDisplayModel creates a new result display model.
 func NewResultDisplayModel(resultJSON string) ResultDisplayModel {
 	return ResultDisplayModel{resultJSON: resultJSON}
 }
 
-// Init initializes the result display model
+// Init initializes the result display model.
 func (m ResultDisplayModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles messages for the result display model
+// Update handles messages for the result display model.
 func (m ResultDisplayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -342,7 +355,7 @@ func (m ResultDisplayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the result display model with enhanced styling
+// View renders the result display model with enhanced styling.
 func (m ResultDisplayModel) View() string {
 	var message string
 	if m.copied {
@@ -361,7 +374,7 @@ func (m ResultDisplayModel) View() string {
 	return fmt.Sprintf("%s\n\n%s", jsonWithBorder, message)
 }
 
-// HighlightJSON formats and highlights JSON string
+// HighlightJSON formats and highlights JSON string.
 func HighlightJSON(jsonStr string) string {
 	var builder strings.Builder
 	err := quick.Highlight(&builder, jsonStr, "json", "terminal", "monokai")
@@ -371,12 +384,9 @@ func HighlightJSON(jsonStr string) string {
 	return builder.String()
 }
 
-// StyleServiceName applies appropriate styling to service names
-func StyleServiceName(serviceName string) string {
-	return TitleStyle.Render(serviceName)
-}
+// Note: StyleServiceName is defined earlier in this file
 
-// PrintEmptyState shows a message when no data is available
+// PrintEmptyState shows a message when no data is available.
 func PrintEmptyState(message string) {
 	box := BoxStyle.
 		BorderStyle(lipgloss.RoundedBorder()).

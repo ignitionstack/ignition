@@ -2,6 +2,7 @@ package compose
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewComposeLogsCommand creates a new cobra command for retrieving and displaying function logs
+// NewComposeLogsCommand creates a new cobra command for retrieving and displaying function logs.
 func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 	var filePath string
 	var follow bool
@@ -26,7 +27,7 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 		Use:   "logs [SERVICE...]",
 		Short: "View logs from services defined in a compose file",
 		Long:  "View the logs from services defined in an ignition-compose.yml file.",
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			// Removed redundant operation line
 
 			// Parse the compose file
@@ -39,56 +40,56 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 			// Get the engine client from the container
 			client, err := container.Get("engineClient")
 			if err != nil {
-				ui.PrintError("Error getting engine client")
-				return fmt.Errorf("error getting engine client: %w", err)
+				ui.PrintError("Failed to get engine client")
+				return fmt.Errorf("failed to get engine client: %w", err)
 			}
 			engineClient, ok := client.(*services.EngineClient)
 			if !ok {
 				ui.PrintError("Invalid engine client type")
-				return fmt.Errorf("invalid engine client type")
+				return errors.New("invalid engine client type")
 			}
 
-			// Ping the engine to ensure it's running
+			// Check if engine is running
 			if err := engineClient.Ping(context.Background()); err != nil {
-				ui.PrintError("Engine is not running")
-				return fmt.Errorf("engine is not running. Start it with 'ignition engine start': %w", err)
+				ui.PrintError(fmt.Sprintf("Engine is not running: %v", err))
+				return fmt.Errorf("engine is not running: %w", err)
 			}
 
-			// Filter services based on args
+			// Filter services by name if provided
 			servicesToShow := make(map[string]manifest.ComposeService)
 			if len(args) > 0 {
-				// Show only the specified services
 				for _, serviceName := range args {
-					if service, exists := composeManifest.Services[serviceName]; exists {
-						servicesToShow[serviceName] = service
-					} else {
-						ui.PrintWarning(fmt.Sprintf("Service '%s' not found in compose file", serviceName))
+					service, exists := composeManifest.Services[serviceName]
+					if !exists {
+						ui.PrintError(fmt.Sprintf("Service '%s' not found in compose file", serviceName))
+						return fmt.Errorf("service '%s' not found in compose file", serviceName)
 					}
-				}
-				if len(servicesToShow) == 0 {
-					ui.PrintError("None of the specified services were found in the compose file")
-					return fmt.Errorf("no matching services found")
+					servicesToShow[serviceName] = service
 				}
 			} else {
-				// Show all services
 				servicesToShow = composeManifest.Services
 			}
 
-			// Convert the since string to a time.Duration
+			// If no services to show, exit early
+			if len(servicesToShow) == 0 {
+				ui.PrintInfo("Status", "No services found to show logs for")
+				return nil
+			}
+
+			// Parse the since duration
 			var sinceDuration time.Duration
 			if since != "" {
 				sinceDuration, err = time.ParseDuration(since)
 				if err != nil {
-					ui.PrintError(fmt.Sprintf("Invalid time duration '%s': %v", since, err))
-					return err
+					ui.PrintError(fmt.Sprintf("Invalid duration: %v", err))
+					return fmt.Errorf("invalid duration format: %w", err)
 				}
 			}
 
-			// Create a spinner for retrieving logs
-			spinnerModel := spinner.NewSpinnerModelWithMessage("Retrieving logs from services...")
+			// Show logs once
+			spinnerModel := spinner.NewSpinnerModelWithMessage("Retrieving logs...")
 			program := tea.NewProgram(spinnerModel)
 
-			// Retrieve logs in a goroutine
 			go func() {
 				logs, err := retrieveLogs(context.Background(), servicesToShow, engineClient, sinceDuration, tail)
 				if err != nil {
@@ -98,66 +99,67 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 				}
 			}()
 
-			// Run the spinner UI
 			model, err := program.Run()
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("UI error: %v", err))
 				return err
 			}
 
-			// Check for errors during log retrieval
-			finalModel := model.(spinner.SpinnerModel)
+			finalModel, ok := model.(spinner.Model)
+			if !ok {
+				return errors.New("unexpected model type returned from spinner")
+			}
 			if finalModel.HasError() {
 				return finalModel.GetError()
 			}
 
-			// Display the logs
-			logs := finalModel.GetResult().(map[string][]string)
-			displayLogs(logs)
-
-			// If follow mode is enabled, continuously retrieve and display new logs
-			if follow {
-				ui.PrintInfo("Status", "Watching for new logs. Press Ctrl+C to stop...")
-
-				// Get the most recent timestamp to filter future logs
-				lastSeen := time.Now()
-
-				// Setup a ticker for polling
-				ticker := time.NewTicker(2 * time.Second)
-				defer ticker.Stop()
-
-				// Create context for cancellation
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-
-				// Start polling for new logs
-				for {
-					select {
-					case <-ticker.C:
-						// Retrieve logs since lastSeen time
-						newLogs, err := retrieveLogs(ctx, servicesToShow, engineClient, time.Since(lastSeen), 0)
-						if err != nil {
-							ui.PrintError(fmt.Sprintf("Error retrieving new logs: %v", err))
-							return err
-						}
-
-						// Display only new logs
-						if hasNewLogs(newLogs) {
-							displayLogs(newLogs)
-							lastSeen = time.Now()
-						}
-
-					case <-ctx.Done():
-						return nil
-					}
-				}
+			result := finalModel.GetResult()
+			logs, ok := result.(map[string][]string)
+			if !ok {
+				return errors.New("unexpected result type: expected map[string][]string")
 			}
 
-			return nil
+			// Display logs
+			displayLogs(logs)
+
+			// If not following, exit now
+			if !follow {
+				return nil
+			}
+
+			// Follow logs in real-time
+			ui.PrintInfo("Status", "Following logs (press Ctrl+C to exit)...")
+			lastSeen := time.Now()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Setup ticker for periodic log fetching
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+
+			// Follow logs until interrupted
+			for {
+				select {
+				case <-ticker.C:
+					// Get only new logs since last check
+					newLogs, err := retrieveLogs(ctx, servicesToShow, engineClient, time.Since(lastSeen), 0)
+					if err != nil {
+						ui.PrintError(fmt.Sprintf("Error retrieving logs: %v", err))
+						return err
+					}
+
+					if hasNewLogs(newLogs) {
+						displayLogs(newLogs)
+						lastSeen = time.Now()
+					}
+				case <-ctx.Done():
+					return nil
+				}
+			}
 		},
 	}
 
-	// Add flags
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Specify an alternate compose file (default: ignition-compose.yml)")
 	cmd.Flags().BoolVarP(&follow, "follow", "F", false, "Follow log output")
 	cmd.Flags().StringVar(&since, "since", "", "Show logs since timestamp (e.g., 30m for 30 minutes)")
@@ -166,7 +168,7 @@ func NewComposeLogsCommand(container *di.Container) *cobra.Command {
 	return cmd
 }
 
-// retrieveLogs gets logs for the specified services
+// retrieveLogs gets logs for the specified services.
 func retrieveLogs(ctx context.Context, services map[string]manifest.ComposeService, client *services.EngineClient, since time.Duration, tail int) (map[string][]string, error) {
 	logs := make(map[string][]string)
 
@@ -194,7 +196,7 @@ func retrieveLogs(ctx context.Context, services map[string]manifest.ComposeServi
 	return logs, nil
 }
 
-// displayLogs formats and displays logs with service name prefixes
+// displayLogs formats and displays logs with service name prefixes.
 func displayLogs(logs map[string][]string) {
 	for serviceName, serviceLog := range logs {
 		if len(serviceLog) == 0 {
@@ -203,12 +205,12 @@ func displayLogs(logs map[string][]string) {
 
 		for _, line := range serviceLog {
 			// Format each log line with service name prefix
-			fmt.Printf("%s | %s\n", ui.StyleServiceName(serviceName), line)
+			ui.PrintServiceLog(serviceName, line)
 		}
 	}
 }
 
-// hasNewLogs checks if there are any new log lines to display
+// hasNewLogs checks if there are any new log lines to display.
 func hasNewLogs(logs map[string][]string) bool {
 	for _, logLines := range logs {
 		if len(logLines) > 0 {

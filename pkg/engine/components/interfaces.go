@@ -9,18 +9,18 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 )
 
-// FunctionID represents a unique function identifier
+// FunctionID represents a unique function identifier.
 type FunctionID struct {
 	Namespace string
 	Name      string
 }
 
-// String returns the string representation of a function ID
+// String returns the string representation of a function ID.
 func (id FunctionID) String() string {
 	return fmt.Sprintf("%s/%s", id.Namespace, id.Name)
 }
 
-// FunctionIDFromKey creates a FunctionID from a string key
+// FunctionIDFromKey creates a FunctionID from a string key.
 func FunctionIDFromKey(key string) FunctionID {
 	parts := strings.Split(key, "/")
 	if len(parts) != 2 {
@@ -32,7 +32,7 @@ func FunctionIDFromKey(key string) FunctionID {
 	}
 }
 
-// PluginOperations defines the core plugin lifecycle operations
+// PluginOperations defines the core plugin lifecycle operations.
 type PluginOperations interface {
 	// Get a plugin by key
 	GetPlugin(key string) (*extism.Plugin, bool)
@@ -44,7 +44,7 @@ type PluginOperations interface {
 	RemovePlugin(key string) bool
 }
 
-// PluginStateManager defines operations for managing plugin state
+// PluginStateManager defines operations for managing plugin state.
 type PluginStateManager interface {
 	// Check if a plugin is loaded
 	IsPluginLoaded(key string) bool
@@ -65,7 +65,7 @@ type PluginStateManager interface {
 	GetPluginConfig(key string) (map[string]string, bool)
 }
 
-// FunctionStateController defines operations for controlling function state
+// FunctionStateController defines operations for controlling function state.
 type FunctionStateController interface {
 	// Stop a function (prevents auto-reload)
 	StopFunction(key string) bool
@@ -77,7 +77,7 @@ type FunctionStateController interface {
 	ClearStoppedStatus(key string)
 }
 
-// PluginLifecycleManager defines operations for plugin lifecycle management
+// PluginLifecycleManager defines operations for plugin lifecycle management.
 type PluginLifecycleManager interface {
 	// Start cleanup routine
 	StartCleanup(ctx context.Context)
@@ -86,7 +86,7 @@ type PluginLifecycleManager interface {
 	Shutdown()
 }
 
-// PluginInfoProvider defines operations for retrieving plugin information
+// PluginInfoProvider defines operations for retrieving plugin information.
 type PluginInfoProvider interface {
 	// List loaded functions
 	ListLoadedFunctions() []string
@@ -104,8 +104,7 @@ type PluginInfoProvider interface {
 	GetLogStore() *logging.FunctionLogStore
 }
 
-// PluginManager combines all plugin management interfaces
-// This is provided for backward compatibility and convenient usage
+// This is provided for backward compatibility and convenient usage.
 type PluginManager interface {
 	PluginOperations
 	PluginStateManager

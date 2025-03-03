@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-// ImmutableConfig provides an immutable key-value store for configuration
-// This avoids unnecessary copying when passing configurations around
+// ImmutableConfig provides an immutable key-value store for configuration.
+// This avoids unnecessary copying when passing configurations around.
 type ImmutableConfig struct {
 	values map[string]string
 }
 
-// NewConfig creates a new ImmutableConfig from a map
-// The input map is copied to avoid external modifications
+// NewConfig creates a new ImmutableConfig from a map.
+// The input map is copied to avoid external modifications.
 func NewConfig(values map[string]string) ImmutableConfig {
 	if values == nil {
 		return ImmutableConfig{
@@ -32,20 +32,20 @@ func NewConfig(values map[string]string) ImmutableConfig {
 	}
 }
 
-// EmptyConfig returns an empty configuration
+// EmptyConfig returns an empty configuration.
 func EmptyConfig() ImmutableConfig {
 	return ImmutableConfig{
 		values: make(map[string]string),
 	}
 }
 
-// Get retrieves a value from the configuration
+// Get retrieves a value from the configuration.
 func (c ImmutableConfig) Get(key string) (string, bool) {
 	value, exists := c.values[key]
 	return value, exists
 }
 
-// GetWithDefault retrieves a value or returns a default if not found
+// GetWithDefault retrieves a value or returns a default if not found.
 func (c ImmutableConfig) GetWithDefault(key string, defaultValue string) string {
 	if value, exists := c.values[key]; exists {
 		return value
@@ -53,23 +53,23 @@ func (c ImmutableConfig) GetWithDefault(key string, defaultValue string) string 
 	return defaultValue
 }
 
-// Has checks if a key exists in the configuration
+// Has checks if a key exists in the configuration.
 func (c ImmutableConfig) Has(key string) bool {
 	_, exists := c.values[key]
 	return exists
 }
 
-// Size returns the number of configuration entries
+// Size returns the number of configuration entries.
 func (c ImmutableConfig) Size() int {
 	return len(c.values)
 }
 
-// IsEmpty checks if the configuration is empty
+// IsEmpty checks if the configuration is empty.
 func (c ImmutableConfig) IsEmpty() bool {
 	return len(c.values) == 0
 }
 
-// Keys returns all keys in the configuration
+// Keys returns all keys in the configuration.
 func (c ImmutableConfig) Keys() []string {
 	keys := make([]string, 0, len(c.values))
 	for k := range c.values {
@@ -79,7 +79,7 @@ func (c ImmutableConfig) Keys() []string {
 	return keys
 }
 
-// Values returns all values in the configuration
+// Values returns all values in the configuration.
 func (c ImmutableConfig) Values() []string {
 	values := make([]string, 0, len(c.values))
 	for _, v := range c.values {
@@ -88,8 +88,8 @@ func (c ImmutableConfig) Values() []string {
 	return values
 }
 
-// ToMap converts the ImmutableConfig back to a regular map
-// The returned map is a copy to maintain immutability
+// ToMap converts the ImmutableConfig back to a regular map.
+// The returned map is a copy to maintain immutability.
 func (c ImmutableConfig) ToMap() map[string]string {
 	result := make(map[string]string, len(c.values))
 	for k, v := range c.values {
@@ -98,7 +98,7 @@ func (c ImmutableConfig) ToMap() map[string]string {
 	return result
 }
 
-// With returns a new ImmutableConfig with the additional key-value pair
+// With returns a new ImmutableConfig with the additional key-value pair.
 func (c ImmutableConfig) With(key, value string) ImmutableConfig {
 	// Create a new map with the existing values
 	newValues := make(map[string]string, len(c.values)+1)
@@ -114,7 +114,7 @@ func (c ImmutableConfig) With(key, value string) ImmutableConfig {
 	}
 }
 
-// Without returns a new ImmutableConfig without the specified key
+// Without returns a new ImmutableConfig without the specified key.
 func (c ImmutableConfig) Without(key string) ImmutableConfig {
 	// If the key doesn't exist, return the original config
 	if _, exists := c.values[key]; !exists {
@@ -134,7 +134,7 @@ func (c ImmutableConfig) Without(key string) ImmutableConfig {
 	}
 }
 
-// Merge combines two configurations, with values from other taking precedence
+// Merge combines two configurations, with values from other taking precedence.
 func (c ImmutableConfig) Merge(other ImmutableConfig) ImmutableConfig {
 	// Create a new map with the existing values
 	newValues := make(map[string]string, len(c.values)+len(other.values))
@@ -154,7 +154,7 @@ func (c ImmutableConfig) Merge(other ImmutableConfig) ImmutableConfig {
 	}
 }
 
-// Filter returns a new ImmutableConfig with only keys that match the predicate
+// Filter returns a new ImmutableConfig with only keys that match the predicate.
 func (c ImmutableConfig) Filter(predicate func(key, value string) bool) ImmutableConfig {
 	newValues := make(map[string]string)
 
@@ -169,8 +169,8 @@ func (c ImmutableConfig) Filter(predicate func(key, value string) bool) Immutabl
 	}
 }
 
-// WithPrefix returns a new ImmutableConfig with only keys that have the given prefix
-// The prefix is removed from the keys in the result
+// WithPrefix returns a new ImmutableConfig with only keys that have the given prefix.
+// The prefix is removed from the keys in the result.
 func (c ImmutableConfig) WithPrefix(prefix string) ImmutableConfig {
 	newValues := make(map[string]string)
 
@@ -186,7 +186,7 @@ func (c ImmutableConfig) WithPrefix(prefix string) ImmutableConfig {
 	}
 }
 
-// Equals checks if two configurations are equal
+// Equals checks if two configurations are equal.
 func (c ImmutableConfig) Equals(other ImmutableConfig) bool {
 	if len(c.values) != len(other.values) {
 		return false
@@ -201,7 +201,7 @@ func (c ImmutableConfig) Equals(other ImmutableConfig) bool {
 	return true
 }
 
-// String returns a string representation of the configuration
+// String returns a string representation of the configuration.
 func (c ImmutableConfig) String() string {
 	var builder strings.Builder
 

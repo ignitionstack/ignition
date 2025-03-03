@@ -11,7 +11,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// FunctionLoader is responsible for loading, unloading, and managing function state
+// FunctionLoader is responsible for loading, unloading, and managing function state.
 type FunctionLoader struct {
 	registry        registry.Registry
 	pluginManager   PluginManager
@@ -20,7 +20,7 @@ type FunctionLoader struct {
 	logger          logging.Logger
 }
 
-// NewFunctionLoader creates a new function loader
+// NewFunctionLoader creates a new function loader.
 func NewFunctionLoader(registry registry.Registry, pluginManager PluginManager,
 	circuitBreakers CircuitBreakerManager, logStore *logging.FunctionLogStore,
 	logger logging.Logger) *FunctionLoader {
@@ -98,7 +98,7 @@ func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, n
 	return l.createAndStorePlugin(ctx, functionKey, wasmBytes, versionInfo, configCopy, actualDigest)
 }
 
-// validateLoadPermissions checks if a function can be loaded based on its stopped status
+// validateLoadPermissions checks if a function can be loaded based on its stopped status.
 func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force bool) error {
 	functionKey := components.GetFunctionKey(namespace, name)
 
@@ -119,7 +119,7 @@ func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force b
 	return nil
 }
 
-// copyConfig creates a deep copy of a configuration map
+// copyConfig creates a deep copy of a configuration map.
 func (l *FunctionLoader) copyConfig(config map[string]string) map[string]string {
 	configCopy := make(map[string]string, len(config))
 	for k, v := range config {
@@ -128,7 +128,7 @@ func (l *FunctionLoader) copyConfig(config map[string]string) map[string]string 
 	return configCopy
 }
 
-// handlePullError handles errors from pulling a function from the registry
+// handlePullError handles errors from pulling a function from the registry.
 func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
 	errMsg := fmt.Sprintf("Failed to fetch WASM file from registry: %v", err)
 	l.logger.Errorf(errMsg)
@@ -136,7 +136,7 @@ func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
 	return WrapEngineError("failed to fetch WASM file from registry", err)
 }
 
-// handleExistingFunction checks if the function is already loaded and handles accordingly
+// handleExistingFunction checks if the function is already loaded and handles accordingly.
 func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy map[string]string, actualDigest string) error {
 	// Check if already loaded with same digest and config
 	alreadyLoaded := l.pluginManager.IsPluginLoaded(functionKey)
@@ -176,10 +176,11 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 }
 
 // createAndStorePlugin creates a new plugin instance and stores it in the plugin manager
+//
 //nolint:whitespace // Complex function signature with many parameters causes whitespace linting issues
 func (l *FunctionLoader) createAndStorePlugin(
-    ctx context.Context, key string, wasm []byte, vi *registry.VersionInfo, 
-    cfg map[string]string, dg string) error {
+	ctx context.Context, key string, wasm []byte, vi *registry.VersionInfo,
+	cfg map[string]string, dg string) error {
 
 	// Create a new plugin instance
 	initStart := time.Now()
@@ -243,7 +244,7 @@ func (l *FunctionLoader) UnloadFunction(namespace, name string) error {
 	return nil
 }
 
-// performUnload does the actual work of unloading a function and handling errors
+// performUnload does the actual work of unloading a function and handling errors.
 func (l *FunctionLoader) performUnload(functionKey string) error {
 	// Remove the plugin from the plugin manager
 	if !l.pluginManager.RemovePlugin(functionKey) {
@@ -298,7 +299,7 @@ func (l *FunctionLoader) StopFunction(namespace, name string) error {
 	return nil
 }
 
-// performStop does the actual work of stopping a function and handling errors
+// performStop does the actual work of stopping a function and handling errors.
 func (l *FunctionLoader) performStop(functionKey string) error {
 	// Stop the function using the plugin manager's StopFunction method
 	if !l.pluginManager.StopFunction(functionKey) {
@@ -313,19 +314,19 @@ func (l *FunctionLoader) performStop(functionKey string) error {
 	return nil
 }
 
-// IsLoaded checks if a function is loaded
+// IsLoaded checks if a function is loaded.
 func (l *FunctionLoader) IsLoaded(namespace, name string) bool {
 	functionKey := components.GetFunctionKey(namespace, name)
 	return l.pluginManager.IsPluginLoaded(functionKey)
 }
 
-// WasPreviouslyLoaded checks if a function was previously loaded
+// WasPreviouslyLoaded checks if a function was previously loaded.
 func (l *FunctionLoader) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
 	functionKey := components.GetFunctionKey(namespace, name)
 	return l.pluginManager.WasPreviouslyLoaded(functionKey)
 }
 
-// IsStopped checks if a function is stopped
+// IsStopped checks if a function is stopped.
 func (l *FunctionLoader) IsStopped(namespace, name string) bool {
 	functionKey := components.GetFunctionKey(namespace, name)
 	return l.pluginManager.IsFunctionStopped(functionKey)
@@ -333,7 +334,7 @@ func (l *FunctionLoader) IsStopped(namespace, name string) bool {
 
 // Helper methods
 
-// pullWithContext fetches a WASM module with context
+// pullWithContext fetches a WASM module with context.
 func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, identifier string) ([]byte, *registry.VersionInfo, error) {
 	// Create a channel for the result
 	type pullResult struct {
@@ -374,7 +375,7 @@ func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, i
 	return result.wasmBytes, result.versionInfo, result.err
 }
 
-// createPluginWithContext creates a plugin with context
+// createPluginWithContext creates a plugin with context.
 func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
 	// Create plugin in a cancellable goroutine
 	type pluginResult struct {

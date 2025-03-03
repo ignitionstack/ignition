@@ -26,15 +26,14 @@ type CircuitBreaker interface {
 	GetFailureCount() int
 }
 
-// Circuit breaker states as string constants
+// Circuit breaker states as string constants.
 const (
 	StateClosed   = "closed"
 	StateHalfOpen = "half-open"
 	StateOpen     = "open"
 )
 
-// defaultCircuitBreaker provides an implementation of the CircuitBreaker interface
-// that is simplified to use a consistent locking strategy
+// that is simplified to use a consistent locking strategy.
 type defaultCircuitBreaker struct {
 	// Mutex for protecting all state changes
 	mutex sync.RWMutex
@@ -75,7 +74,7 @@ func NewCircuitBreakerWithOptions(failureThreshold int, resetTimeout time.Durati
 	}
 }
 
-// RecordSuccess records a successful operation and resets the failure count if in half-open state
+// RecordSuccess records a successful operation and resets the failure count if in half-open state.
 func (cb *defaultCircuitBreaker) RecordSuccess() {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -86,8 +85,7 @@ func (cb *defaultCircuitBreaker) RecordSuccess() {
 	}
 }
 
-// RecordFailure records a failed operation and potentially opens the circuit
-// Returns true if the circuit is now open
+// Returns true if the circuit is now open.
 func (cb *defaultCircuitBreaker) RecordFailure() bool {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -102,8 +100,7 @@ func (cb *defaultCircuitBreaker) RecordFailure() bool {
 	return cb.state == StateOpen
 }
 
-// IsOpen checks if the circuit is currently open
-// If the reset timeout has expired, transitions to half-open state
+// If the reset timeout has expired, transitions to half-open state.
 func (cb *defaultCircuitBreaker) IsOpen() bool {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -121,7 +118,7 @@ func (cb *defaultCircuitBreaker) IsOpen() bool {
 	return true
 }
 
-// Reset resets the circuit breaker to its initial closed state
+// Reset resets the circuit breaker to its initial closed state.
 func (cb *defaultCircuitBreaker) Reset() {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -130,7 +127,7 @@ func (cb *defaultCircuitBreaker) Reset() {
 	cb.state = StateClosed
 }
 
-// GetState returns the current state of the circuit breaker
+// GetState returns the current state of the circuit breaker.
 func (cb *defaultCircuitBreaker) GetState() string {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
@@ -138,7 +135,7 @@ func (cb *defaultCircuitBreaker) GetState() string {
 	return cb.state
 }
 
-// GetFailureCount returns the current failure count
+// GetFailureCount returns the current failure count.
 func (cb *defaultCircuitBreaker) GetFailureCount() int {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()

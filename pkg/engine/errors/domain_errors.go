@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Domain enumerates the possible error domains
+// Domain enumerates the possible error domains.
 type Domain string
 
 const (
@@ -16,10 +16,10 @@ const (
 	DomainExecution Domain = "execution"
 )
 
-// Code enumerates possible error codes for each domain
+// Code enumerates possible error codes for each domain.
 type Code string
 
-// Engine error codes
+// Engine error codes.
 const (
 	CodeNotInitialized Code = "not_initialized"
 	CodeInvalidState   Code = "invalid_state"
@@ -29,7 +29,7 @@ const (
 	CodeInternalError  Code = "internal_error"
 )
 
-// Function error codes
+// Function error codes.
 const (
 	CodeFunctionNotFound      Code = "function_not_found"
 	CodeFunctionNotLoaded     Code = "function_not_loaded"
@@ -39,7 +39,7 @@ const (
 	CodeInvalidConfig         Code = "invalid_config"
 )
 
-// Registry error codes
+// Registry error codes.
 const (
 	CodeRegistryNotFound Code = "registry_not_found"
 	CodeVersionNotFound  Code = "version_not_found"
@@ -47,14 +47,14 @@ const (
 	CodeRegistryError    Code = "registry_error"
 )
 
-// Plugin error codes
+// Plugin error codes.
 const (
 	CodePluginCreationFailed Code = "plugin_creation_failed"
 	CodePluginNotFound       Code = "plugin_not_found"
 	CodePluginAlreadyExists  Code = "plugin_already_exists"
 )
 
-// Execution error codes
+// Execution error codes.
 const (
 	CodeExecutionTimeout   Code = "execution_timeout"
 	CodeExecutionCancelled Code = "execution_cancelled"
@@ -100,7 +100,7 @@ func (e *DomainError) Error() string {
 	return msg
 }
 
-// Unwrap returns the cause of this error
+// Unwrap returns the cause of this error.
 func (e *DomainError) Unwrap() error {
 	return e.Cause
 }
@@ -110,29 +110,29 @@ func New(domain Domain, code Code, message string) *DomainError {
 	return &DomainError{
 		ErrDomain: domain,
 		ErrCode:   code,
-		Message:    message,
+		Message:   message,
 	}
 }
 
-// WithNamespace adds namespace context to the error
+// WithNamespace adds namespace context to the error.
 func (e *DomainError) WithNamespace(namespace string) *DomainError {
 	e.Namespace = namespace
 	return e
 }
 
-// WithName adds function name context to the error
+// WithName adds function name context to the error.
 func (e *DomainError) WithName(name string) *DomainError {
 	e.Name = name
 	return e
 }
 
-// WithCause adds the causing error
+// WithCause adds the causing error.
 func (e *DomainError) WithCause(cause error) *DomainError {
 	e.Cause = cause
 	return e
 }
 
-// WithDetails adds additional context details
+// WithDetails adds additional context details.
 func (e *DomainError) WithDetails(details map[string]interface{}) *DomainError {
 	e.Details = details
 	return e
@@ -143,8 +143,8 @@ func Wrap(domain Domain, code Code, message string, err error) *DomainError {
 	return &DomainError{
 		ErrDomain: domain,
 		ErrCode:   code,
-		Message:    message,
-		Cause:      err,
+		Message:   message,
+		Cause:     err,
 	}
 }
 
@@ -157,21 +157,21 @@ func Is(err error, domain Domain, code Code) bool {
 	return false
 }
 
-// Common engine errors
+// Common engine errors.
 var (
 	ErrEngineNotInitialized = New(DomainEngine, CodeNotInitialized, "Engine not initialized")
 	ErrInvalidEngineState   = New(DomainEngine, CodeInvalidState, "Invalid engine state")
 	ErrInternalError        = New(DomainEngine, CodeInternalError, "Internal engine error")
 )
 
-// Common function errors
+// Common function errors.
 var (
 	ErrFunctionNotFound  = New(DomainFunction, CodeFunctionNotFound, "Function not found")
 	ErrFunctionNotLoaded = New(DomainFunction, CodeFunctionNotLoaded, "Function not loaded")
 	ErrFunctionStopped   = New(DomainFunction, CodeFunctionStopped, "Function is stopped")
 )
 
-// Common execution errors
+// Common execution errors.
 var (
 	ErrExecutionTimeout   = New(DomainExecution, CodeExecutionTimeout, "Function execution timed out")
 	ErrCircuitBreakerOpen = New(DomainExecution, CodeCircuitBreakerOpen, "Circuit breaker is open")

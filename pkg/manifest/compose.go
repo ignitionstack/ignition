@@ -17,8 +17,9 @@ type ComposeManifest struct {
 
 // ComposeService represents a single function service in the compose file.
 type ComposeService struct {
-	Function      string            `yaml:"function"` // namespace/name:tag format
-	Config        map[string]string `yaml:"config,omitempty"`
+	Function      string            `yaml:"function"`         // namespace/name:tag format
+	Config        map[string]string `yaml:"config,omitempty"` // Deprecated: use Environment instead
+	Environment   map[string]string `yaml:"environment,omitempty"`
 	DependsOn     []string          `yaml:"depends_on,omitempty"`
 	HostName      string            `yaml:"hostname,omitempty"`
 	RestartPolicy string            `yaml:"restart,omitempty"` // "always", "on-failure", "no"
@@ -49,7 +50,7 @@ func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 		return nil, fmt.Errorf("failed to resolve compose file path: %w", err)
 	}
 
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
 		return nil, fmt.Errorf("compose file not found: %s", absPath)
 	}
 
@@ -60,8 +61,8 @@ func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 	}
 
 	var manifest ComposeManifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse compose file: %w", err)
+	if unmarshalErr := yaml.Unmarshal(data, &manifest); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse compose file: %w", unmarshalErr)
 	}
 
 	// Validate the manifest

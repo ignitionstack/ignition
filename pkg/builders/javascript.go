@@ -23,7 +23,7 @@ func (j *jsBuilder) VerifyDependencies() error {
 			return fmt.Errorf("extism-js verification failed: %v\n%s", exitErr.Error(), stderr.String())
 		}
 		// If the error is not an ExitError, it likely means npx or extism-js isn't installed
-		return fmt.Errorf("extism-js is not installed. Please see the installation instructions here: https://github.com/extism/js-pdk?tab=readme-ov-file#install-script")
+		return errors.New("extism-js is not installed. Please see the installation instructions here: https://github.com/extism/js-pdk?tab=readme-ov-file#install-script")
 	}
 	return nil
 }

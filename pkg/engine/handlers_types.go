@@ -5,7 +5,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// ExtendedBuildRequest represents a request to build a function
+// ExtendedBuildRequest represents a request to build a function.
 type ExtendedBuildRequest struct {
 	// Embed the build request from types package
 	types.BuildRequest

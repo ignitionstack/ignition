@@ -2,9 +2,9 @@ package compose
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ignitionstack/ignition/internal/di"
@@ -24,7 +24,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 		Use:   "down",
 		Short: "Stop and remove functions defined in a compose file",
 		Long:  "Stop and remove functions defined in an ignition-compose.yml file.",
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			// Removed redundant operation line
 
 			// Parse the compose file
@@ -43,22 +43,18 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 			engineClient, ok := client.(*services.EngineClient)
 			if !ok {
 				ui.PrintError("Invalid engine client type")
-				return fmt.Errorf("invalid engine client type")
+				return errors.New("invalid engine client type")
 			}
 
 			// Check if engine is running
 			if err := engineClient.Ping(context.Background()); err != nil {
 				ui.PrintInfo("Status", "Engine is not running, no services to stop")
-				return nil
+				return fmt.Errorf("engine not running: %w", err)
 			}
 
 			// Gather functions to unload
 			ui.PrintInfo("Status", "Functions to stop")
-			var functionsToUnload []struct {
-				namespace string
-				name      string
-				service   string
-			}
+			var functionsToUnload []services.FunctionReference
 
 			for name, service := range composeManifest.Services {
 				parts := strings.Split(service.Function, ":")
@@ -71,14 +67,10 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 				namespace, funcName := nameParts[0], nameParts[1]
 				ui.PrintMetadata(name, fmt.Sprintf("%s/%s", namespace, funcName))
 
-				functionsToUnload = append(functionsToUnload, struct {
-					namespace string
-					name      string
-					service   string
-				}{
-					namespace: namespace,
-					name:      funcName,
-					service:   name,
+				functionsToUnload = append(functionsToUnload, services.FunctionReference{
+					Namespace: namespace,
+					Name:      funcName,
+					Service:   name,
 				})
 			}
 
@@ -102,7 +94,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 
 			// Unload functions in a goroutine
 			go func() {
-				err := unloadFunctions(context.Background(), functionsToUnload, engineClient)
+				err := engineClient.UnloadFunctions(context.Background(), functionsToUnload)
 				if err != nil {
 					program.Send(spinner.ErrorMsg{Err: err})
 				} else {
@@ -118,7 +110,10 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 			}
 
 			// Check for errors during unloading
-			finalModel := model.(spinner.SpinnerModel)
+			finalModel, ok := model.(spinner.Model)
+			if !ok {
+				return errors.New("unexpected model type returned from spinner")
+			}
 			if finalModel.HasError() {
 				return finalModel.GetError()
 			}
@@ -133,40 +128,4 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Specify an alternate compose file (default: ignition-compose.yml)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be unloaded without actually unloading")
 	return cmd
-}
-
-// unloadFunctions unloads all functions in the provided list.
-func unloadFunctions(ctx context.Context, functions []struct {
-	namespace string
-	name      string
-	service   string
-}, engineClient *services.EngineClient) error {
-	var unloadErrs []string
-	var unloadErrsMu sync.Mutex
-	var wg sync.WaitGroup
-
-	for _, function := range functions {
-		wg.Add(1)
-		go func(namespace, name, serviceName string) {
-			defer wg.Done()
-
-			err := engineClient.UnloadFunction(ctx, namespace, name)
-			if err != nil {
-				unloadErrsMu.Lock()
-				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v",
-					namespace, name, serviceName, err))
-				unloadErrsMu.Unlock()
-			}
-		}(function.namespace, function.name, function.service)
-	}
-
-	// Wait for all unload operations to complete
-	wg.Wait()
-
-	// Check for errors
-	if len(unloadErrs) > 0 {
-		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
-	}
-
-	return nil
 }

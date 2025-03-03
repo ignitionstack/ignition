@@ -22,7 +22,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// FunctionService defines the interface for function-related operations
+// FunctionService defines the interface for function-related operations.
 type FunctionService interface {
 	// InitFunction initializes a new function with the given name and language
 	InitFunction(name string, language string) error
@@ -40,14 +40,14 @@ type FunctionService interface {
 	ListFunctions(ctx context.Context) ([]types.FunctionInfo, error)
 }
 
-// BuildResult contains information about a successful function build
+// BuildResult contains information about a successful function build.
 type BuildResult struct {
 	Name   string // Function name
 	Path   string // Path to the built WASM file
 	Digest string // Content hash of the built WASM file
 }
 
-// FunctionDetails provides information about a function for internal use
+// FunctionDetails provides information about a function for internal use.
 type FunctionDetails struct {
 	Namespace string   `json:"namespace"`
 	Name      string   `json:"name"`
@@ -55,7 +55,7 @@ type FunctionDetails struct {
 	Tags      []string `json:"tags,omitempty"`
 }
 
-// functionService implements the FunctionService interface
+// functionService implements the FunctionService interface.
 type functionService struct {
 	builderFactory BuilderFactory
 	socketPath     string
@@ -169,20 +169,20 @@ func (f *functionService) CalculateHash(path string, config manifest.FunctionMan
 	}, nil
 }
 
-// BuilderFactory creates language-specific builders
+// BuilderFactory creates language-specific builders.
 type BuilderFactory interface {
 	GetBuilder(language string) (builders.Builder, error)
 }
 
-// defaultBuilderFactory is the default implementation of BuilderFactory
+// defaultBuilderFactory is the default implementation of BuilderFactory.
 type defaultBuilderFactory struct{}
 
-// NewBuilderFactory creates a new builder factory
+// NewBuilderFactory creates a new builder factory.
 func NewBuilderFactory() BuilderFactory {
 	return &defaultBuilderFactory{}
 }
 
-// GetBuilder returns a builder for the specified language
+// GetBuilder returns a builder for the specified language.
 func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, error) {
 	switch strings.ToLower(language) {
 	case "rust":
@@ -209,7 +209,7 @@ func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, e
 		return builder, nil
 	case "zig":
 		// Zig builder is disabled until fixed
-		return nil, fmt.Errorf("zig builder is currently disabled; see pkg/builders/zig.go for details")
+		return nil, errors.New("zig builder is currently disabled; see pkg/builders/zig.go for details")
 	case "python":
 		builder := builders.NewPythonBuilder()
 		if err := builder.VerifyDependencies(); err != nil {
@@ -221,7 +221,7 @@ func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, e
 	}
 }
 
-// getTemplateURL returns the URL for the template repository for a given language
+// getTemplateURL returns the URL for the template repository for a given language.
 func getTemplateURL(language string) (string, error) {
 	templates := map[string]string{
 		"golang":         "https://github.com/extism/go-pdk-template",
@@ -241,7 +241,7 @@ func getTemplateURL(language string) (string, error) {
 	return url, nil
 }
 
-// cloneTemplate clones a template repository to the specified path
+// cloneTemplate clones a template repository to the specified path.
 func cloneTemplate(path, url string) error {
 	// Clone the template repository
 	_, err := git.PlainClone(path, false, &git.CloneOptions{
@@ -259,7 +259,7 @@ func cloneTemplate(path, url string) error {
 	return nil
 }
 
-// createManifestFile creates a new manifest file for the function
+// createManifestFile creates a new manifest file for the function.
 func createManifestFile(path, name, language string) error {
 	// Create the function manifest
 	functionManifest := manifest.FunctionManifest{
@@ -281,14 +281,14 @@ func createManifestFile(path, name, language string) error {
 
 	// Write to file
 	manifestPath := filepath.Join(path, "ignition.yml")
-	if err := os.WriteFile(manifestPath, marshalledManifest, 0644); err != nil {
+	if err := os.WriteFile(manifestPath, marshalledManifest, 0600); err != nil {
 		return fmt.Errorf("failed to write manifest file: %w", err)
 	}
 
 	return nil
 }
 
-// hashFile calculates a SHA-256 hash of a file
+// hashFile calculates a SHA-256 hash of a file.
 func hashFile(filePath string) (string, error) {
 	// Create a new hasher
 	hasher := sha256.New()
@@ -310,7 +310,7 @@ func hashFile(filePath string) (string, error) {
 	return checksum, nil
 }
 
-// hashSourceCode walks through a directory and hashes all source files
+// hashSourceCode walks through a directory and hashes all source files.
 func hashSourceCode(hasher io.Writer, path string) error {
 	err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -346,7 +346,7 @@ func hashSourceCode(hasher io.Writer, path string) error {
 	return nil
 }
 
-// hashConfig hashes a function's configuration
+// hashConfig hashes a function's configuration.
 func hashConfig(hasher io.Writer, config manifest.FunctionManifest) error {
 	// Marshal the config to JSON
 	configBytes, err := json.Marshal(config)
@@ -361,7 +361,7 @@ func hashConfig(hasher io.Writer, config manifest.FunctionManifest) error {
 	return nil
 }
 
-// shouldSkipFile determines if a file should be excluded from hashing
+// shouldSkipFile determines if a file should be excluded from hashing.
 func shouldSkipFile(path string) bool {
 	skipPatterns := []string{
 		".git",
@@ -430,7 +430,7 @@ func (f *functionService) ListFunctions(ctx context.Context) ([]types.FunctionIn
 		ctx,
 		http.MethodPost,
 		"http://unix/list",
-		bytes.NewBuffer([]byte("{}")), // Empty JSON object for listing all functions
+		bytes.NewBufferString("{}"), // Empty JSON object for listing all functions
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)

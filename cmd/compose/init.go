@@ -12,14 +12,14 @@ import (
 )
 
 // NewComposeInitCommand creates a new cobra command for compose init.
-func NewComposeInitCommand(container *di.Container) *cobra.Command {
+func NewComposeInitCommand(_ *di.Container) *cobra.Command {
 	var outputPath string
 
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a new compose file",
 		Long:  "Create a new ignition-compose.yml file with example services.",
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			// Removed redundant operation line
 
 			// Create example compose file content
@@ -70,7 +70,7 @@ func NewComposeInitCommand(container *di.Container) *cobra.Command {
 			}
 
 			// Write to file
-			if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+			if err := os.WriteFile(outputPath, yamlData, 0600); err != nil {
 				ui.PrintError(fmt.Sprintf("Failed to write file: %v", err))
 				return fmt.Errorf("failed to write file: %w", err)
 			}

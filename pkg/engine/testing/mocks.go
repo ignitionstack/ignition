@@ -12,12 +12,12 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// Constants for common circuit breaker states
+// Constants for common circuit breaker states.
 const (
 	circuitStateClosed = "closed"
 	circuitStateOpen   = "open"
-	
-	// Default capacity for log store
+
+	// Default capacity for log store.
 	defaultLogStoreCapacity = 100
 )
 
@@ -122,7 +122,7 @@ func (m *MockPluginManager) StorePlugin(key string, plugin *extism.Plugin, diges
 	}
 }
 
-// RemovePlugin implements PluginManager.RemovePlugin
+// RemovePlugin implements PluginManager.RemovePlugin.
 func (m *MockPluginManager) RemovePlugin(key string) bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -138,7 +138,7 @@ func (m *MockPluginManager) RemovePlugin(key string) bool {
 	return false
 }
 
-// StopFunction implements PluginManager.StopFunction
+// StopFunction implements PluginManager.StopFunction.
 func (m *MockPluginManager) StopFunction(key string) bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -156,7 +156,7 @@ func (m *MockPluginManager) StopFunction(key string) bool {
 	return removed
 }
 
-// IsFunctionStopped implements PluginManager.IsFunctionStopped
+// IsFunctionStopped implements PluginManager.IsFunctionStopped.
 func (m *MockPluginManager) IsFunctionStopped(key string) bool {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -170,7 +170,7 @@ func (m *MockPluginManager) IsFunctionStopped(key string) bool {
 	return m.FunctionState.stopped[key]
 }
 
-// ClearStoppedStatus implements PluginManager.ClearStoppedStatus
+// ClearStoppedStatus implements PluginManager.ClearStoppedStatus.
 func (m *MockPluginManager) ClearStoppedStatus(key string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -180,7 +180,7 @@ func (m *MockPluginManager) ClearStoppedStatus(key string) {
 	delete(m.FunctionState.stopped, key)
 }
 
-// IsPluginLoaded implements PluginManager.IsPluginLoaded
+// IsPluginLoaded implements PluginManager.IsPluginLoaded.
 func (m *MockPluginManager) IsPluginLoaded(key string) bool {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -191,7 +191,7 @@ func (m *MockPluginManager) IsPluginLoaded(key string) bool {
 	return exists
 }
 
-// WasPreviouslyLoaded implements PluginManager.WasPreviouslyLoaded
+// WasPreviouslyLoaded implements PluginManager.WasPreviouslyLoaded.
 func (m *MockPluginManager) WasPreviouslyLoaded(key string) (bool, map[string]string) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -216,7 +216,7 @@ func (m *MockPluginManager) WasPreviouslyLoaded(key string) (bool, map[string]st
 	return wasLoaded, config
 }
 
-// HasConfigChanged implements PluginManager.HasConfigChanged
+// HasConfigChanged implements PluginManager.HasConfigChanged.
 func (m *MockPluginManager) HasConfigChanged(key string, newConfig map[string]string) bool {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -245,7 +245,7 @@ func (m *MockPluginManager) HasConfigChanged(key string, newConfig map[string]st
 	return false
 }
 
-// HasDigestChanged implements PluginManager.HasDigestChanged
+// HasDigestChanged implements PluginManager.HasDigestChanged.
 func (m *MockPluginManager) HasDigestChanged(key string, newDigest string) bool {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -260,7 +260,7 @@ func (m *MockPluginManager) HasDigestChanged(key string, newDigest string) bool 
 	return !exists || currentDigest != newDigest
 }
 
-// GetPluginDigest implements PluginManager.GetPluginDigest
+// GetPluginDigest implements PluginManager.GetPluginDigest.
 func (m *MockPluginManager) GetPluginDigest(key string) (string, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -271,7 +271,7 @@ func (m *MockPluginManager) GetPluginDigest(key string) (string, bool) {
 	return digest, exists
 }
 
-// GetPluginConfig implements PluginManager.GetPluginConfig
+// GetPluginConfig implements PluginManager.GetPluginConfig.
 func (m *MockPluginManager) GetPluginConfig(key string) (map[string]string, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -292,25 +292,25 @@ func (m *MockPluginManager) GetPluginConfig(key string) (map[string]string, bool
 	return configCopy, exists
 }
 
-// StartCleanup implements PluginManager.StartCleanup
+// StartCleanup implements PluginManager.StartCleanup.
 func (m *MockPluginManager) StartCleanup(_ context.Context) {
 	m.Calls.StartCleanup++
 	// Do nothing in the mock
 }
 
-// Shutdown implements PluginManager.Shutdown
+// Shutdown implements PluginManager.Shutdown.
 func (m *MockPluginManager) Shutdown() {
 	m.Calls.Shutdown++
 	// Do nothing in the mock
 }
 
-// GetLogStore implements PluginManager.GetLogStore
+// GetLogStore implements PluginManager.GetLogStore.
 func (m *MockPluginManager) GetLogStore() *logging.FunctionLogStore {
 	m.Calls.GetLogStore++
 	return m.logStore
 }
 
-// ListLoadedFunctions implements PluginManager.ListLoadedFunctions
+// ListLoadedFunctions implements PluginManager.ListLoadedFunctions.
 func (m *MockPluginManager) ListLoadedFunctions() []string {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -325,7 +325,7 @@ func (m *MockPluginManager) ListLoadedFunctions() []string {
 	return keys
 }
 
-// GetLoadedFunctionCount implements PluginManager.GetLoadedFunctionCount
+// GetLoadedFunctionCount implements PluginManager.GetLoadedFunctionCount.
 func (m *MockPluginManager) GetLoadedFunctionCount() int {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -335,7 +335,7 @@ func (m *MockPluginManager) GetLoadedFunctionCount() int {
 	return len(m.plugins)
 }
 
-// GetPreviouslyLoadedFunctions implements PluginManager.GetPreviouslyLoadedFunctions
+// GetPreviouslyLoadedFunctions implements PluginManager.GetPreviouslyLoadedFunctions.
 func (m *MockPluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -351,7 +351,7 @@ func (m *MockPluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
 	return result
 }
 
-// GetStoppedFunctions implements PluginManager.GetStoppedFunctions
+// GetStoppedFunctions implements PluginManager.GetStoppedFunctions.
 func (m *MockPluginManager) GetStoppedFunctions() map[string]bool {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -367,7 +367,7 @@ func (m *MockPluginManager) GetStoppedFunctions() map[string]bool {
 	return result
 }
 
-// MockCircuitBreaker is a mock implementation of CircuitBreaker for testing
+// MockCircuitBreaker is a mock implementation of CircuitBreaker for testing.
 type MockCircuitBreaker struct {
 	State        string
 	FailureCount int
@@ -389,14 +389,14 @@ type MockCircuitBreaker struct {
 	}
 }
 
-// NewMockCircuitBreaker creates a new mock circuit breaker
+// NewMockCircuitBreaker creates a new mock circuit breaker.
 func NewMockCircuitBreaker() *MockCircuitBreaker {
 	return &MockCircuitBreaker{
 		State: circuitStateClosed,
 	}
 }
 
-// RecordSuccess implements CircuitBreaker.RecordSuccess
+// RecordSuccess implements CircuitBreaker.RecordSuccess.
 func (m *MockCircuitBreaker) RecordSuccess() {
 	m.Calls.RecordSuccess++
 
@@ -406,7 +406,7 @@ func (m *MockCircuitBreaker) RecordSuccess() {
 	}
 }
 
-// RecordFailure implements CircuitBreaker.RecordFailure
+// RecordFailure implements CircuitBreaker.RecordFailure.
 func (m *MockCircuitBreaker) RecordFailure() bool {
 	m.Calls.RecordFailure++
 
@@ -423,7 +423,7 @@ func (m *MockCircuitBreaker) RecordFailure() bool {
 	return m.State == circuitStateOpen
 }
 
-// IsOpen implements CircuitBreaker.IsOpen
+// IsOpen implements CircuitBreaker.IsOpen.
 func (m *MockCircuitBreaker) IsOpen() bool {
 	m.Calls.IsOpen++
 
@@ -434,7 +434,7 @@ func (m *MockCircuitBreaker) IsOpen() bool {
 	return m.State == circuitStateOpen
 }
 
-// Reset implements CircuitBreaker.Reset
+// Reset implements CircuitBreaker.Reset.
 func (m *MockCircuitBreaker) Reset() {
 	m.Calls.Reset++
 
@@ -442,21 +442,21 @@ func (m *MockCircuitBreaker) Reset() {
 	m.FailureCount = 0
 }
 
-// GetState implements CircuitBreaker.GetState
+// GetState implements CircuitBreaker.GetState.
 func (m *MockCircuitBreaker) GetState() string {
 	m.Calls.GetState++
 
 	return m.State
 }
 
-// GetFailureCount implements CircuitBreaker.GetFailureCount
+// GetFailureCount implements CircuitBreaker.GetFailureCount.
 func (m *MockCircuitBreaker) GetFailureCount() int {
 	m.Calls.GetFailureCount++
 
 	return m.FailureCount
 }
 
-// MockCircuitBreakerManager is a mock implementation of CircuitBreakerManager for testing
+// MockCircuitBreakerManager is a mock implementation of CircuitBreakerManager for testing.
 type MockCircuitBreakerManager struct {
 	circuitBreakers map[string]*MockCircuitBreaker
 	mutex           sync.RWMutex
@@ -471,14 +471,14 @@ type MockCircuitBreakerManager struct {
 	}
 }
 
-// NewMockCircuitBreakerManager creates a new mock circuit breaker manager
+// NewMockCircuitBreakerManager creates a new mock circuit breaker manager.
 func NewMockCircuitBreakerManager() *MockCircuitBreakerManager {
 	return &MockCircuitBreakerManager{
 		circuitBreakers: make(map[string]*MockCircuitBreaker),
 	}
 }
 
-// GetCircuitBreaker implements CircuitBreakerManager.GetCircuitBreaker
+// GetCircuitBreaker implements CircuitBreakerManager.GetCircuitBreaker.
 func (m *MockCircuitBreakerManager) GetCircuitBreaker(key string) components.CircuitBreaker {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -494,7 +494,7 @@ func (m *MockCircuitBreakerManager) GetCircuitBreaker(key string) components.Cir
 	return cb
 }
 
-// RemoveCircuitBreaker implements CircuitBreakerManager.RemoveCircuitBreaker
+// RemoveCircuitBreaker implements CircuitBreakerManager.RemoveCircuitBreaker.
 func (m *MockCircuitBreakerManager) RemoveCircuitBreaker(key string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -504,7 +504,7 @@ func (m *MockCircuitBreakerManager) RemoveCircuitBreaker(key string) {
 	delete(m.circuitBreakers, key)
 }
 
-// Reset implements CircuitBreakerManager.Reset
+// Reset implements CircuitBreakerManager.Reset.
 func (m *MockCircuitBreakerManager) Reset() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -516,7 +516,7 @@ func (m *MockCircuitBreakerManager) Reset() {
 	}
 }
 
-// GetCircuitBreakerState implements CircuitBreakerManager.GetCircuitBreakerState
+// GetCircuitBreakerState implements CircuitBreakerManager.GetCircuitBreakerState.
 func (m *MockCircuitBreakerManager) GetCircuitBreakerState(key string) string {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -531,7 +531,7 @@ func (m *MockCircuitBreakerManager) GetCircuitBreakerState(key string) string {
 	return cb.GetState()
 }
 
-// GetAllCircuitBreakers implements CircuitBreakerManager.GetAllCircuitBreakers
+// GetAllCircuitBreakers implements CircuitBreakerManager.GetAllCircuitBreakers.
 func (m *MockCircuitBreakerManager) GetAllCircuitBreakers() map[string]components.CircuitBreaker {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -546,7 +546,7 @@ func (m *MockCircuitBreakerManager) GetAllCircuitBreakers() map[string]component
 	return result
 }
 
-// MockRegistry is a mock implementation of Registry for testing
+// MockRegistry is a mock implementation of Registry for testing.
 type MockRegistry struct {
 	Functions map[string]map[string]*registry.FunctionMetadata
 	Versions  map[string]map[string]map[string]*registry.VersionInfo
@@ -583,7 +583,7 @@ type MockRegistry struct {
 	}
 }
 
-// NewMockRegistry creates a new mock registry
+// NewMockRegistry creates a new mock registry.
 func NewMockRegistry() *MockRegistry {
 	return &MockRegistry{
 		Functions: make(map[string]map[string]*registry.FunctionMetadata),
@@ -592,8 +592,7 @@ func NewMockRegistry() *MockRegistry {
 	}
 }
 
-
-// Pull implements Registry.Pull
+// Pull implements Registry.Pull.
 func (m *MockRegistry) Pull(namespace, name, reference string) ([]byte, *registry.VersionInfo, error) {
 	key := fmt.Sprintf("%s/%s/%s", namespace, name, reference)
 	m.Calls.Pull = append(m.Calls.Pull, key)
@@ -611,7 +610,7 @@ func (m *MockRegistry) Pull(namespace, name, reference string) ([]byte, *registr
 
 // Additional methods would be implemented similarly
 
-// MockLogger is a mock implementation of logging.Logger for testing
+// MockLogger is a mock implementation of logging.Logger for testing.
 type MockLogger struct {
 	logs []string
 
@@ -621,14 +620,14 @@ type MockLogger struct {
 	}
 }
 
-// NewMockLogger creates a new mock logger
+// NewMockLogger creates a new mock logger.
 func NewMockLogger() *MockLogger {
 	return &MockLogger{
 		logs: make([]string, 0),
 	}
 }
 
-// Printf implements logging.Logger.Printf
+// Printf implements logging.Logger.Printf.
 func (m *MockLogger) Printf(format string, v ...interface{}) {
 	m.Calls.Printf++
 
@@ -636,17 +635,17 @@ func (m *MockLogger) Printf(format string, v ...interface{}) {
 	m.logs = append(m.logs, message)
 }
 
-// GetLogs returns all logged messages
+// GetLogs returns all logged messages.
 func (m *MockLogger) GetLogs() []string {
 	return m.logs
 }
 
-// Clear clears all logged messages
+// Clear clears all logged messages.
 func (m *MockLogger) Clear() {
 	m.logs = make([]string, 0)
 }
 
-// TestFixture provides a complete test fixture for engine tests
+// TestFixture provides a complete test fixture for engine tests.
 type TestFixture struct {
 	PluginManager  *MockPluginManager
 	CircuitBreaker *MockCircuitBreakerManager
@@ -654,7 +653,7 @@ type TestFixture struct {
 	Logger         *MockLogger
 }
 
-// NewTestFixture creates a new test fixture
+// NewTestFixture creates a new test fixture.
 func NewTestFixture() *TestFixture {
 	return &TestFixture{
 		PluginManager:  NewMockPluginManager(),

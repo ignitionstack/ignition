@@ -6,8 +6,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// EngineClient defines the interface for interacting with the Ignition engine.
-// The actual implementation is in internal/services/engine_client.go
+// The actual implementation is in internal/services/engine_client.go.
 type EngineClient interface {
 	LoadFunction(ctx context.Context, namespace, name, tag string, config map[string]string) error
 	UnloadFunction(ctx context.Context, namespace, name string) error

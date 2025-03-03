@@ -3,6 +3,7 @@ package function
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -120,14 +121,14 @@ command allows you to explore what's available to run.`,
 func parseNamespaceAndNameWithoutTag(input string) (namespace, name string, err error) {
 	parts := strings.Split(input, "/")
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid format: expected namespace/name")
+		return "", "", errors.New("invalid format: expected namespace/name")
 	}
 
 	namespace = strings.TrimSpace(parts[0])
 	name = strings.TrimSpace(parts[1])
 
 	if namespace == "" || name == "" {
-		return "", "", fmt.Errorf("namespace and name cannot be empty")
+		return "", "", errors.New("namespace and name cannot be empty")
 	}
 
 	return namespace, name, nil

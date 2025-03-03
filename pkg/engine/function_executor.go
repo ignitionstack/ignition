@@ -10,7 +10,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 )
 
-// FunctionExecutor is responsible for executing functions and managing circuit breakers
+// FunctionExecutor is responsible for executing functions and managing circuit breakers.
 type FunctionExecutor struct {
 	pluginManager   PluginManager
 	circuitBreakers CircuitBreakerManager
@@ -19,7 +19,7 @@ type FunctionExecutor struct {
 	defaultTimeout  time.Duration
 }
 
-// NewFunctionExecutor creates a new function executor
+// NewFunctionExecutor creates a new function executor.
 func NewFunctionExecutor(pluginManager PluginManager, circuitBreakers CircuitBreakerManager,
 	logStore *logging.FunctionLogStore, logger logging.Logger, defaultTimeout time.Duration) *FunctionExecutor {
 	return &FunctionExecutor{
@@ -59,7 +59,7 @@ func (e *FunctionExecutor) CallFunction(ctx context.Context, namespace, name, en
 	return e.executeFunction(ctx, functionKey, plugin, cb, entrypoint, payload)
 }
 
-// prepareExecution checks circuit breaker state and retrieves the plugin
+// prepareExecution checks circuit breaker state and retrieves the plugin.
 func (e *FunctionExecutor) prepareExecution(functionKey string) (CircuitBreaker, *extism.Plugin, error) {
 	// Check circuit breaker
 	cb := e.circuitBreakers.GetCircuitBreaker(functionKey)
@@ -79,13 +79,13 @@ func (e *FunctionExecutor) prepareExecution(functionKey string) (CircuitBreaker,
 	return cb, plugin, nil
 }
 
-// callResult represents the result of a function call
+// callResult represents the result of a function call.
 type callResult struct {
 	output []byte
 	err    error
 }
 
-// executeFunction performs the actual function execution with proper error handling
+// executeFunction performs the actual function execution with proper error handling.
 func (e *FunctionExecutor) executeFunction(
 	ctx context.Context,
 	functionKey string,
@@ -122,11 +122,12 @@ func (e *FunctionExecutor) executeFunction(
 		return e.handleResult(functionKey, cb, entrypoint, result, startTime)
 
 	case <-ctx.Done():
-		return e.handleContextCancellation(ctx, functionKey, cb)
+		err := e.handleContextCancellation(ctx, functionKey, cb)
+		return nil, err
 	}
 }
 
-// handleResult processes the function execution result
+// handleResult processes the function execution result.
 func (e *FunctionExecutor) handleResult(
 	functionKey string,
 	cb CircuitBreaker,
@@ -148,7 +149,7 @@ func (e *FunctionExecutor) handleResult(
 	return result.output, nil
 }
 
-// handleExecutionError handles errors that occur during function execution
+// handleExecutionError handles errors that occur during function execution.
 func (e *FunctionExecutor) handleExecutionError(
 	functionKey string,
 	cb CircuitBreaker,
@@ -168,12 +169,12 @@ func (e *FunctionExecutor) handleExecutionError(
 	return nil, WrapEngineError("failed to call function", err)
 }
 
-// handleContextCancellation handles the case where execution is cancelled or times out
+// handleContextCancellation handles the case where execution is cancelled or times out.
 func (e *FunctionExecutor) handleContextCancellation(
 	ctx context.Context,
 	functionKey string,
 	cb CircuitBreaker,
-) ([]byte, error) {
+) error {
 	// Record the failure in the circuit breaker
 	isOpen := cb.RecordFailure()
 
@@ -193,7 +194,7 @@ func (e *FunctionExecutor) handleContextCancellation(
 		e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
 	}
 
-	return nil, WrapEngineError(errMsg, ctx.Err())
+	return WrapEngineError(errMsg, ctx.Err())
 }
 
 // DefaultTimeout returns the default timeout for function calls.

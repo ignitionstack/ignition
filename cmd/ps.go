@@ -2,11 +2,18 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/spf13/cobra"
+)
+
+const (
+	StatusStopped  = "stopped"
+	StatusUnloaded = "unloaded"
+	StatusRunning  = "running"
 )
 
 // PsCmd creates a new cobra command for listing running functions.
@@ -45,7 +52,7 @@ is not running, it will display a warning and show no functions.`,
 			if !plainFormat {
 				ui.PrintError("Invalid engine client type")
 			}
-			return fmt.Errorf("invalid engine client type")
+			return errors.New("invalid engine client type")
 		}
 
 		// Try to ping the engine to ensure it's running
@@ -84,11 +91,11 @@ is not running, it will display a warning and show no functions.`,
 				for _, fn := range runningFunctions {
 					status := fn.Status
 					if status == "" {
-						status = "running"
-					} else if status == "stopped" {
-						status = "stopped"
-					} else if status == "unloaded" {
-						status = "unloaded"
+						status = StatusRunning
+					} else if status == StatusStopped {
+						status = StatusStopped
+					} else if status == StatusUnloaded {
+						status = StatusUnloaded
 					}
 					fmt.Printf(dataFormat, fn.Namespace, fn.Name, status)
 				}
@@ -109,14 +116,14 @@ is not running, it will display a warning and show no functions.`,
 			for _, fn := range runningFunctions {
 				var statusStyle string
 
-				if fn.Status == "unloaded" {
-					statusStyle = ui.StyleStatusValue("unloaded")
+				if fn.Status == StatusUnloaded {
+					statusStyle = ui.StyleStatusValue(StatusUnloaded)
 					unloadedFunctionsExist = true
-				} else if fn.Status == "stopped" {
-					statusStyle = ui.StyleStatusValue("stopped")
+				} else if fn.Status == StatusStopped {
+					statusStyle = ui.StyleStatusValue(StatusStopped)
 					stoppedFunctionsExist = true
 				} else {
-					statusStyle = ui.StyleStatusValue("running")
+					statusStyle = ui.StyleStatusValue(StatusRunning)
 				}
 
 				table.AddRow(fn.Namespace, fn.Name, statusStyle)
@@ -130,11 +137,11 @@ is not running, it will display a warning and show no functions.`,
 				fmt.Println()
 
 				if unloadedFunctionsExist {
-					ui.PrintInfo("Note", "Functions with 'unloaded' status are available but not currently loaded in memory")
+					ui.PrintInfo("Note", "Functions with '"+StatusUnloaded+"' status are available but not currently loaded in memory")
 				}
 
 				if stoppedFunctionsExist {
-					ui.PrintInfo("Note", "Functions with 'stopped' status will not be automatically reloaded when called")
+					ui.PrintInfo("Note", "Functions with '"+StatusStopped+"' status will not be automatically reloaded when called")
 				}
 			}
 		} else {

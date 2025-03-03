@@ -80,9 +80,16 @@ func functionInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	finalModel := m.(spinner.SpinnerModel)
+	finalModel, ok := m.(spinner.Model)
+	if !ok {
+		return fmt.Errorf("unexpected model type returned")
+	}
+
 	if !finalModel.HasError() {
-		result := finalModel.GetResult().(string)
+		result, ok := finalModel.GetResult().(string)
+		if !ok {
+			return fmt.Errorf("unexpected result type")
+		}
 		ui.PrintSuccess(result)
 	}
 

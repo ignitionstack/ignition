@@ -1,5 +1,5 @@
 // registry/local/registry_test.go
-package localRegistry
+package localregistry_test
 
 import (
 	"errors"
@@ -376,7 +376,7 @@ func TestWithMockStorage(t *testing.T) {
 	assert.Equal(t, defaultSettings, versionInfo.Settings)
 }
 
-// Mock implementations for testing
+// Mock implementations for testing.
 type mockStorage struct {
 	files map[string][]byte
 }

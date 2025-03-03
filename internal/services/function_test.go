@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockBuilderFactory is a test implementation of BuilderFactory
+// mockBuilderFactory is a test implementation of BuilderFactory.
 type mockBuilderFactory struct {
 	mockBuilder builders.Builder
 }
@@ -20,7 +20,7 @@ func (f *mockBuilderFactory) GetBuilder(language string) (builders.Builder, erro
 	return f.mockBuilder, nil
 }
 
-// mockBuilder is a test implementation of builders.Builder
+// mockBuilder is a test implementation of builders.Builder.
 type mockBuilder struct {
 	buildFunc              func(path string) (*builders.BuildResult, error)
 	verifyDependenciesFunc func() error
@@ -264,7 +264,7 @@ func TestGetTemplateURL(t *testing.T) {
 			if test.expectError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, test.expectedURL, url)
 			}
 		})

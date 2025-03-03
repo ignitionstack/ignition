@@ -8,19 +8,19 @@ import (
 	"time"
 )
 
-// Logger interface for logging
+// Logger interface for logging.
 type Logger interface {
 	Printf(format string, v ...interface{})
 	Println(v ...interface{})
 }
 
-// Default logger
+// Default logger.
 var logger Logger = log.New(log.Writer(), "resource: ", log.LstdFlags)
 
-// MemoryLimit represents memory limits in bytes
+// MemoryLimit represents memory limits in bytes.
 type MemoryLimit int64
 
-// Common memory size constants
+// Common memory size constants.
 const (
 	Kilobyte MemoryLimit = 1024
 	Megabyte             = Kilobyte * 1024
@@ -78,8 +78,7 @@ func NewManager(limits Limits) *Manager {
 	}
 }
 
-// AcquireExecution attempts to acquire a global execution slot
-// Returns true if successful, false if the maximum concurrent calls limit was reached
+// Returns true if successful, false if the maximum concurrent calls limit was reached.
 func (rm *Manager) AcquireExecution(ctx context.Context) error {
 	select {
 	case rm.executionSem <- struct{}{}:
@@ -89,7 +88,7 @@ func (rm *Manager) AcquireExecution(ctx context.Context) error {
 	}
 }
 
-// ReleaseExecution releases a global execution slot
+// ReleaseExecution releases a global execution slot.
 func (rm *Manager) ReleaseExecution() {
 	select {
 	case <-rm.executionSem:
@@ -99,7 +98,7 @@ func (rm *Manager) ReleaseExecution() {
 	}
 }
 
-// AcquireFunctionExecution attempts to acquire a function-specific execution slot
+// AcquireFunctionExecution attempts to acquire a function-specific execution slot.
 func (rm *Manager) AcquireFunctionExecution(ctx context.Context, functionKey string) error {
 	// Get or create the function semaphore
 	sem := rm.getFunctionSemaphore(functionKey)
@@ -113,7 +112,7 @@ func (rm *Manager) AcquireFunctionExecution(ctx context.Context, functionKey str
 	}
 }
 
-// ReleaseFunctionExecution releases a function-specific execution slot
+// ReleaseFunctionExecution releases a function-specific execution slot.
 func (rm *Manager) ReleaseFunctionExecution(functionKey string) {
 	rm.functionSemMu.Lock()
 	sem, exists := rm.functionSems[functionKey]
@@ -133,7 +132,7 @@ func (rm *Manager) ReleaseFunctionExecution(functionKey string) {
 	}
 }
 
-// getFunctionSemaphore gets or creates a semaphore for a function
+// getFunctionSemaphore gets or creates a semaphore for a function.
 func (rm *Manager) getFunctionSemaphore(functionKey string) chan struct{} {
 	rm.functionSemMu.Lock()
 	defer rm.functionSemMu.Unlock()
@@ -147,8 +146,7 @@ func (rm *Manager) getFunctionSemaphore(functionKey string) chan struct{} {
 	return sem
 }
 
-// WithResourceLimits executes a function with resource limits
-// Acquires both global and function-specific execution slots
+// Acquires both global and function-specific execution slots.
 func (rm *Manager) WithResourceLimits(ctx context.Context, functionKey string, operation func() (interface{}, error)) (interface{}, error) {
 	// Acquire global execution slot
 	if err := rm.AcquireExecution(ctx); err != nil {
