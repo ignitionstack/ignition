@@ -156,15 +156,10 @@ func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 			for key, lastUsed := range e.pluginLastUsed {
 				if now.Sub(lastUsed) > e.ttlDuration {
 					if plugin, exists := e.plugins[key]; exists {
-						// Store last used configuration for potential reload later
-						// We keep the config in pluginConfigs even after unloading
-						// The configuration will be used if we need to reload the function
-
 						plugin.Close(context.TODO())
 						delete(e.plugins, key)
 						delete(e.pluginLastUsed, key)
 						delete(e.pluginDigests, key)
-						// Deliberately NOT removing the config: delete(e.pluginConfigs, key)
 
 						e.logger.Printf("Plugin %s unloaded due to inactivity, preserving configuration for potential reload", key)
 					}
