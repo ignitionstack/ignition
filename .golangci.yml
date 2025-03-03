@@ -171,8 +171,6 @@ linters-settings:
     disable:
       - fieldalignment # too strict
       - shadow # Shadow variables to be fixed in a separate PR
-    # Settings per analyzer.
-    settings:
 
   inamedparam:
     # Skips check for interface methods with only a single parameter.
