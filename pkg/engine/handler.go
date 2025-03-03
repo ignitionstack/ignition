@@ -655,7 +655,7 @@ func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) err
 }
 
 // handleStatus returns the current status of the engine.
-func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
+func (h *Handlers) handleStatus(w http.ResponseWriter, _ *http.Request) error {
 	// Get the count of loaded functions from the plugin manager
 	loadedCount := h.engine.pluginManager.GetLoadedFunctionCount()
 
@@ -668,7 +668,7 @@ func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
 }
 
 // handleHealth is a simple health check endpoint.
-func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) error {
+func (h *Handlers) handleHealth(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"status": "ok"})
 }
 

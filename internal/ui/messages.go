@@ -341,9 +341,8 @@ func (m ResultDisplayModel) Init() tea.Cmd {
 
 // Update handles messages for the result display model.
 func (m ResultDisplayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
 		case "q":
 			m.quit = true
 			return m, tea.Quit

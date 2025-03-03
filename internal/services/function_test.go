@@ -16,7 +16,7 @@ type mockBuilderFactory struct {
 	mockBuilder builders.Builder
 }
 
-func (f *mockBuilderFactory) GetBuilder(language string) (builders.Builder, error) {
+func (f *mockBuilderFactory) GetBuilder(_ string) (builders.Builder, error) {
 	return f.mockBuilder, nil
 }
 
@@ -132,7 +132,7 @@ func TestBuildFunction_WithMock(t *testing.T) {
 
 	// Create a mock builder that returns our test WASM file
 	mockBuilder := &mockBuilder{
-		buildFunc: func(path string) (*builders.BuildResult, error) {
+		buildFunc: func(_ string) (*builders.BuildResult, error) {
 			return &builders.BuildResult{
 				OutputPath: wasmPath,
 			}, nil

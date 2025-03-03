@@ -3,19 +3,20 @@ package resource
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
 
 // Logger interface for logging.
 type Logger interface {
-	Printf(format string, v ...interface{})
-	Println(v ...interface{})
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
 }
 
 // Default logger.
-var logger Logger = log.New(log.Writer(), "resource: ", log.LstdFlags)
+var logger Logger = slog.Default()
 
 // MemoryLimit represents memory limits in bytes.
 type MemoryLimit int64
@@ -25,6 +26,14 @@ const (
 	Kilobyte MemoryLimit = 1024
 	Megabyte             = Kilobyte * 1024
 	Gigabyte             = Megabyte * 1024
+
+	// Default resource limits
+	DefaultMemoryLimit        = 128 * Megabyte
+	DefaultMaxExecutionTime   = 30 * time.Second
+	DefaultMaxConcurrentCalls = 100
+	DefaultMaxCallsPerFunc    = 10
+	DefaultMaxPluginsLoaded   = 50
+	DefaultPluginIdleTimeout  = 10 * time.Minute
 )
 
 // Limits defines execution resource limits for functions.
@@ -47,16 +56,16 @@ type Limits struct {
 func DefaultLimits() Limits {
 	return Limits{
 		// Memory limits
-		MemoryLimit: 128 * Megabyte,
+		MemoryLimit: DefaultMemoryLimit,
 
 		// Execution limits
-		MaxExecutionTime:    30 * time.Second,
-		MaxConcurrentCalls:  100,
-		MaxCallsPerFunction: 10,
+		MaxExecutionTime:    DefaultMaxExecutionTime,
+		MaxConcurrentCalls:  DefaultMaxConcurrentCalls,
+		MaxCallsPerFunction: DefaultMaxCallsPerFunc,
 
 		// Plugin limits
-		MaxPluginsLoaded:      50,
-		PluginIdleTimeout:     10 * time.Minute,
+		MaxPluginsLoaded:      DefaultMaxPluginsLoaded,
+		PluginIdleTimeout:     DefaultPluginIdleTimeout,
 		PluginCleanupInterval: 1 * time.Minute,
 	}
 }
@@ -94,7 +103,7 @@ func (rm *Manager) ReleaseExecution() {
 	case <-rm.executionSem:
 	default:
 		// This should never happen in correct usage
-		logger.Println("WARNING: Attempted to release an execution slot that wasn't acquired")
+		logger.Warn("Attempted to release an execution slot that wasn't acquired")
 	}
 }
 
@@ -120,7 +129,7 @@ func (rm *Manager) ReleaseFunctionExecution(functionKey string) {
 
 	if !exists {
 		// This should never happen in correct usage
-		logger.Printf("WARNING: Attempted to release a function execution slot for unknown function: %s", functionKey)
+		logger.Warn("Attempted to release a function execution slot for unknown function", "key", functionKey)
 		return
 	}
 
@@ -128,7 +137,7 @@ func (rm *Manager) ReleaseFunctionExecution(functionKey string) {
 	case <-sem:
 	default:
 		// This should never happen in correct usage
-		logger.Printf("WARNING: Attempted to release a function execution slot that wasn't acquired: %s", functionKey)
+		logger.Warn("Attempted to release a function execution slot that wasn't acquired", "key", functionKey)
 	}
 }
 
@@ -147,7 +156,12 @@ func (rm *Manager) getFunctionSemaphore(functionKey string) chan struct{} {
 }
 
 // Acquires both global and function-specific execution slots.
-func (rm *Manager) WithResourceLimits(ctx context.Context, functionKey string, operation func() (interface{}, error)) (interface{}, error) {
+// WithResourceLimits applies resource limits to an operation and executes it.
+func (rm *Manager) WithResourceLimits(
+	ctx context.Context,
+	functionKey string,
+	operation func() (interface{}, error),
+) (interface{}, error) {
 	// Acquire global execution slot
 	if err := rm.AcquireExecution(ctx); err != nil {
 		return nil, err

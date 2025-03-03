@@ -35,7 +35,7 @@ is not running, it will display a warning and show no functions.`,
 
   # List in plain format (useful for scripting)
   ignition ps --plain`,
-	RunE: func(c *cobra.Command, args []string) error {
+	RunE: func(c *cobra.Command, _ []string) error {
 		// Check if output should be machine-readable
 		plainFormat, _ := c.Flags().GetBool("plain")
 
