@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
@@ -238,7 +239,11 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 	h.logger.Printf("Received call request for function: %s/%s, entrypoint: %s",
 		namespace, name, entrypoint)
 
-	output, err := h.engine.CallFunction(namespace, name, entrypoint, []byte(req.Payload))
+	// Create a context from the request that will be canceled if the client disconnects
+	ctx := r.Context()
+
+	// Try calling the function with the request context
+	output, err := h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
 	if err != nil {
 		if err == ErrFunctionNotLoaded {
 			// Check if this function was previously loaded but was unloaded due to TTL
@@ -287,21 +292,26 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 				tagToLoad = latestVersion.FullDigest
 			}
 
-			// Load the function with the chosen tag and previous config
-			if err := h.engine.LoadFunction(namespace, name, tagToLoad, previousConfig); err != nil {
+			// Load the function with the chosen tag and previous config using context
+			if err := h.engine.LoadFunctionWithContext(ctx, namespace, name, tagToLoad, previousConfig); err != nil {
 				return fmt.Errorf("failed to reload function: %w", err)
 			}
 
-			// Try calling the function again
-			output, err = h.engine.CallFunction(namespace, name, entrypoint, []byte(req.Payload))
+			// Try calling the function again with context
+			output, err = h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
 			if err != nil {
 				return err
 			}
 		} else {
+			// Check for context cancellation
+			if ctx.Err() != nil {
+				return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+			}
 			return err
 		}
 	}
 
+	// Set appropriate headers and write the response
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(output)
 	return err
@@ -317,31 +327,131 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 	h.logger.Printf("Received one-off call request for function: %s/%s (reference: %s, entrypoint: %s)",
 		req.Namespace, req.Name, req.Reference, req.Entrypoint)
 
-	// Fetch the function from the registry
-	wasmBytes, versionInfo, err := h.engine.GetRegistry().Pull(req.Namespace, req.Name, req.Reference)
-	if err != nil {
-		if err == registry.ErrFunctionNotFound || err == registry.ErrVersionNotFound {
-			return NewNotFoundError(err.Error())
-		}
-		return err
+	// Get context from the request for cancellation support
+	ctx := r.Context()
+
+	// Create a channel for the result
+	type pullResult struct {
+		wasmBytes   []byte
+		versionInfo *registry.VersionInfo
+		err         error
 	}
 
-	// Initialize the plugin using our helper function
-	plugin, err := components.CreatePlugin(wasmBytes, versionInfo, req.Config)
-	if err != nil {
-		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", err))
+	// Fetch the function from the registry in a goroutine
+	pullCh := make(chan pullResult, 1)
+	go func() {
+		wasmBytes, versionInfo, err := h.engine.GetRegistry().Pull(req.Namespace, req.Name, req.Reference)
+		select {
+		case pullCh <- pullResult{wasmBytes, versionInfo, err}:
+		case <-ctx.Done():
+			// Context cancelled, but we need to send something to avoid goroutine leak
+			select {
+			case pullCh <- pullResult{nil, nil, ctx.Err()}:
+			default:
+			}
+		}
+	}()
+
+	// Wait for result or context cancellation
+	var result pullResult
+	select {
+	case result = <-pullCh:
+	case <-ctx.Done():
+		result = <-pullCh // Clean up goroutine
 	}
+
+	// Check for errors
+	if result.err != nil {
+		if result.err == registry.ErrFunctionNotFound || result.err == registry.ErrVersionNotFound {
+			return NewNotFoundError(result.err.Error())
+		}
+		if ctx.Err() != nil {
+			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+		return result.err
+	}
+
+	wasmBytes, versionInfo := result.wasmBytes, result.versionInfo
+
+	// Initialize the plugin in a goroutine
+	type pluginResult struct {
+		plugin *extism.Plugin
+		err    error
+	}
+
+	pluginCh := make(chan pluginResult, 1)
+	go func() {
+		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, req.Config)
+		select {
+		case pluginCh <- pluginResult{plugin, err}:
+		case <-ctx.Done():
+			if plugin != nil && err == nil {
+				plugin.Close(context.Background()) // Clean up resources
+			}
+			select {
+			case pluginCh <- pluginResult{nil, ctx.Err()}:
+			default:
+			}
+		}
+	}()
+
+	// Wait for plugin creation or context cancellation
+	var pluginRes pluginResult
+	select {
+	case pluginRes = <-pluginCh:
+	case <-ctx.Done():
+		pluginRes = <-pluginCh // Clean up goroutine
+	}
+
+	// Check for errors
+	if pluginRes.err != nil {
+		if ctx.Err() != nil {
+			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", pluginRes.err))
+	}
+
+	plugin := pluginRes.plugin
 	defer plugin.Close(context.Background())
 
-	// Call the function
-	_, output, err := plugin.Call(req.Entrypoint, []byte(req.Payload))
-	if err != nil {
-		return NewInternalServerError(fmt.Sprintf("Failed to call function: %v", err))
+	// Call the function in a goroutine
+	type callResult struct {
+		output []byte
+		err    error
+	}
+
+	callCh := make(chan callResult, 1)
+	go func() {
+		_, output, err := plugin.Call(req.Entrypoint, []byte(req.Payload))
+		select {
+		case callCh <- callResult{output, err}:
+		case <-ctx.Done():
+			select {
+			case callCh <- callResult{nil, ctx.Err()}:
+			default:
+			}
+		}
+	}()
+
+	// Wait for call result or context cancellation
+	var callRes callResult
+	select {
+	case callRes = <-callCh:
+	case <-ctx.Done():
+		callRes = <-callCh // Clean up goroutine
+	}
+
+	// Check for errors
+	if callRes.err != nil {
+		if ctx.Err() != nil {
+			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+		return NewInternalServerError(fmt.Sprintf("Failed to call function: %v", callRes.err))
 	}
 
 	// Return the output
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(output)
+	_, err := w.Write(callRes.output)
 	return err
 }
 

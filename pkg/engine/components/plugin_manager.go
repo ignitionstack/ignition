@@ -19,8 +19,11 @@ type PluginManager struct {
 	cleanupTicker  *time.Ticker
 	logger         logging.Logger
 
+	// Using separate mutexes for different maps to reduce contention
 	pluginDigests       map[string]string
+	pluginDigestsMux    sync.RWMutex
 	pluginConfigs       map[string]map[string]string
+	pluginConfigsMux    sync.RWMutex
 	previouslyLoaded    map[string]bool
 	previouslyLoadedMux sync.RWMutex
 
@@ -108,28 +111,38 @@ func (pm *PluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 }
 
 func (pm *PluginManager) StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string) {
-	pm.pluginsMux.Lock()
-	defer pm.pluginsMux.Unlock()
+	// Handle plugin map updates with its own lock
+	func() {
+		pm.pluginsMux.Lock()
+		defer pm.pluginsMux.Unlock()
 
-	// If there's an existing plugin, close it first
-	if existing, exists := pm.plugins[key]; exists {
-		existing.Close(context.TODO())
-	}
+		// If there's an existing plugin, close it first
+		if existing, exists := pm.plugins[key]; exists {
+			existing.Close(context.TODO())
+		}
 
-	pm.plugins[key] = plugin
-	pm.pluginLastUsed[key] = time.Now()
+		pm.plugins[key] = plugin
+		pm.pluginLastUsed[key] = time.Now()
+	}()
 
+	// Handle digest update with its own lock
 	if digest != "" {
+		pm.pluginDigestsMux.Lock()
 		pm.pluginDigests[key] = digest
+		pm.pluginDigestsMux.Unlock()
 	}
 
+	// Handle config update with its own lock
 	if config != nil {
 		// Make a copy of the config
 		configCopy := make(map[string]string, len(config))
 		for k, v := range config {
 			configCopy[k] = v
 		}
+
+		pm.pluginConfigsMux.Lock()
 		pm.pluginConfigs[key] = configCopy
+		pm.pluginConfigsMux.Unlock()
 	}
 
 	// Mark the plugin as having been loaded
@@ -192,9 +205,9 @@ func (pm *PluginManager) WasPreviouslyLoaded(key string) (bool, map[string]strin
 
 // HasConfigChanged compares stored config with a new config to check for changes
 func (pm *PluginManager) HasConfigChanged(key string, newConfig map[string]string) bool {
-	pm.pluginsMux.RLock()
+	pm.pluginConfigsMux.RLock()
 	currentConfig, hasConfig := pm.pluginConfigs[key]
-	pm.pluginsMux.RUnlock()
+	pm.pluginConfigsMux.RUnlock()
 
 	if !hasConfig {
 		return true
@@ -220,9 +233,9 @@ func (pm *PluginManager) HasConfigChanged(key string, newConfig map[string]strin
 }
 
 func (pm *PluginManager) HasDigestChanged(key string, newDigest string) bool {
-	pm.pluginsMux.RLock()
+	pm.pluginDigestsMux.RLock()
 	currentDigest, hasDigest := pm.pluginDigests[key]
-	pm.pluginsMux.RUnlock()
+	pm.pluginDigestsMux.RUnlock()
 
 	return !hasDigest || currentDigest != newDigest
 }
@@ -248,15 +261,15 @@ func (pm *PluginManager) GetLogStore() *logging.FunctionLogStore {
 }
 
 func (pm *PluginManager) GetPluginDigest(key string) (string, bool) {
-	pm.pluginsMux.RLock()
+	pm.pluginDigestsMux.RLock()
 	digest, exists := pm.pluginDigests[key]
-	pm.pluginsMux.RUnlock()
+	pm.pluginDigestsMux.RUnlock()
 
 	return digest, exists
 }
 
 func (pm *PluginManager) GetPluginConfig(key string) (map[string]string, bool) {
-	pm.pluginsMux.RLock()
+	pm.pluginConfigsMux.RLock()
 	config, exists := pm.pluginConfigs[key]
 
 	// Make a copy if it exists
@@ -267,7 +280,7 @@ func (pm *PluginManager) GetPluginConfig(key string) (map[string]string, bool) {
 			configCopy[k] = v
 		}
 	}
-	pm.pluginsMux.RUnlock()
+	pm.pluginConfigsMux.RUnlock()
 
 	return configCopy, exists
 }

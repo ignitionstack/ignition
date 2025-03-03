@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
@@ -131,11 +132,13 @@ func (e *Engine) GetRegistry() registry.Registry {
 	return e.registry
 }
 
-func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte) ([]byte, error) {
+// CallFunctionWithContext calls a function with a context that can be used for cancellation
+func (e *Engine) CallFunctionWithContext(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	functionKey := components.GetFunctionKey(namespace, name)
 
 	e.logStore.AddLog(functionKey, logging.LevelInfo, fmt.Sprintf("Function call: %s with payload size %d bytes", entrypoint, len(payload)))
 
+	// Quick circuit breaker check
 	cb := e.circuitBreakers.GetCircuitBreaker(functionKey)
 	if cb.IsOpen() {
 		errMsg := fmt.Sprintf("Circuit breaker is open for function %s", functionKey)
@@ -143,32 +146,48 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 		return nil, fmt.Errorf("%s", errMsg)
 	}
 
+	// Get the plugin
 	plugin, ok := e.pluginManager.GetPlugin(functionKey)
 	if !ok {
+		// Check for a racing condition where the plugin may have been unloaded
+		// since our call to IsPluginLoaded
 		e.logStore.AddLog(functionKey, logging.LevelError, "Function not loaded")
 		return nil, ErrFunctionNotLoaded
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
-	defer cancel()
 
 	startTime := time.Now()
 
+	// Result channel with buffer to prevent goroutine leaks
 	resultCh := make(chan struct {
 		output []byte
 		err    error
 	}, 1)
 
+	// Cancel context for the goroutine if this function returns
+	execCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Execute the plugin call in a goroutine
 	go func() {
 		_, output, err := plugin.Call(entrypoint, payload)
-		resultCh <- struct {
+
+		// Send the result, handling the case where the context is cancelled
+		select {
+		case resultCh <- struct {
 			output []byte
 			err    error
-		}{output, err}
+		}{output, err}:
+			// Result sent successfully
+		case <-execCtx.Done():
+			// Context was cancelled, nothing to do
+		}
 	}()
 
+	// Wait for the result or context cancellation
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
+			// Record the failure in the circuit breaker
 			isOpen := cb.RecordFailure()
 			errMsg := fmt.Sprintf("Failed to call function: %v", result.err)
 			e.logStore.AddLog(functionKey, LevelError, errMsg)
@@ -182,6 +201,7 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 			return nil, fmt.Errorf("failed to call function: %w", result.err)
 		}
 
+		// Record success in metrics and logs
 		execTime := time.Since(startTime)
 		e.logStore.AddLog(functionKey, LevelInfo,
 			fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
@@ -191,8 +211,17 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 		return result.output, nil
 
 	case <-ctx.Done():
+		// The context deadline was exceeded or cancelled
 		isOpen := cb.RecordFailure()
-		errMsg := fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
+
+		// Determine the specific error
+		var errMsg string
+		if ctx.Err() == context.DeadlineExceeded {
+			errMsg = fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
+		} else {
+			errMsg = "Function execution was cancelled"
+		}
+
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
 
 		if isOpen {
@@ -205,7 +234,17 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	}
 }
 
-func (e *Engine) LoadFunction(namespace, name, identifier string, config map[string]string) error {
+// CallFunction calls a function (wrapper for backward compatibility)
+func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte) ([]byte, error) {
+	// Create a context with the default timeout
+	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
+	defer cancel()
+
+	return e.CallFunctionWithContext(ctx, namespace, name, entrypoint, payload)
+}
+
+// LoadFunctionWithContext is a context-aware version of LoadFunction
+func (e *Engine) LoadFunctionWithContext(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
 	functionKey := components.GetFunctionKey(namespace, name)
 
@@ -217,14 +256,55 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 		configCopy[k] = v
 	}
 
+	// Fetch the WASM bytes from the registry
 	loadStart := time.Now()
-	wasmBytes, versionInfo, err := e.registry.Pull(namespace, name, identifier)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to fetch WASM file from registry: %v", err)
+
+	// Create a channel for the result
+	type pullResult struct {
+		wasmBytes   []byte
+		versionInfo *registry.VersionInfo
+		err         error
+	}
+
+	// Use a channel with buffer size 1 to prevent goroutine leaks
+	resultCh := make(chan pullResult, 1)
+
+	// Pull in a separate goroutine to allow for cancellation
+	go func() {
+		wasmBytes, versionInfo, err := e.registry.Pull(namespace, name, identifier)
+		select {
+		case resultCh <- pullResult{wasmBytes, versionInfo, err}:
+			// Result sent successfully
+		case <-ctx.Done():
+			// Context was cancelled, but we need to send the result to avoid goroutine leak
+			select {
+			case resultCh <- pullResult{nil, nil, ctx.Err()}:
+			default:
+				// Channel is already closed or full, nothing to do
+			}
+		}
+	}()
+
+	// Wait for the result or context cancellation
+	var result pullResult
+	select {
+	case result = <-resultCh:
+		// Result received
+	case <-ctx.Done():
+		// Context cancelled, wait for the result to avoid goroutine leak
+		result = <-resultCh
+	}
+
+	// Check for errors from the Pull operation
+	if result.err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch WASM file from registry: %v", result.err)
 		e.logger.Errorf(errMsg)
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
-		return fmt.Errorf("failed to fetch WASM file from registry: %w", err)
+		return fmt.Errorf("failed to fetch WASM file from registry: %w", result.err)
 	}
+
+	wasmBytes, versionInfo := result.wasmBytes, result.versionInfo
+
 	e.logStore.AddLog(functionKey, LevelInfo,
 		fmt.Sprintf("Function pulled from registry (size: %d bytes, time: %v)",
 			len(wasmBytes), time.Since(loadStart)))
@@ -267,13 +347,53 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 
 	// Create a new plugin instance
 	initStart := time.Now()
-	plugin, err := components.CreatePlugin(wasmBytes, versionInfo, configCopy)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
+
+	// Create plugin in a cancellable goroutine
+	type pluginResult struct {
+		plugin *extism.Plugin
+		err    error
+	}
+
+	pluginCh := make(chan pluginResult, 1)
+
+	go func() {
+		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, configCopy)
+		select {
+		case pluginCh <- pluginResult{plugin, err}:
+			// Result sent successfully
+		case <-ctx.Done():
+			// Context was cancelled, but cleanup and send result to avoid goroutine leak
+			if plugin != nil && err == nil {
+				plugin.Close(context.Background())
+			}
+			select {
+			case pluginCh <- pluginResult{nil, ctx.Err()}:
+			default:
+				// Channel is already closed or full, nothing to do
+			}
+		}
+	}()
+
+	// Wait for plugin creation or context cancellation
+	var pluginRes pluginResult
+	select {
+	case pluginRes = <-pluginCh:
+		// Result received
+	case <-ctx.Done():
+		// Context cancelled, wait for the result to avoid goroutine leak
+		pluginRes = <-pluginCh
+	}
+
+	// Check for errors from the plugin creation
+	if pluginRes.err != nil {
+		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", pluginRes.err)
 		e.logger.Errorf(errMsg)
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
-		return fmt.Errorf("failed to initialize plugin: %w", err)
+		return fmt.Errorf("failed to initialize plugin: %w", pluginRes.err)
 	}
+
+	plugin := pluginRes.plugin
+
 	e.logStore.AddLog(functionKey, LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
@@ -284,6 +404,15 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 	e.logger.Printf(successMsg)
 	e.logStore.AddLog(functionKey, LevelInfo, successMsg)
 	return nil
+}
+
+// LoadFunction loads a function into memory (wrapper for backward compatibility)
+func (e *Engine) LoadFunction(namespace, name, identifier string, config map[string]string) error {
+	// Create a context with the default timeout
+	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
+	defer cancel()
+
+	return e.LoadFunctionWithContext(ctx, namespace, name, identifier, config)
 }
 
 func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {
