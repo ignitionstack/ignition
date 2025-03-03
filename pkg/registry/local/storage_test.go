@@ -1,4 +1,4 @@
-package localregistry_test
+package localregistry
 
 import (
 	"os"

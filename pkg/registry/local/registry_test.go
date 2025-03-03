@@ -1,5 +1,5 @@
 // registry/local/registry_test.go
-package localregistry_test
+package localregistry
 
 import (
 	"errors"
