@@ -220,7 +220,6 @@ Ignition is under active development. APIs and features may change. We welcome y
 
 - [Extism Documentation](https://extism.org/docs/concepts/pdk/) - Learn about the WebAssembly PDK
 - [GitHub Issues](https://github.com/ignitionstack/ignition/issues) - Report bugs or request features
-- [Discord Community](https://discord.gg/EQeZY5utHC) - Get help and discuss ideas
 
 ## Similar Projects
 
