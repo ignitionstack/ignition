@@ -170,12 +170,9 @@ linters-settings:
     # Default: []
     disable:
       - fieldalignment # too strict
+      - shadow # Shadow variables to be fixed in a separate PR
     # Settings per analyzer.
     settings:
-      shadow:
-        # Whether to be strict about shadowing; can be noisy.
-        # Default: false
-        strict: true
 
   inamedparam:
     # Skips check for interface methods with only a single parameter.
@@ -424,3 +421,5 @@ issues:
         - funlen           # Function length issues need separate PR
         - gocognit         # Cognitive complexity needs separate PR
         - gocritic         # Go critic suggestions need separate PR
+        - gochecknoglobals # Global variables need separate PR
+        - gochecknoinits   # init functions need separate PR

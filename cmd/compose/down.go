@@ -24,7 +24,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 		Use:   "down",
 		Short: "Stop and remove functions defined in a compose file",
 		Long:  "Stop and remove functions defined in an ignition-compose.yml file.",
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// Removed redundant operation line
 
 			// Parse the compose file

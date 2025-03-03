@@ -29,7 +29,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 		Long:          "Create and start functions defined in an ignition-compose.yml file.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("Failed to parse compose file: %v", err))

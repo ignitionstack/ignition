@@ -47,7 +47,7 @@ The command requires a running engine to execute the function.`,
   # Call using function digest instead of tag
   ignition call default/hello-world:d7a8fbb307d7809469ca9abcb0082e4f`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			namespace, name, reference, err := parseNamespaceAndName(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid function name format: %w", err)

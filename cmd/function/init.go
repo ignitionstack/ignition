@@ -26,7 +26,7 @@ func NewFunctionInitCommand() *cobra.Command {
 	return cmd
 }
 
-func functionInit(cmd *cobra.Command, args []string) error {
+func functionInit(_ *cobra.Command, args []string) error {
 	name := args[0]
 
 	if language == "" {

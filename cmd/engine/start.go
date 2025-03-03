@@ -46,7 +46,7 @@ The engine can be configured with various flags to customize its behavior.`,
 
   # Start with detailed logging
   ignition engine start --log-level debug --log-file /var/log/ignition.log`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// Setup registry directory
 			if config.registryDir == "" {
 				homeDir, err := os.UserHomeDir()

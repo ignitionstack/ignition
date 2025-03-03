@@ -162,7 +162,7 @@ func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 
 	// Register cleanup
 	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
+		OnStop: func(_ context.Context) error {
 			return zapLogger.Sync()
 		},
 	})
@@ -170,7 +170,7 @@ func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	return zapLogger, nil
 }
 
-func NewEngineLogger(baseLogger *zap.Logger) logging.Logger {
+func NewEngineLogger(_ *zap.Logger) logging.Logger {
 	// Create a specialized logger for engine with higher verbosity
 	config := zap.NewDevelopmentConfig()
 
@@ -218,7 +218,7 @@ func NewBadgerDB(lc fx.Lifecycle, config AppConfig) (*badger.DB, error) {
 
 	// Register lifecycle hooks for proper cleanup
 	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
+		OnStop: func(_ context.Context) error {
 			return db.Close()
 		},
 	})

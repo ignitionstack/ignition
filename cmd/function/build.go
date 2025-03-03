@@ -240,7 +240,7 @@ func parseNamespaceAndName(input string) (namespace, name, tag string, err error
 func createEngineClient(socketPath string) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				return net.Dial("unix", socketPath)
 			},
 		},

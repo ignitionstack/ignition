@@ -26,7 +26,7 @@ func NewFunctionRunCommand() *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			namespace, name, identifier, err := parseNamespaceAndName(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid function name format: %w", err)
@@ -67,7 +67,7 @@ func NewFunctionRunCommand() *cobra.Command {
 
 				client := http.Client{
 					Transport: &http.Transport{
-						DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+						DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 							return net.Dial("unix", runSocketPath)
 						},
 					},

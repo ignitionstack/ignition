@@ -327,7 +327,7 @@ func TestTransactionHandling(t *testing.T) {
 
 	t.Run("read transaction handles errors", func(t *testing.T) {
 		expectedErr := errors.New("test error")
-		err := localReg.withReadTx(func(txn *badger.Txn) error {
+		err := localReg.withReadTx(func(_ *badger.Txn) error {
 			return expectedErr
 		})
 		assert.ErrorIs(t, err, expectedErr)
@@ -335,7 +335,7 @@ func TestTransactionHandling(t *testing.T) {
 
 	t.Run("write transaction handles errors", func(t *testing.T) {
 		expectedErr := errors.New("test error")
-		err := localReg.withWriteTx(func(txn *badger.Txn) error {
+		err := localReg.withWriteTx(func(_ *badger.Txn) error {
 			return expectedErr
 		})
 		assert.ErrorIs(t, err, expectedErr)
