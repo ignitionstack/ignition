@@ -12,6 +12,35 @@ import (
 	"github.com/muesli/reflow/indent"
 )
 
+// cleanErrorMessage removes common prefixes from error messages to provide
+// more concise and user-friendly error messages
+func cleanErrorMessage(errMsg string) string {
+	prefixes := []string{
+		"Build failed: ",
+		"builder initialization failed: ",
+		"build failed: ",
+		"failed to build function: ",
+		"hash calculation failed: ",
+		"Error: ",
+	}
+
+	for _, prefix := range prefixes {
+		if strings.Contains(errMsg, prefix) {
+			index := strings.Index(errMsg, prefix)
+			if index >= 0 {
+				errMsg = errMsg[:index] + errMsg[index+len(prefix):]
+			}
+		}
+	}
+
+	// Capitalize the first letter
+	if len(errMsg) > 0 {
+		errMsg = strings.ToUpper(errMsg[:1]) + errMsg[1:]
+	}
+
+	return errMsg
+}
+
 // SpinnerModel represents an interactive spinner with state
 type SpinnerModel struct {
 	spinner       spinner.Model
@@ -136,7 +165,7 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg
 		m.done = true
 		return m, tea.Sequence(
-			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s Error: %s", ui.ErrorSymbol, strings.TrimSpace(msg.Error())))),
+			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s %s", ui.ErrorSymbol, cleanErrorMessage(msg.Error())))),
 			tea.Quit,
 		)
 
@@ -144,7 +173,7 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Err
 		m.done = true
 		return m, tea.Sequence(
-			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s Error: %s", ui.ErrorSymbol, strings.TrimSpace(msg.Err.Error())))),
+			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s %s", ui.ErrorSymbol, cleanErrorMessage(msg.Err.Error())))),
 			tea.Quit,
 		)
 

@@ -201,6 +201,24 @@ func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, e
 			return nil, err
 		}
 		return builder, nil
+	case "assemblyscript":
+		builder := builders.NewAssemblyScriptBuilder()
+		if err := builder.VerifyDependencies(); err != nil {
+			return nil, err
+		}
+		return builder, nil
+	case "zig":
+		builder := builders.NewZigBuilder()
+		if err := builder.VerifyDependencies(); err != nil {
+			return nil, err
+		}
+		return builder, nil
+	case "python":
+		builder := builders.NewPythonBuilder()
+		if err := builder.VerifyDependencies(); err != nil {
+			return nil, err
+		}
+		return builder, nil
 	default:
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
@@ -209,10 +227,13 @@ func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, e
 // getTemplateURL returns the URL for the template repository for a given language
 func getTemplateURL(language string) (string, error) {
 	templates := map[string]string{
-		"golang":     "https://github.com/extism/go-pdk-template",
-		"javascript": "https://github.com/extism/js-pdk-template",
-		"typescript": "https://github.com/extism/ts-pdk-template",
-		"rust":       "https://github.com/extism/rust-pdk-template",
+		"golang":         "https://github.com/extism/go-pdk-template",
+		"javascript":     "https://github.com/extism/js-pdk-template",
+		"typescript":     "https://github.com/extism/ts-pdk-template",
+		"rust":           "https://github.com/extism/rust-pdk-template",
+		"assemblyscript": "https://github.com/extism/assemblyscript-pdk-template",
+		"zig":            "https://github.com/extism/zig-pdk-template",
+		"python":         "https://github.com/extism/python-pdk-template",
 	}
 
 	url, ok := templates[strings.ToLower(language)]
