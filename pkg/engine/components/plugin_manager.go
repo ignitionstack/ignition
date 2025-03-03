@@ -38,7 +38,7 @@ type PluginOptions struct {
 
 func DefaultPluginOptions() PluginOptions {
 	return PluginOptions{
-		TTL:              1 * time.Minute,
+		TTL:              10 * time.Minute,
 		CleanupInterval:  5 * time.Minute,
 		LogStoreCapacity: 1000,
 	}
