@@ -213,6 +213,12 @@ func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, e
 			return nil, err
 		}
 		return builder, nil
+	case "python":
+		builder := builders.NewPythonBuilder()
+		if err := builder.VerifyDependencies(); err != nil {
+			return nil, err
+		}
+		return builder, nil
 	default:
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
@@ -227,6 +233,7 @@ func getTemplateURL(language string) (string, error) {
 		"rust":           "https://github.com/extism/rust-pdk-template",
 		"assemblyscript": "https://github.com/extism/assemblyscript-pdk-template",
 		"zig":            "https://github.com/extism/zig-pdk-template",
+		"python":         "https://github.com/extism/python-pdk-template",
 	}
 
 	url, ok := templates[strings.ToLower(language)]
