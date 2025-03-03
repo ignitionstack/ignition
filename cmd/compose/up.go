@@ -30,8 +30,6 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(c *cobra.Command, args []string) error {
-			// Removed redundant operation line
-
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("Failed to parse compose file: %v", err))
@@ -129,8 +127,6 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					// Engine is no longer running
 				}
 
-				// Removed redundant operation line
-
 				var functionsToUnload []struct {
 					namespace string
 					name      string
@@ -225,11 +221,7 @@ func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifes
 
 			namespace, funcName := nameParts[0], nameParts[1]
 
-			// Prefer Config over deprecated Environment field
 			config := service.Config
-			if config == nil && service.Environment != nil {
-				config = service.Environment
-			}
 
 			err := engineClient.LoadFunction(ctx, namespace, funcName, tag, config)
 			if err != nil {

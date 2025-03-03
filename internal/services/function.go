@@ -208,11 +208,8 @@ func (f *defaultBuilderFactory) GetBuilder(language string) (builders.Builder, e
 		}
 		return builder, nil
 	case "zig":
-		builder := builders.NewZigBuilder()
-		if err := builder.VerifyDependencies(); err != nil {
-			return nil, err
-		}
-		return builder, nil
+		// Zig builder is disabled until fixed
+		return nil, fmt.Errorf("zig builder is currently disabled; see pkg/builders/zig.go for details")
 	case "python":
 		builder := builders.NewPythonBuilder()
 		if err := builder.VerifyDependencies(); err != nil {
@@ -232,8 +229,8 @@ func getTemplateURL(language string) (string, error) {
 		"typescript":     "https://github.com/extism/ts-pdk-template",
 		"rust":           "https://github.com/extism/rust-pdk-template",
 		"assemblyscript": "https://github.com/extism/assemblyscript-pdk-template",
-		"zig":            "https://github.com/extism/zig-pdk-template",
-		"python":         "https://github.com/extism/python-pdk-template",
+		// Zig support temporarily removed
+		"python": "https://github.com/extism/python-pdk-template",
 	}
 
 	url, ok := templates[strings.ToLower(language)]

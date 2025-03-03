@@ -18,7 +18,6 @@ type ComposeManifest struct {
 type ComposeService struct {
 	Function      string            `yaml:"function"` // namespace/name:tag format
 	Config        map[string]string `yaml:"config,omitempty"`
-	Environment   map[string]string `yaml:"environment,omitempty"` // Deprecated: use Config instead
 	DependsOn     []string          `yaml:"depends_on,omitempty"`
 	HostName      string            `yaml:"hostname,omitempty"`
 	RestartPolicy string            `yaml:"restart,omitempty"` // "always", "on-failure", "no"
