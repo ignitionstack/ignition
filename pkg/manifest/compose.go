@@ -8,13 +8,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// ComposeManifest represents the structure of an ignition-compose.yml file
+// ComposeManifest represents the structure of an ignition-compose.yml file.
 type ComposeManifest struct {
 	Version  string                    `yaml:"version,omitempty"`
 	Services map[string]ComposeService `yaml:"services"`
 }
 
-// ComposeService represents a single function service in the compose file
+// ComposeService represents a single function service in the compose file.
 type ComposeService struct {
 	Function      string            `yaml:"function"` // namespace/name:tag format
 	Config        map[string]string `yaml:"config,omitempty"`
@@ -24,7 +24,7 @@ type ComposeService struct {
 	Ports         []string          `yaml:"ports,omitempty"`   // For future use with network config
 }
 
-// ParseComposeFile parses an ignition-compose.yml file and returns a ComposeManifest
+// ParseComposeFile parses an ignition-compose.yml file and returns a ComposeManifest.
 func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 	// If no file path is provided, check for default file
 	if filePath == "" {

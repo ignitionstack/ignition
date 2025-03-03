@@ -185,7 +185,7 @@ func retrieveLogs(ctx context.Context, services map[string]manifest.ComposeServi
 		// Retrieve logs for the function
 		functionLogs, err := client.GetFunctionLogs(ctx, namespace, funcName, since, tail)
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve logs for service '%s': %v", name, err)
+			return nil, fmt.Errorf("failed to retrieve logs for service '%s': %w", name, err)
 		}
 
 		logs[name] = functionLogs

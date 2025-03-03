@@ -176,28 +176,30 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 }
 
 // createAndStorePlugin creates a new plugin instance and stores it in the plugin manager
-func (l *FunctionLoader) createAndStorePlugin(ctx context.Context, functionKey string,
-	wasmBytes []byte, versionInfo *registry.VersionInfo, configCopy map[string]string, actualDigest string) error {
+//nolint:whitespace
+func (l *FunctionLoader) createAndStorePlugin(
+    ctx context.Context, key string, wasm []byte, vi *registry.VersionInfo, 
+    cfg map[string]string, dg string) error {
 
 	// Create a new plugin instance
 	initStart := time.Now()
-	plugin, err := l.createPluginWithContext(ctx, wasmBytes, versionInfo, configCopy)
+	plugin, err := l.createPluginWithContext(ctx, wasm, vi, cfg)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
 		l.logger.Errorf(errMsg)
-		l.logStore.AddLog(functionKey, logging.LevelError, errMsg)
+		l.logStore.AddLog(key, logging.LevelError, errMsg)
 		return WrapEngineError("failed to initialize plugin", err)
 	}
 
-	l.logStore.AddLog(functionKey, logging.LevelInfo,
+	l.logStore.AddLog(key, logging.LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
 	// Store the plugin in the plugin manager
-	l.pluginManager.StorePlugin(functionKey, plugin, actualDigest, configCopy)
+	l.pluginManager.StorePlugin(key, plugin, dg, cfg)
 
-	successMsg := fmt.Sprintf("Function loaded successfully: %s", functionKey)
+	successMsg := fmt.Sprintf("Function loaded successfully: %s", key)
 	l.logger.Printf(successMsg)
-	l.logStore.AddLog(functionKey, logging.LevelInfo, successMsg)
+	l.logStore.AddLog(key, logging.LevelInfo, successMsg)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -156,7 +157,7 @@ func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
 
 	metadata, err := h.engine.GetRegistry().Get(req.Namespace, req.Name)
 	if err != nil {
-		if err == registry.ErrFunctionNotFound {
+		if errors.Is(err, registry.ErrFunctionNotFound) {
 			return NewNotFoundError("Function not found")
 		}
 		return fmt.Errorf("failed to fetch function metadata: %w", err)
@@ -323,7 +324,7 @@ func (h *Handlers) executeFunction(ctx context.Context, params *functionCallPara
 
 	// Handle different error cases
 	if err != nil {
-		if err == ErrFunctionNotLoaded {
+		if errors.Is(err, ErrFunctionNotLoaded) {
 			// Try auto-reload if the function isn't loaded
 			return h.handleFunctionAutoReload(ctx, params.namespace, params.name, params.entrypoint, payload)
 		}
@@ -394,7 +395,7 @@ func (h *Handlers) getMetadataAndConfig(namespace, name string) (*registry.Funct
 	// Check if the function exists in the registry
 	metadata, err := h.engine.GetRegistry().Get(namespace, name)
 	if err != nil {
-		if err == registry.ErrFunctionNotFound {
+		if errors.Is(err, registry.ErrFunctionNotFound) {
 			return nil, nil, NewNotFoundError("Function not found in registry")
 		}
 		return nil, nil, fmt.Errorf("failed to fetch function metadata: %w", err)
@@ -538,7 +539,7 @@ func (h *Handlers) pullFunction(ctx context.Context, namespace, name, reference 
 
 	// Handle errors
 	if result.err != nil {
-		if result.err == registry.ErrFunctionNotFound || result.err == registry.ErrVersionNotFound {
+		if errors.Is(result.err, registry.ErrFunctionNotFound) || errors.Is(result.err, registry.ErrVersionNotFound) {
 			return nil, nil, NewNotFoundError(result.err.Error())
 		}
 		if ctx.Err() != nil {
@@ -773,11 +774,10 @@ func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail i
 				fmt.Sprintf("[%s] No logs available for function %s. The function is loaded but has not recorded any activity yet.",
 					time.Now().Format(time.RFC3339), functionKey),
 			}
-		} else {
-			return []string{
-				fmt.Sprintf("[%s] No logs available for function %s. The function is not currently loaded.",
-					time.Now().Format(time.RFC3339), functionKey),
-			}
+		}
+		return []string{
+			fmt.Sprintf("[%s] No logs available for function %s. The function is not currently loaded.",
+				time.Now().Format(time.RFC3339), functionKey),
 		}
 	}
 

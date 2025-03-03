@@ -2,6 +2,7 @@ package builders
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,7 +17,8 @@ func (a *assemblyscriptBuilder) VerifyDependencies() error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("npx verification failed: %v\n%s", exitErr.Error(), stderr.String())
 		}
 		return fmt.Errorf("npx is not installed. Please install Node.js and npm from https://nodejs.org")
@@ -45,7 +47,7 @@ func (a *assemblyscriptBuilder) Build(path string) (*BuildResult, error) {
 	// Determine source file (assuming it's in the root directory with .ts extension)
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %v", err)
+		return nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	var sourceFile string

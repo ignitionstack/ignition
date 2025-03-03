@@ -51,7 +51,7 @@ type Engine struct {
 	initialized bool
 
 	// Configuration
-	options *EngineOptions
+	options *Options
 }
 
 // NewEngine creates a new engine instance with default logger and options
@@ -68,7 +68,7 @@ func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger
 }
 
 // NewEngineWithOptions creates a new engine instance with custom logger and options
-func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, logger logging.Logger, options *EngineOptions) (*Engine, error) {
+func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, logger logging.Logger, options *Options) (*Engine, error) {
 	registry, err := setupRegistry(registryDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup registry: %w", err)
@@ -93,7 +93,7 @@ func NewEngineWithDependencies(
 	registry registry.Registry,
 	functionService services.FunctionService,
 	logger logging.Logger,
-	options *EngineOptions,
+	options *Options,
 ) *Engine {
 	if options == nil {
 		options = DefaultEngineOptions()

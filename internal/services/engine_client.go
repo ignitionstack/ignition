@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -73,7 +74,8 @@ func (c *EngineClient) Ping(ctx context.Context) error {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		// Check for common connection errors and provide more helpful messages
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
 			return fmt.Errorf("engine connection timed out: %w", err)
 		}
 

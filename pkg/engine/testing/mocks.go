@@ -583,28 +583,6 @@ func NewMockRegistry() *MockRegistry {
 	}
 }
 
-// Initialize registry storage for a namespace and name
-func (m *MockRegistry) initStorage(namespace, name string) {
-	if _, exists := m.Functions[namespace]; !exists {
-		m.Functions[namespace] = make(map[string]*registry.FunctionMetadata)
-	}
-
-	if _, exists := m.Versions[namespace]; !exists {
-		m.Versions[namespace] = make(map[string]map[string]*registry.VersionInfo)
-	}
-
-	if _, exists := m.Versions[namespace][name]; !exists {
-		m.Versions[namespace][name] = make(map[string]*registry.VersionInfo)
-	}
-
-	if _, exists := m.Tags[namespace]; !exists {
-		m.Tags[namespace] = make(map[string]map[string]string)
-	}
-
-	if _, exists := m.Tags[namespace][name]; !exists {
-		m.Tags[namespace][name] = make(map[string]string)
-	}
-}
 
 // Pull implements Registry.Pull
 func (m *MockRegistry) Pull(namespace, name, reference string) ([]byte, *registry.VersionInfo, error) {

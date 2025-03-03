@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 )
@@ -42,7 +43,8 @@ func (h *Handlers) errorMiddleware() Middleware {
 			if err != nil {
 				var reqErr RequestError
 
-				if e, ok := err.(RequestError); ok {
+				var e RequestError
+				if errors.As(err, &e) {
 					reqErr = e
 				} else {
 					reqErr = RequestError{

@@ -16,36 +16,36 @@ const (
 	LevelDebug
 )
 
-// Logger interface for basic logging operations
+// Logger interface for basic logging operations.
 type Logger interface {
 	Printf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
 	Debugf(format string, args ...interface{})
 }
 
-// StdLogger implements the Logger interface
+// StdLogger implements the Logger interface.
 type StdLogger struct {
 	writer io.Writer
 }
 
-// NewStdLogger creates a new StdLogger
+// NewStdLogger creates a new StdLogger.
 func NewStdLogger(writer io.Writer) *StdLogger {
 	return &StdLogger{
 		writer: writer,
 	}
 }
 
-// Printf logs a message with printf formatting
+// Printf logs a message with printf formatting.
 func (l *StdLogger) Printf(format string, args ...interface{}) {
 	fmt.Fprintf(l.writer, "[INFO] "+format+"\n", args...)
 }
 
-// Errorf logs an error message with printf formatting
+// Errorf logs an error message with printf formatting.
 func (l *StdLogger) Errorf(format string, args ...interface{}) {
 	fmt.Fprintf(l.writer, "[ERROR] "+format+"\n", args...)
 }
 
-// Debugf logs a debug message with printf formatting
+// Debugf logs a debug message with printf formatting.
 func (l *StdLogger) Debugf(format string, args ...interface{}) {
 	fmt.Fprintf(l.writer, "[DEBUG] "+format+"\n", args...)
 }
@@ -62,7 +62,7 @@ type FunctionLogStore struct {
 	maxEntries int
 }
 
-// NewFunctionLogStore creates a new FunctionLogStore
+// NewFunctionLogStore creates a new FunctionLogStore.
 func NewFunctionLogStore(maxEntries int) *FunctionLogStore {
 	return &FunctionLogStore{
 		logs:       make(map[string][]FunctionLogEntry),
@@ -70,7 +70,7 @@ func NewFunctionLogStore(maxEntries int) *FunctionLogStore {
 	}
 }
 
-// AddLog adds a log entry for a function
+// AddLog adds a log entry for a function.
 func (s *FunctionLogStore) AddLog(functionKey string, level LogLevel, message string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -93,7 +93,7 @@ func (s *FunctionLogStore) AddLog(functionKey string, level LogLevel, message st
 	}
 }
 
-// GetLogs retrieves logs for a function
+// GetLogs retrieves logs for a function.
 func (s *FunctionLogStore) GetLogs(functionKey string, since time.Time, tail int) []string {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()

@@ -13,14 +13,14 @@ var (
 	ErrFunctionNotFound     = fmt.Errorf("function not found")
 )
 
-// EngineError represents an internal engine error
-type EngineError struct {
+// Error represents an internal engine error
+type Error struct {
 	message string
 	cause   error
 }
 
 // Error implements the error interface
-func (e EngineError) Error() string {
+func (e Error) Error() string {
 	if e.cause != nil {
 		return fmt.Sprintf("%s: %v", e.message, e.cause)
 	}
@@ -28,23 +28,23 @@ func (e EngineError) Error() string {
 }
 
 // Unwrap implements errors.Unwrap for Go 1.13+ error wrapping
-func (e EngineError) Unwrap() error {
+func (e Error) Unwrap() error {
 	return e.cause
 }
 
 // NewEngineError creates a new engine error with the given message
 func NewEngineError(message string) error {
-	return EngineError{message: message}
+	return Error{message: message}
 }
 
 // WrapEngineError wraps an error with an engine error
 func WrapEngineError(message string, err error) error {
-	return EngineError{message: message, cause: err}
+	return Error{message: message, cause: err}
 }
 
 // IsEngineError checks if an error is or wraps an engine error
 func IsEngineError(err error) bool {
-	var engineErr EngineError
+	var engineErr Error
 	return errors.As(err, &engineErr)
 }
 

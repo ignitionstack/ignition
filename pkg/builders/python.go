@@ -2,6 +2,7 @@ package builders
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,7 +17,8 @@ func (p *pythonBuilder) VerifyDependencies() error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("extism-py verification failed: %v\n%s", exitErr.Error(), stderr.String())
 		}
 		// If the error is not an ExitError, it likely means extism-py isn't installed
@@ -45,7 +47,7 @@ func (p *pythonBuilder) Build(path string) (*BuildResult, error) {
 		// Fall back to looking for any Python file in the root directory
 		entries, err := os.ReadDir(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read directory: %v", err)
+			return nil, fmt.Errorf("failed to read directory: %w", err)
 		}
 
 		var sourceFile string

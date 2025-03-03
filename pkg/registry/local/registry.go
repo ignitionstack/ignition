@@ -132,7 +132,7 @@ func (r *localRegistry) DigestExists(namespace, name, digest string) (bool, erro
 	err := r.withReadTx(func(txn *badger.Txn) error {
 		var metadata *registry.FunctionMetadata
 		if err := r.getFunctionMetadata(txn, namespace, name, &metadata); err != nil {
-			if err == registry.ErrFunctionNotFound {
+			if errors.Is(err, registry.ErrFunctionNotFound) {
 				// If the function doesn't exist, the digest doesn't exist either
 				exists = false
 				return nil
@@ -200,7 +200,7 @@ func (r *localRegistry) getFunctionMetadata(txn *badger.Txn, namespace, name str
 
 	// Try to get the item from the database
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		return registry.ErrFunctionNotFound
 	}
 	if err != nil {
@@ -223,7 +223,7 @@ func (r *localRegistry) getOrCreateMetadata(txn *badger.Txn, namespace, name str
 
 	// Try to get existing metadata
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		// Create new metadata if it doesn't exist
 		return &registry.FunctionMetadata{
 			Namespace: namespace,

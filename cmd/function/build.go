@@ -105,13 +105,20 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check for build errors
-	finalModel := model.(spinner.SpinnerModel)
+	finalModel, ok := model.(spinner.SpinnerModel)
+	if !ok {
+		return fmt.Errorf("unexpected model type: %T", model)
+	}
 	if finalModel.HasError() {
 		return finalModel.GetError()
 	}
 
 	// Display build results
-	result := finalModel.GetResult().(types.BuildResult)
+	resultValue := finalModel.GetResult()
+	result, ok := resultValue.(types.BuildResult)
+	if !ok {
+		return fmt.Errorf("unexpected result type: %T", resultValue)
+	}
 	displayBuildResults(result, tags)
 
 	return nil

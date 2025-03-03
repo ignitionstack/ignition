@@ -6,8 +6,8 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/components"
 )
 
-// EngineOptions defines configurable options for the engine
-type EngineOptions struct {
+// Options defines configurable options for the engine
+type Options struct {
 	// Default timeout for function operations
 	DefaultTimeout time.Duration
 
@@ -21,9 +21,9 @@ type EngineOptions struct {
 	PluginManagerSettings components.PluginManagerSettings
 }
 
-// DefaultEngineOptions returns a new EngineOptions with default values
-func DefaultEngineOptions() *EngineOptions {
-	return &EngineOptions{
+// DefaultEngineOptions returns a new Options with default values
+func DefaultEngineOptions() *Options {
+	return &Options{
 		DefaultTimeout:   30 * time.Second,
 		LogStoreCapacity: 1000,
 		CircuitBreakerSettings: components.CircuitBreakerSettings{
@@ -38,25 +38,25 @@ func DefaultEngineOptions() *EngineOptions {
 }
 
 // WithDefaultTimeout sets the default timeout
-func (o *EngineOptions) WithDefaultTimeout(timeout time.Duration) *EngineOptions {
+func (o *Options) WithDefaultTimeout(timeout time.Duration) *Options {
 	o.DefaultTimeout = timeout
 	return o
 }
 
 // WithLogStoreCapacity sets the log store capacity
-func (o *EngineOptions) WithLogStoreCapacity(capacity int) *EngineOptions {
+func (o *Options) WithLogStoreCapacity(capacity int) *Options {
 	o.LogStoreCapacity = capacity
 	return o
 }
 
 // WithCircuitBreakerSettings sets the circuit breaker settings
-func (o *EngineOptions) WithCircuitBreakerSettings(settings components.CircuitBreakerSettings) *EngineOptions {
+func (o *Options) WithCircuitBreakerSettings(settings components.CircuitBreakerSettings) *Options {
 	o.CircuitBreakerSettings = settings
 	return o
 }
 
 // WithPluginManagerSettings sets the plugin manager settings
-func (o *EngineOptions) WithPluginManagerSettings(settings components.PluginManagerSettings) *EngineOptions {
+func (o *Options) WithPluginManagerSettings(settings components.PluginManagerSettings) *Options {
 	o.PluginManagerSettings = settings
 	return o
 }

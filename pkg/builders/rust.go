@@ -2,6 +2,7 @@ package builders
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,7 +24,8 @@ func (r *rustBuilder) VerifyDependencies() error {
 	// Check if cargo is installed
 	cargoCmd := exec.Command("cargo", "--version")
 	if err := cargoCmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("cargo verification failed: %v", exitErr.Error())
 		}
 		return fmt.Errorf("cargo is not installed. Please install Rust and Cargo from https://rustup.rs")
@@ -35,7 +37,7 @@ func (r *rustBuilder) VerifyDependencies() error {
 	targetCmd.Stdout = &stdout
 
 	if err := targetCmd.Run(); err != nil {
-		return fmt.Errorf("failed to check installed targets: %v", err)
+		return fmt.Errorf("failed to check installed targets: %w", err)
 	}
 
 	if !bytes.Contains(stdout.Bytes(), []byte("wasm32-wasip1")) {

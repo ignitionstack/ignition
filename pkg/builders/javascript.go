@@ -2,6 +2,7 @@ package builders
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +18,8 @@ func (j *jsBuilder) VerifyDependencies() error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("extism-js verification failed: %v\n%s", exitErr.Error(), stderr.String())
 		}
 		// If the error is not an ExitError, it likely means npx or extism-js isn't installed

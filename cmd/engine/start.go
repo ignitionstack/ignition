@@ -13,7 +13,7 @@ import (
 	"go.uber.org/fx"
 )
 
-// NewEngineStartCommand creates a command to start the engine
+// NewEngineStartCommand creates a command to start the engine.
 func NewEngineStartCommand() *cobra.Command {
 	// Configuration options
 	var config struct {
@@ -123,7 +123,7 @@ The engine can be configured with various flags to customize its behavior.`,
 	return cmd
 }
 
-// ensureDirectoryExists creates a directory if it doesn't exist
+// ensureDirectoryExists creates a directory if it doesn't exist.
 func ensureDirectoryExists(path string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return os.MkdirAll(path, 0755)
