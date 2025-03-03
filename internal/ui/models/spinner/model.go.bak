@@ -23,7 +23,7 @@ func cleanErrorMessage(errMsg string) string {
 		"hash calculation failed: ",
 		"Error: ",
 	}
-
+	
 	for _, prefix := range prefixes {
 		if strings.Contains(errMsg, prefix) {
 			index := strings.Index(errMsg, prefix)
@@ -32,12 +32,12 @@ func cleanErrorMessage(errMsg string) string {
 			}
 		}
 	}
-
+	
 	// Capitalize the first letter
 	if len(errMsg) > 0 {
 		errMsg = strings.ToUpper(errMsg[:1]) + errMsg[1:]
 	}
-
+	
 	return errMsg
 }
 
@@ -165,7 +165,7 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg
 		m.done = true
 		return m, tea.Sequence(
-			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s %s", ui.ErrorSymbol, cleanErrorMessage(msg.Error())))),
+			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s Error: %s", ui.ErrorSymbol, strings.TrimSpace(msg.Error())))),
 			tea.Quit,
 		)
 
@@ -173,7 +173,7 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Err
 		m.done = true
 		return m, tea.Sequence(
-			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s %s", ui.ErrorSymbol, cleanErrorMessage(msg.Err.Error())))),
+			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s Error: %s", ui.ErrorSymbol, strings.TrimSpace(msg.Err.Error())))),
 			tea.Quit,
 		)
 

@@ -35,6 +35,7 @@ func functionInit(cmd *cobra.Command, args []string) error {
 			huh.NewOption("TypeScript", "typescript"),
 			huh.NewOption("Golang", "golang"),
 			huh.NewOption("Rust", "rust"),
+			huh.NewOption("AssemblyScript", "assemblyscript"),
 		}
 
 		baseStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.InfoColor))

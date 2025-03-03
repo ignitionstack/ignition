@@ -38,8 +38,8 @@ func (r *rustBuilder) VerifyDependencies() error {
 		return fmt.Errorf("failed to check installed targets: %v", err)
 	}
 
-	if !bytes.Contains(stdout.Bytes(), []byte("wasm32-unknown-unknown")) {
-		return fmt.Errorf("wasm32-wasi target is not installed. Please install it using 'rustup target add wasm32-unknown-unknown'")
+	if !bytes.Contains(stdout.Bytes(), []byte("wasm32-wasip1")) {
+		return fmt.Errorf("wasm32-wasi target is not installed. Please install it using 'rustup target add wasm32-wasi'")
 	}
 
 	return nil
@@ -58,7 +58,7 @@ func (r rustBuilder) Build(path string) (*BuildResult, error) {
 		return nil, err
 	}
 
-	cmd := exec.Command("cargo", "build", "-r", "-q")
+	cmd := exec.Command("cargo", "build", "--target=wasm32-wasip1", "-r", "-q")
 	cmd.Dir = path
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -67,7 +67,7 @@ func (r rustBuilder) Build(path string) (*BuildResult, error) {
 	}
 
 	return &BuildResult{
-		OutputPath: filepath.Join(path, "target", "wasm32-unknown-unknown", "release", fmt.Sprintf("%s.wasm", strings.Replace(cargoConfig.Package.Name, "-", "_", -1))),
+		OutputPath: filepath.Join(path, "target", "wasm32-wasip1", "release", fmt.Sprintf("%s.wasm", strings.Replace(cargoConfig.Package.Name, "-", "_", -1))),
 	}, nil
 }
 
