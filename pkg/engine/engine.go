@@ -154,7 +154,7 @@ func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
 						plugin.Close(context.TODO())
 						delete(e.plugins, key)
 						delete(e.pluginLastUsed, key)
-						
+
 						delete(e.pluginDigests, key)
 						delete(e.pluginConfigs, key)
 						e.logger.Printf("Plugin %s unloaded due to inactivity", key)
@@ -342,7 +342,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 		configCopy[k] = v
 	}
 
-	
 	loadStart := time.Now()
 	wasmBytes, versionInfo, err := e.registry.Pull(namespace, name, identifier)
 	if err != nil {
@@ -355,30 +354,25 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 		fmt.Sprintf("Function pulled from registry (size: %d bytes, time: %v)",
 			len(wasmBytes), time.Since(loadStart)))
 
-	
 	actualDigest := versionInfo.FullDigest
 
-	
 	e.pluginsMux.RLock()
 	_, alreadyLoaded := e.plugins[functionKey]
 
-	
 	if alreadyLoaded {
 		currentDigest, hasDigest := e.pluginDigests[functionKey]
 		currentConfig, hasConfig := e.pluginConfigs[functionKey]
 		e.pluginsMux.RUnlock()
 
-		
 		digestChanged := hasDigest && currentDigest != actualDigest
 
-		
 		configChanged := false
 		if hasConfig {
-			
+
 			if len(currentConfig) != len(configCopy) {
 				configChanged = true
 			} else {
-				
+
 				for k, v := range configCopy {
 					if currentValue, exists := currentConfig[k]; !exists || currentValue != v {
 						configChanged = true
@@ -386,7 +380,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 					}
 				}
 
-				
 				if !configChanged {
 					for k := range currentConfig {
 						if _, exists := configCopy[k]; !exists {
@@ -398,7 +391,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 			}
 		}
 
-		
 		if !digestChanged && !configChanged {
 			e.logger.Printf("Function %s already loaded with same digest and config", functionKey)
 			e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded with same digest and config")
@@ -410,7 +402,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 			return nil
 		}
 
-		
 		if digestChanged {
 			e.logger.Printf("Function %s digest changed from %s to %s, reloading",
 				functionKey, currentDigest, actualDigest)
@@ -424,7 +415,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 			e.logStore.AddLog(functionKey, LevelInfo, "Function configuration changed, reloading")
 		}
 
-		
 		if err := e.UnloadFunction(namespace, name); err != nil {
 			errMsg := fmt.Sprintf("Failed to unload function before reload: %v", err)
 			e.logger.Errorf(errMsg)
@@ -434,8 +424,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 	} else {
 		e.pluginsMux.RUnlock()
 	}
-
-	
 
 	initStart := time.Now()
 	plugin, err := createPlugin(wasmBytes, versionInfo, configCopy)
@@ -458,7 +446,6 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 		return nil
 	}
 
-	
 	e.plugins[functionKey] = plugin
 	e.pluginLastUsed[functionKey] = time.Now()
 	e.pluginDigests[functionKey] = actualDigest
@@ -573,7 +560,6 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	delete(e.plugins, functionKey)
 	delete(e.pluginLastUsed, functionKey)
 
-	
 	delete(e.pluginDigests, functionKey)
 	delete(e.pluginConfigs, functionKey)
 
