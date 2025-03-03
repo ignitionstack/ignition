@@ -2,7 +2,6 @@ package components
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -11,65 +10,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// PluginManager manages function plugins lifecycle
-type PluginManager interface {
-	// Get a plugin by key
-	GetPlugin(key string) (*extism.Plugin, bool)
-
-	// Store a plugin
-	StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string)
-
-	// Remove a plugin
-	RemovePlugin(key string) bool
-
-	// Stop a function (prevents auto-reload)
-	StopFunction(key string) bool
-
-	// Check if a function is stopped
-	IsFunctionStopped(key string) bool
-
-	// Clear stopped status
-	ClearStoppedStatus(key string)
-
-	// Check if a plugin is loaded
-	IsPluginLoaded(key string) bool
-
-	// Check if a plugin was previously loaded
-	WasPreviouslyLoaded(key string) (bool, map[string]string)
-
-	// Check if config has changed
-	HasConfigChanged(key string, newConfig map[string]string) bool
-
-	// Check if digest has changed
-	HasDigestChanged(key string, newDigest string) bool
-
-	// Get plugin digest
-	GetPluginDigest(key string) (string, bool)
-
-	// Get plugin config
-	GetPluginConfig(key string) (map[string]string, bool)
-
-	// Start cleanup routine
-	StartCleanup(ctx context.Context)
-
-	// Shutdown and cleanup resources
-	Shutdown()
-
-	// Get log store
-	GetLogStore() *logging.FunctionLogStore
-
-	// List loaded functions
-	ListLoadedFunctions() []string
-
-	// Get loaded function count
-	GetLoadedFunctionCount() int
-
-	// Get previously loaded functions
-	GetPreviouslyLoadedFunctions() map[string]bool
-
-	// Get stopped functions
-	GetStoppedFunctions() map[string]bool
-}
+// The PluginManager interface is defined in interfaces.go
 
 // PluginManagerSettings defines configurable options for the plugin manager
 type PluginManagerSettings struct {
@@ -472,7 +413,9 @@ func (pm *defaultPluginManager) GetLoadedFunctionCount() int {
 	return len(pm.plugins)
 }
 
-// Helper function to get standard function key format
+// GetFunctionKey returns a string key from namespace and name
+// This is kept for backward compatibility, consider using FunctionID directly
 func GetFunctionKey(namespace, name string) string {
-	return fmt.Sprintf("%s/%s", namespace, name)
+	id := FunctionID{Namespace: namespace, Name: name}
+	return id.String()
 }
