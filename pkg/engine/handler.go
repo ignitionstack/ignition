@@ -205,7 +205,7 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 	// Get previously loaded functions and stopped functions
 	previouslyLoadedMap := h.engine.pluginManager.GetPreviouslyLoadedFunctions()
 	stoppedFunctionsMap := h.engine.pluginManager.GetStoppedFunctions()
-	
+
 	// Process all function keys we know about
 	for key := range previouslyLoadedMap {
 		// Skip if it's already in the loaded list
@@ -220,7 +220,7 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 			if _, isStopped := stoppedFunctionsMap[key]; isStopped {
 				status = "stopped"
 			}
-			
+
 			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
 				Namespace: parts[0],
 				Name:      parts[1],
@@ -298,7 +298,7 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 			if !wasLoaded {
 				return NewNotFoundError("Function not loaded")
 			}
-			
+
 			// Check if function is explicitly stopped - prevent auto-reload
 			if h.engine.IsFunctionStopped(namespace, name) {
 				h.logger.Printf("Function %s/%s is stopped and will not be auto-reloaded", namespace, name)

@@ -252,14 +252,14 @@ func (e *Engine) LoadFunctionWithContext(ctx context.Context, namespace, name, i
 func (e *Engine) LoadFunctionWithContextAndForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s, force: %v)", namespace, name, identifier, force)
 	functionKey := components.GetFunctionKey(namespace, name)
-	
+
 	// Check if the function is stopped - only allow loading if force is true
 	if e.IsFunctionStopped(namespace, name) && !force {
 		e.logger.Printf("Function %s/%s is stopped and cannot be loaded without force option", namespace, name)
 		e.logStore.AddLog(functionKey, LevelError, "Cannot load stopped function. Use 'ignition function run' to explicitly load it")
 		return fmt.Errorf("function was explicitly stopped - use 'ignition function run' to load it")
 	}
-	
+
 	// If force is true and function is stopped, clear the stopped status
 	if force && e.IsFunctionStopped(namespace, name) {
 		e.logger.Printf("Force loading stopped function %s/%s - clearing stopped status", namespace, name)

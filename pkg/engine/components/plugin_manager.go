@@ -202,16 +202,16 @@ func (pm *PluginManager) RemovePlugin(key string) bool {
 func (pm *PluginManager) StopFunction(key string) bool {
 	// First unload the plugin if it's loaded
 	removed := pm.RemovePlugin(key)
-	
+
 	// Mark the function as stopped to prevent automatic reload
 	pm.stoppedFunctionsMux.Lock()
 	pm.stoppedFunctions[key] = true
 	pm.stoppedFunctionsMux.Unlock()
-	
+
 	if pm.logStore != nil {
 		pm.logStore.AddLog(key, logging.LevelInfo, "Function stopped and will not be automatically reloaded")
 	}
-	
+
 	return removed
 }
 
@@ -219,7 +219,7 @@ func (pm *PluginManager) StopFunction(key string) bool {
 func (pm *PluginManager) IsFunctionStopped(key string) bool {
 	pm.stoppedFunctionsMux.RLock()
 	defer pm.stoppedFunctionsMux.RUnlock()
-	
+
 	stopped, exists := pm.stoppedFunctions[key]
 	return exists && stopped
 }
@@ -229,7 +229,7 @@ func (pm *PluginManager) ClearStoppedStatus(key string) {
 	pm.stoppedFunctionsMux.Lock()
 	delete(pm.stoppedFunctions, key)
 	pm.stoppedFunctionsMux.Unlock()
-	
+
 	if pm.logStore != nil {
 		pm.logStore.AddLog(key, logging.LevelInfo, "Function's stopped status cleared, can be loaded again")
 	}

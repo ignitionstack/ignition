@@ -19,8 +19,8 @@ import (
 func NewFunctionStopCommand() *cobra.Command {
 	var stopSocketPath string
 	cmd := &cobra.Command{
-		Use:           "stop [namespace/name]",
-		Short:         "Stop a function and prevent automatic reloading",
+		Use:   "stop [namespace/name]",
+		Short: "Stop a function and prevent automatic reloading",
 		Long: `Stop a function completely and prevent it from being automatically reloaded.
 
 This command fully unloads the function and marks it as stopped, which prevents
