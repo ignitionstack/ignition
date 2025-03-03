@@ -48,9 +48,10 @@ func NewFunctionRunCommand() *cobra.Command {
 				}
 
 				req := map[string]interface{}{
-					"namespace": namespace,
-					"name":      name,
-					"digest":    identifier,
+					"namespace":  namespace,
+					"name":       name,
+					"digest":     identifier,
+					"force_load": true, // Always force load when running with function run command
 				}
 
 				// Only add config if there are values

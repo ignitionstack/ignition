@@ -245,8 +245,27 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 
 // LoadFunctionWithContext is a context-aware version of LoadFunction
 func (e *Engine) LoadFunctionWithContext(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
-	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
+	return e.LoadFunctionWithContextAndForce(ctx, namespace, name, identifier, config, false)
+}
+
+// LoadFunctionWithContextAndForce is a context-aware version of LoadFunction with optional force loading
+func (e *Engine) LoadFunctionWithContextAndForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
+	e.logger.Printf("Loading function: %s/%s (identifier: %s, force: %v)", namespace, name, identifier, force)
 	functionKey := components.GetFunctionKey(namespace, name)
+
+	// Check if the function is stopped - only allow loading if force is true
+	if e.IsFunctionStopped(namespace, name) && !force {
+		e.logger.Printf("Function %s/%s is stopped and cannot be loaded without force option", namespace, name)
+		e.logStore.AddLog(functionKey, LevelError, "Cannot load stopped function. Use 'ignition function run' to explicitly load it")
+		return fmt.Errorf("function was explicitly stopped - use 'ignition function run' to load it")
+	}
+
+	// If force is true and function is stopped, clear the stopped status
+	if force && e.IsFunctionStopped(namespace, name) {
+		e.logger.Printf("Force loading stopped function %s/%s - clearing stopped status", namespace, name)
+		e.logStore.AddLog(functionKey, LevelInfo, "Force loading stopped function - clearing stopped status")
+		e.pluginManager.ClearStoppedStatus(functionKey)
+	}
 
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Loading function with identifier: %s", identifier))
 
@@ -412,7 +431,15 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
 	defer cancel()
 
-	return e.LoadFunctionWithContext(ctx, namespace, name, identifier, config)
+	return e.LoadFunctionWithContextAndForce(ctx, namespace, name, identifier, config, false)
+}
+
+func (e *Engine) LoadFunctionWithForce(namespace, name, identifier string, config map[string]string, force bool) error {
+	// Create a context with the default timeout
+	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
+	defer cancel()
+
+	return e.LoadFunctionWithContextAndForce(ctx, namespace, name, identifier, config, force)
 }
 
 func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {
@@ -499,4 +526,42 @@ func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logStore.AddLog(functionKey, LevelInfo, "Function unloaded - this is the final log entry")
 
 	return nil
+}
+
+// StopFunction fully stops a function and prevents automatic reloading
+func (e *Engine) StopFunction(namespace, name string) error {
+	e.logger.Printf("Stopping function: %s/%s", namespace, name)
+	functionKey := components.GetFunctionKey(namespace, name)
+
+	e.logStore.AddLog(functionKey, LevelInfo, "Stopping function")
+
+	// Check if the function is already stopped
+	if e.pluginManager.IsFunctionStopped(functionKey) {
+		alreadyStoppedMsg := fmt.Sprintf("Function %s is already stopped", functionKey)
+		e.logger.Printf(alreadyStoppedMsg)
+		e.logStore.AddLog(functionKey, LevelInfo, alreadyStoppedMsg)
+		return nil
+	}
+
+	stopStart := time.Now()
+
+	// Stop the function using the plugin manager's StopFunction method
+	e.pluginManager.StopFunction(functionKey)
+
+	// Remove circuit breaker for this function
+	e.circuitBreakers.RemoveCircuitBreaker(functionKey)
+
+	successMsg := fmt.Sprintf("Function %s stopped successfully (time: %v)", functionKey, time.Since(stopStart))
+	e.logger.Printf(successMsg)
+	e.logStore.AddLog(functionKey, LevelInfo, successMsg)
+
+	e.logStore.AddLog(functionKey, LevelInfo, "Function stopped - will not be automatically reloaded")
+
+	return nil
+}
+
+// IsFunctionStopped checks if a function has been explicitly stopped
+func (e *Engine) IsFunctionStopped(namespace, name string) bool {
+	functionKey := components.GetFunctionKey(namespace, name)
+	return e.pluginManager.IsFunctionStopped(functionKey)
 }

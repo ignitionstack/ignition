@@ -228,10 +228,14 @@ func StyleStatusValue(status string) string {
 	switch status {
 	case "running":
 		return RunningStyle.Render(SuccessSymbol + " " + status)
-	case "stopped", "error", "failed":
+	case "error", "failed":
 		return ErrorStyle.Render(ErrorSymbol + " " + status)
 	case "pending":
 		return PendingStyle.Render("⋯ " + status)
+	case "unloaded":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(UnloadedColor)).Render("◌ " + status)
+	case "stopped":
+		return StoppedStyle.Render("⊘ " + status)
 	default:
 		return status
 	}

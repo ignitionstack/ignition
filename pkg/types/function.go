@@ -47,8 +47,9 @@ type FunctionRequest struct {
 // LoadRequest represents a request to load a function
 type LoadRequest struct {
 	FunctionRequest
-	Digest string            `json:"digest" validate:"required"`
-	Config map[string]string `json:"config,omitempty"`
+	Digest    string            `json:"digest" validate:"required"`
+	Config    map[string]string `json:"config,omitempty"`
+	ForceLoad bool              `json:"force_load,omitempty"`
 }
 
 // OneOffCallRequest represents a request to call a function once
@@ -93,4 +94,5 @@ type PluginOptions struct {
 type LoadedFunction struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
+	Status    string `json:"status,omitempty"` // Status can be "running", "unloaded", or "stopped"
 }

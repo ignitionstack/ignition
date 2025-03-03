@@ -12,12 +12,13 @@ import (
 )
 
 type PluginManager struct {
-	plugins        map[string]*extism.Plugin
-	pluginLastUsed map[string]time.Time
-	pluginsMux     sync.RWMutex
-	ttlDuration    time.Duration
-	cleanupTicker  *time.Ticker
-	logger         logging.Logger
+	plugins         map[string]*extism.Plugin
+	pluginLastUsed  map[string]time.Time
+	pluginsMux      sync.RWMutex
+	ttlDuration     time.Duration
+	cleanupInterval time.Duration
+	cleanupTicker   *time.Ticker
+	logger          logging.Logger
 
 	// Using separate mutexes for different maps to reduce contention
 	pluginDigests       map[string]string
@@ -26,6 +27,8 @@ type PluginManager struct {
 	pluginConfigsMux    sync.RWMutex
 	previouslyLoaded    map[string]bool
 	previouslyLoadedMux sync.RWMutex
+	stoppedFunctions    map[string]bool
+	stoppedFunctionsMux sync.RWMutex
 
 	logStore *logging.FunctionLogStore
 }
@@ -39,7 +42,7 @@ type PluginOptions struct {
 func DefaultPluginOptions() PluginOptions {
 	return PluginOptions{
 		TTL:              10 * time.Minute,
-		CleanupInterval:  5 * time.Minute,
+		CleanupInterval:  1 * time.Minute,
 		LogStoreCapacity: 1000,
 	}
 }
@@ -49,23 +52,34 @@ func NewPluginManager(logger logging.Logger, options PluginOptions) *PluginManag
 		plugins:          make(map[string]*extism.Plugin),
 		pluginLastUsed:   make(map[string]time.Time),
 		ttlDuration:      options.TTL,
+		cleanupInterval:  options.CleanupInterval,
 		logger:           logger,
 		pluginDigests:    make(map[string]string),
 		pluginConfigs:    make(map[string]map[string]string),
 		previouslyLoaded: make(map[string]bool),
+		stoppedFunctions: make(map[string]bool),
 		logStore:         logging.NewFunctionLogStore(options.LogStoreCapacity),
 	}
 }
 
 func (pm *PluginManager) StartCleanup(ctx context.Context) {
-	pm.logger.Printf("Starting plugin cleanup goroutine")
-	pm.cleanupTicker = time.NewTicker(5 * time.Minute)
+	// Get cleanup interval from options, defaulting to 1 minute
+	cleanupInterval := pm.cleanupInterval
+	if cleanupInterval == 0 {
+		cleanupInterval = time.Minute
+	}
+
+	pm.logger.Printf("Starting plugin cleanup goroutine with interval %s", cleanupInterval)
+	pm.cleanupTicker = time.NewTicker(cleanupInterval)
 
 	go func() {
+		// Run cleanup immediately on start
+		pm.cleanupUnusedPlugins()
+
 		for {
 			select {
 			case <-pm.cleanupTicker.C:
-				pm.logger.Printf("Running plugin cleanup")
+				pm.logger.Printf("Running plugin cleanup (TTL: %s)", pm.ttlDuration)
 				pm.cleanupUnusedPlugins()
 
 			case <-ctx.Done():
@@ -102,10 +116,20 @@ func (pm *PluginManager) cleanupUnusedPlugins() {
 func (pm *PluginManager) GetPlugin(key string) (*extism.Plugin, bool) {
 	pm.pluginsMux.RLock()
 	plugin, ok := pm.plugins[key]
-	if ok {
-		pm.pluginLastUsed[key] = time.Now()
-	}
 	pm.pluginsMux.RUnlock()
+
+	// If the plugin exists, update the last used time with a write lock
+	if ok {
+		pm.pluginsMux.Lock()
+		// Double-check the plugin still exists after getting the write lock
+		if _, stillExists := pm.plugins[key]; stillExists {
+			pm.pluginLastUsed[key] = time.Now()
+		} else {
+			ok = false
+			plugin = nil
+		}
+		pm.pluginsMux.Unlock()
+	}
 
 	return plugin, ok
 }
@@ -172,6 +196,43 @@ func (pm *PluginManager) RemovePlugin(key string) bool {
 	}
 
 	return false
+}
+
+// StopFunction permanently stops a function and prevents automatic reloading
+func (pm *PluginManager) StopFunction(key string) bool {
+	// First unload the plugin if it's loaded
+	removed := pm.RemovePlugin(key)
+
+	// Mark the function as stopped to prevent automatic reload
+	pm.stoppedFunctionsMux.Lock()
+	pm.stoppedFunctions[key] = true
+	pm.stoppedFunctionsMux.Unlock()
+
+	if pm.logStore != nil {
+		pm.logStore.AddLog(key, logging.LevelInfo, "Function stopped and will not be automatically reloaded")
+	}
+
+	return removed
+}
+
+// IsFunctionStopped checks if a function has been explicitly stopped
+func (pm *PluginManager) IsFunctionStopped(key string) bool {
+	pm.stoppedFunctionsMux.RLock()
+	defer pm.stoppedFunctionsMux.RUnlock()
+
+	stopped, exists := pm.stoppedFunctions[key]
+	return exists && stopped
+}
+
+// ClearStoppedStatus removes the stopped status from a function, allowing it to be loaded again
+func (pm *PluginManager) ClearStoppedStatus(key string) {
+	pm.stoppedFunctionsMux.Lock()
+	delete(pm.stoppedFunctions, key)
+	pm.stoppedFunctionsMux.Unlock()
+
+	if pm.logStore != nil {
+		pm.logStore.AddLog(key, logging.LevelInfo, "Function's stopped status cleared, can be loaded again")
+	}
 }
 
 func (pm *PluginManager) IsPluginLoaded(key string) bool {
@@ -283,6 +344,34 @@ func (pm *PluginManager) GetPluginConfig(key string) (map[string]string, bool) {
 	pm.pluginConfigsMux.RUnlock()
 
 	return configCopy, exists
+}
+
+// GetPreviouslyLoadedFunctions returns a map of all functions that have been previously loaded
+func (pm *PluginManager) GetPreviouslyLoadedFunctions() map[string]bool {
+	pm.previouslyLoadedMux.RLock()
+	defer pm.previouslyLoadedMux.RUnlock()
+
+	// Make a copy to avoid concurrency issues
+	result := make(map[string]bool, len(pm.previouslyLoaded))
+	for k, v := range pm.previouslyLoaded {
+		result[k] = v
+	}
+
+	return result
+}
+
+// GetStoppedFunctions returns a map of all functions that have been stopped
+func (pm *PluginManager) GetStoppedFunctions() map[string]bool {
+	pm.stoppedFunctionsMux.RLock()
+	defer pm.stoppedFunctionsMux.RUnlock()
+
+	// Make a copy to avoid concurrency issues
+	result := make(map[string]bool, len(pm.stoppedFunctions))
+	for k, v := range pm.stoppedFunctions {
+		result[k] = v
+	}
+
+	return result
 }
 
 func (pm *PluginManager) Shutdown() {

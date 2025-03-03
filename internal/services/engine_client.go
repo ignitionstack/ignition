@@ -26,6 +26,7 @@ type EngineClient struct {
 type EngineFunctionDetails struct {
 	Namespace string
 	Name      string
+	Status    string
 }
 
 func NewEngineClientWithDefaults() *EngineClient {
@@ -185,6 +186,49 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 	return nil
 }
 
+// StopFunction stops a function and prevents it from being automatically reloaded
+func (c *EngineClient) StopFunction(ctx context.Context, namespace, name string) error {
+	// Create HTTP request body
+	reqBody := map[string]interface{}{
+		"namespace": namespace,
+		"name":      name,
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal stop request: %w", err)
+	}
+
+	// Create HTTP request to the stop endpoint
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"http://unix/stop",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create stop request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send stop request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to stop function (status code %d): %s",
+			resp.StatusCode, string(responseBody))
+	}
+
+	return nil
+}
+
 func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetails, error) {
 	// Create HTTP request to the loaded endpoint to get actually loaded functions
 	req, err := http.NewRequestWithContext(
@@ -223,6 +267,7 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetai
 		functions = append(functions, EngineFunctionDetails{
 			Namespace: fn.Namespace,
 			Name:      fn.Name,
+			Status:    fn.Status,
 		})
 	}
 

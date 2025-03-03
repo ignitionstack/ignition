@@ -33,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(function.NewFunctionBuildCommand())
 	rootCmd.AddCommand(function.NewFunctionCallCommand())
 	rootCmd.AddCommand(function.NewFunctionRunCommand())
+	rootCmd.AddCommand(function.NewFunctionStopCommand())
 	rootCmd.AddCommand(function.NewFunctionTagCommand())
 
 	functionCmd.AddCommand(function.NewFunctionListCommand())

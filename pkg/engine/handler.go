@@ -55,6 +55,7 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 	// Register socket endpoints
 	mux.HandleFunc("/load", h.withMiddleware(h.handleLoad, commonMiddleware...))
 	mux.HandleFunc("/unload", h.withMiddleware(h.handleUnload, commonMiddleware...))
+	mux.HandleFunc("/stop", h.withMiddleware(h.handleStop, commonMiddleware...))
 	mux.HandleFunc("/list", h.withMiddleware(h.handleList, commonMiddleware...))
 	mux.HandleFunc("/build", h.withMiddleware(h.handleBuild, commonMiddleware...))
 	mux.HandleFunc("/reassign-tag", h.withMiddleware(h.handleReassignTag, commonMiddleware...))
@@ -127,7 +128,7 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	h.logger.Printf("Received load request for function: %s/%s (digest: %s)",
 		req.Namespace, req.Name, req.Digest)
 
-	if err := h.engine.LoadFunction(req.Namespace, req.Name, req.Digest, req.Config); err != nil {
+	if err := h.engine.LoadFunctionWithForce(req.Namespace, req.Name, req.Digest, req.Config, req.ForceLoad); err != nil {
 		return err
 	}
 
@@ -175,13 +176,20 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, functions)
 }
 
-// handleLoadedFunctions lists currently loaded functions in memory
+// handleLoadedFunctions lists currently loaded, previously loaded, and stopped functions
 func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list loaded functions")
 
 	// Get list of loaded functions from the plugin manager
 	functionKeys := h.engine.pluginManager.ListLoadedFunctions()
 
+	// Create a set of loaded functions for fast lookup
+	loadedFunctionsSet := make(map[string]bool, len(functionKeys))
+	for _, key := range functionKeys {
+		loadedFunctionsSet[key] = true
+	}
+
+	// Start with currently running functions
 	loadedFunctions := make([]types.LoadedFunction, 0, len(functionKeys))
 	for _, key := range functionKeys {
 		parts := strings.Split(key, "/")
@@ -189,6 +197,34 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
 				Namespace: parts[0],
 				Name:      parts[1],
+				Status:    "running",
+			})
+		}
+	}
+
+	// Get previously loaded functions and stopped functions
+	previouslyLoadedMap := h.engine.pluginManager.GetPreviouslyLoadedFunctions()
+	stoppedFunctionsMap := h.engine.pluginManager.GetStoppedFunctions()
+
+	// Process all function keys we know about
+	for key := range previouslyLoadedMap {
+		// Skip if it's already in the loaded list
+		if loadedFunctionsSet[key] {
+			continue
+		}
+
+		parts := strings.Split(key, "/")
+		if len(parts) == 2 {
+			// Determine the status - "stopped" takes precedence over "unloaded"
+			status := "unloaded"
+			if _, isStopped := stoppedFunctionsMap[key]; isStopped {
+				status = "stopped"
+			}
+
+			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
+				Namespace: parts[0],
+				Name:      parts[1],
+				Status:    status,
 			})
 		}
 	}
@@ -261,6 +297,12 @@ func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) er
 			wasLoaded, previousConfig := h.engine.WasPreviouslyLoaded(namespace, name)
 			if !wasLoaded {
 				return NewNotFoundError("Function not loaded")
+			}
+
+			// Check if function is explicitly stopped - prevent auto-reload
+			if h.engine.IsFunctionStopped(namespace, name) {
+				h.logger.Printf("Function %s/%s is stopped and will not be auto-reloaded", namespace, name)
+				return NewNotFoundError("Function was explicitly stopped and will not be auto-reloaded")
 			}
 
 			// Function was loaded before, try to reload it
@@ -507,6 +549,22 @@ func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return h.writeJSONResponse(w, map[string]string{"message": "Function unloaded successfully"})
+}
+
+// handleStop stops a function and prevents automatic reloading
+func (h *Handlers) handleStop(w http.ResponseWriter, r *http.Request) error {
+	var req types.FunctionRequest
+	if err := h.decodeAndValidate(r, &req); err != nil {
+		return err
+	}
+
+	h.logger.Printf("Received stop request for function: %s/%s", req.Namespace, req.Name)
+
+	if err := h.engine.StopFunction(req.Namespace, req.Name); err != nil {
+		return err
+	}
+
+	return h.writeJSONResponse(w, map[string]string{"message": "Function stopped successfully"})
 }
 
 // handleFunctionLogs returns logs for a specific function
