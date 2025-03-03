@@ -2,11 +2,11 @@ package compose
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -29,113 +29,52 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 		Long:          "Create and start functions defined in an ignition-compose.yml file.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(c *cobra.Command, args []string) error {
-			// Removed redundant operation line
-
+		RunE: func(_ *cobra.Command, _ []string) error {
 			composeManifest, err := manifest.ParseComposeFile(filePath)
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("Failed to parse compose file: %v", err))
 				return err
 			}
 
+			// Get the engine client from the container
 			client, err := container.Get("engineClient")
 			if err != nil {
-				ui.PrintError("Error getting engine client")
-				return fmt.Errorf("error getting engine client: %w", err)
+				ui.PrintError(fmt.Sprintf("Error getting engine client: %v", err))
+				return err
 			}
 			engineClient, ok := client.(*services.EngineClient)
 			if !ok {
 				ui.PrintError("Invalid engine client type")
-				return fmt.Errorf("invalid engine client type")
+				return errors.New("invalid engine client type")
 			}
 
+			// Check if engine is running
 			if err := engineClient.Ping(context.Background()); err != nil {
-				ui.PrintError("Engine is not running")
-				return fmt.Errorf("engine is not running. Start it with 'ignition engine start': %w", err)
-			}
-
-			ctx := context.Background()
-
-			spinnerModel := spinner.NewSpinnerModelWithMessage("Loading functions from compose file...")
-			program := tea.NewProgram(spinnerModel)
-
-			go func() {
-				result, err := loadFunctions(ctx, composeManifest, engineClient)
-				if err != nil {
-					program.Send(spinner.ErrorMsg{Err: err})
-				} else {
-					program.Send(spinner.DoneMsg{Result: result})
-				}
-			}()
-
-			model, err := program.Run()
-			if err != nil {
-				ui.PrintError(fmt.Sprintf("UI error: %v", err))
+				ui.PrintError(fmt.Sprintf("Failed to connect to engine: %v", err))
 				return err
 			}
 
-			finalModel := model.(spinner.SpinnerModel)
-			if finalModel.HasError() {
-				return finalModel.GetError()
-			}
+			// Create a context that we can cancel
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-			loadedCount := finalModel.GetResult().(int)
+			// Create a channel to listen for OS signals
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-			ui.PrintSuccess(fmt.Sprintf("Successfully started %d functions from compose file", loadedCount))
+			// Start a goroutine to handle signals
+			done := make(chan bool, 1)
+			go func() {
+				// Wait for a signal
+				<-sigs
 
-			// Display running functions in a cleaner format
-			fmt.Println()
-			for name, service := range composeManifest.Services {
-				ui.PrintMetadata(name, service.Function)
-			}
+				// Print a message
+				ui.PrintInfo("Status", "Shutting down...")
 
-			if !detach {
-				fmt.Println()
-				fmt.Println(ui.DimStyle.Render("Functions are running. Press Ctrl+C to stop..."))
+				// Cancel the context to signal all operations to stop
+				cancel()
 
-				sigChan := make(chan os.Signal, 1)
-				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-				engineHealthChan := make(chan struct{})
-				engineCheckCtx, engineCheckCancel := context.WithCancel(context.Background())
-				defer engineCheckCancel()
-
-				go func() {
-					ticker := time.NewTicker(10 * time.Second)
-					defer ticker.Stop()
-
-					for {
-						select {
-						case <-ticker.C:
-							pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-							err := engineClient.Ping(pingCtx)
-							cancel()
-
-							if err != nil {
-								ui.PrintWarning("Engine is no longer running. Stopping compose services.")
-								close(engineHealthChan)
-								return
-							}
-						case <-engineCheckCtx.Done():
-							return
-						}
-					}
-				}()
-
-				select {
-				case <-sigChan:
-					// User pressed Ctrl+C
-				case <-engineHealthChan:
-					// Engine is no longer running
-				}
-
-				// Removed redundant operation line
-
-				var functionsToUnload []struct {
-					namespace string
-					name      string
-					service   string
-				}
+				var functionsToUnload []services.FunctionReference
 
 				for name, service := range composeManifest.Services {
 					parts := strings.Split(service.Function, ":")
@@ -143,14 +82,10 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					nameParts := strings.Split(functionRef, "/")
 					if len(nameParts) == 2 {
 						namespace, funcName := nameParts[0], nameParts[1]
-						functionsToUnload = append(functionsToUnload, struct {
-							namespace string
-							name      string
-							service   string
-						}{
-							namespace: namespace,
-							name:      funcName,
-							service:   name,
+						functionsToUnload = append(functionsToUnload, services.FunctionReference{
+							Namespace: namespace,
+							Name:      funcName,
+							Service:   name,
 						})
 					}
 				}
@@ -162,7 +97,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
 
-					err := unloadComposeServices(ctx, functionsToUnload, engineClient)
+					err := engineClient.UnloadFunctions(ctx, functionsToUnload)
 					if err != nil {
 						if isConnectionError(err) {
 							unloadProgram.Send(spinner.DoneMsg{Result: 0})
@@ -176,16 +111,77 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 
 				unloadModel, err := unloadProgram.Run()
 				if err != nil {
-					ui.PrintError(fmt.Sprintf("Error unloading functions: %v", err))
+					ui.PrintError(fmt.Sprintf("UI error: %v", err))
 				} else {
-					finalUnloadModel := unloadModel.(spinner.SpinnerModel)
-					if finalUnloadModel.HasError() {
-						ui.PrintError(fmt.Sprintf("Error unloading functions: %v", finalUnloadModel.GetError()))
+					finalUnloadModel, ok := unloadModel.(spinner.Model)
+					if !ok {
+						ui.PrintError("Unexpected model type returned from spinner")
 					} else {
-						unloadedCount := finalUnloadModel.GetResult().(int)
-						ui.PrintSuccess(fmt.Sprintf("Successfully unloaded %d functions", unloadedCount))
+						if finalUnloadModel.HasError() {
+							ui.PrintError(fmt.Sprintf("Failed to unload functions: %v", finalUnloadModel.GetError()))
+						} else {
+							result := finalUnloadModel.GetResult()
+							unloadedCount, ok := result.(int)
+							if !ok {
+								ui.PrintError("Unexpected result type")
+							} else {
+								ui.PrintSuccess(fmt.Sprintf("Successfully unloaded %d functions", unloadedCount))
+							}
+						}
 					}
 				}
+
+				// Signal that we're done
+				done <- true
+			}()
+
+			// Create spinner model for function loading
+			spinnerModel := spinner.NewSpinnerModelWithMessage("Loading functions...")
+			program := tea.NewProgram(spinnerModel)
+
+			// Load functions in a goroutine
+			go func() {
+				result, err := loadFunctions(ctx, composeManifest, engineClient)
+				if err != nil {
+					program.Send(spinner.ErrorMsg{Err: err})
+				} else {
+					program.Send(spinner.DoneMsg{Result: result})
+				}
+			}()
+
+			// Run the program to show the spinner
+			model, err := program.Run()
+			if err != nil {
+				ui.PrintError(fmt.Sprintf("UI error: %v", err))
+				return err
+			}
+
+			finalModel, ok := model.(spinner.Model)
+			if !ok {
+				return errors.New("unexpected model type returned from spinner")
+			}
+			if finalModel.HasError() {
+				return finalModel.GetError()
+			}
+
+			result := finalModel.GetResult()
+			loadedCount, ok := result.(int)
+			if !ok {
+				return errors.New("unexpected result type: expected int")
+			}
+
+			ui.PrintSuccess(fmt.Sprintf("Successfully loaded %d functions", loadedCount))
+
+			fmt.Println()
+
+			// If detach is true, return now
+			if !detach {
+				ui.PrintInfo("Status", "Waiting for Ctrl+C to shut down...")
+				fmt.Println()
+				fmt.Println(ui.DimStyle.Render("Functions are running. Press Ctrl+C to stop..."))
+
+				// Wait for shutdown to complete
+				<-done
 			}
 
 			return nil
@@ -193,78 +189,12 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Specify an alternate compose file (default: ignition-compose.yml)")
-	cmd.Flags().BoolVarP(&detach, "detach", "d", false, "Run in detached mode")
+	cmd.Flags().BoolVarP(&detach, "detach", "d", false, "Run functions in the background")
 
 	return cmd
 }
 
-func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifest, engineClient *services.EngineClient) (int, error) {
-	var loadErrs []string
-	var loadErrsMu sync.Mutex
-	var wg sync.WaitGroup
-
-	for name, service := range composeManifest.Services {
-		wg.Add(1)
-		go func(name string, service manifest.ComposeService) {
-			defer wg.Done()
-
-			parts := strings.Split(service.Function, ":")
-			functionRef := parts[0]
-			tag := "latest"
-			if len(parts) > 1 {
-				tag = parts[1]
-			}
-
-			nameParts := strings.Split(functionRef, "/")
-			if len(nameParts) != 2 {
-				loadErrsMu.Lock()
-				loadErrs = append(loadErrs, fmt.Sprintf("invalid function reference '%s' for service '%s', expected format namespace/name:tag", service.Function, name))
-				loadErrsMu.Unlock()
-				return
-			}
-
-			namespace, funcName := nameParts[0], nameParts[1]
-
-			// Prefer Config over deprecated Environment field
-			config := service.Config
-			if config == nil && service.Environment != nil {
-				config = service.Environment
-			}
-
-			err := engineClient.LoadFunction(ctx, namespace, funcName, tag, config)
-			if err != nil {
-				errorMsg := fmt.Sprintf("Failed to load function '%s' for service '%s'", service.Function, name)
-
-				if strings.Contains(err.Error(), "function not found") {
-					errorMsg = fmt.Sprintf("Function '%s' not found for service '%s'. Run 'ignition function build' to create it first.",
-						service.Function, name)
-				} else if strings.Contains(err.Error(), "engine is not running") {
-					errorMsg = "Engine is not running. Start it with 'ignition engine start' before running compose up."
-				} else {
-					errorMsg = fmt.Sprintf("%s: %v", errorMsg, err)
-				}
-
-				loadErrsMu.Lock()
-				loadErrs = append(loadErrs, errorMsg)
-				loadErrsMu.Unlock()
-				return
-			}
-		}(name, service)
-	}
-
-	wg.Wait()
-
-	if len(loadErrs) > 0 {
-		errorMessage := "Failed to start services:\n"
-		for _, err := range loadErrs {
-			errorMessage += fmt.Sprintf("• %s\n", err)
-		}
-		return 0, fmt.Errorf("%s", errorMessage)
-	}
-
-	return len(composeManifest.Services), nil
-}
-
+// Check if an error is a connection-related error.
 func isConnectionError(err error) bool {
 	if err == nil {
 		return false
@@ -276,35 +206,67 @@ func isConnectionError(err error) bool {
 		strings.Contains(errMsg, "engine is not running")
 }
 
-func unloadComposeServices(ctx context.Context, functions []struct {
-	namespace string
-	name      string
-	service   string
-}, engineClient *services.EngineClient) error {
-	var unloadErrs []string
-	var unloadErrsMu sync.Mutex
-	var wg sync.WaitGroup
+func loadFunctions(ctx context.Context, composeManifest *manifest.ComposeManifest, engineClient *services.EngineClient) (int, error) {
+	loadedCount := 0
+	var loadErrs []string
 
-	for _, function := range functions {
-		wg.Add(1)
-		go func(namespace, name, serviceName string) {
-			defer wg.Done()
+	for name, service := range composeManifest.Services {
+		// Parse function reference (namespace/name:tag)
+		parts := strings.Split(service.Function, ":")
+		if len(parts) != 2 {
+			loadErrs = append(loadErrs, fmt.Sprintf("invalid function reference '%s' for service '%s', expected format namespace/name:tag", service.Function, name))
+			continue
+		}
 
-			err := engineClient.UnloadFunction(ctx, namespace, name)
-			if err != nil {
-				unloadErrsMu.Lock()
-				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v",
-					namespace, name, serviceName, err))
-				unloadErrsMu.Unlock()
+		functionRef, tag := parts[0], parts[1]
+
+		// Parse namespace and name
+		nameParts := strings.Split(functionRef, "/")
+		if len(nameParts) != 2 {
+			loadErrs = append(loadErrs, fmt.Sprintf("invalid function reference '%s' for service '%s', expected format namespace/name:tag", service.Function, name))
+			continue
+		}
+
+		namespace, funcName := nameParts[0], nameParts[1]
+
+		// Create configuration by merging both Config and Environment fields
+		config := make(map[string]string)
+
+		// First copy from legacy Config field if present
+		for k, v := range service.Config {
+			config[k] = v
+		}
+
+		// Then copy from Environment field, which takes precedence
+		for k, v := range service.Environment {
+			config[k] = v
+		}
+
+		// Load the function
+		err := engineClient.LoadFunction(ctx, namespace, funcName, tag, config)
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to load function '%s' for service '%s': %v", service.Function, name, err)
+
+			// Provide more helpful error messages for common issues
+			if strings.Contains(err.Error(), "function not found") {
+				errorMsg = fmt.Sprintf("Function '%s' not found for service '%s'. Run 'ignition function build' to create it first.",
+					service.Function, name)
+			} else if strings.Contains(err.Error(), "no such file or directory") {
+				errorMsg = fmt.Sprintf("Unable to load function '%s' for service '%s'. The function file does not exist.",
+					service.Function, name)
 			}
-		}(function.namespace, function.name, function.service)
+
+			loadErrs = append(loadErrs, errorMsg)
+			continue
+		}
+
+		loadedCount++
 	}
 
-	wg.Wait()
-
-	if len(unloadErrs) > 0 {
-		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
+	// Check for errors
+	if len(loadErrs) > 0 {
+		return loadedCount, fmt.Errorf("failed to load some functions:\n%s", strings.Join(loadErrs, "\n"))
 	}
 
-	return nil
+	return loadedCount, nil
 }

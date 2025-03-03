@@ -17,7 +17,7 @@ func NewFunctionTagCommand() *cobra.Command {
 		Use:   "tag [namespace/name:digest] [tag]",
 		Short: "Assign a tag to a specific digest",
 		Args:  cobra.ExactArgs(2), // Requires exactly 2 arguments
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			// Parse namespace, name, and digest from the first argument
 			namespace, name, digest, err := parseNamespaceAndName(args[0])
 			if err != nil {

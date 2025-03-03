@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,24 +9,24 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// ComposeManifest represents the structure of an ignition-compose.yml file
+// ComposeManifest represents the structure of an ignition-compose.yml file.
 type ComposeManifest struct {
 	Version  string                    `yaml:"version,omitempty"`
 	Services map[string]ComposeService `yaml:"services"`
 }
 
-// ComposeService represents a single function service in the compose file
+// ComposeService represents a single function service in the compose file.
 type ComposeService struct {
-	Function      string            `yaml:"function"` // namespace/name:tag format
-	Config        map[string]string `yaml:"config,omitempty"`
-	Environment   map[string]string `yaml:"environment,omitempty"` // Deprecated: use Config instead
+	Function      string            `yaml:"function"`         // namespace/name:tag format
+	Config        map[string]string `yaml:"config,omitempty"` // Deprecated: use Environment instead
+	Environment   map[string]string `yaml:"environment,omitempty"`
 	DependsOn     []string          `yaml:"depends_on,omitempty"`
 	HostName      string            `yaml:"hostname,omitempty"`
 	RestartPolicy string            `yaml:"restart,omitempty"` // "always", "on-failure", "no"
 	Ports         []string          `yaml:"ports,omitempty"`   // For future use with network config
 }
 
-// ParseComposeFile parses an ignition-compose.yml file and returns a ComposeManifest
+// ParseComposeFile parses an ignition-compose.yml file and returns a ComposeManifest.
 func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 	// If no file path is provided, check for default file
 	if filePath == "" {
@@ -49,7 +50,7 @@ func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 		return nil, fmt.Errorf("failed to resolve compose file path: %w", err)
 	}
 
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
 		return nil, fmt.Errorf("compose file not found: %s", absPath)
 	}
 
@@ -60,13 +61,13 @@ func ParseComposeFile(filePath string) (*ComposeManifest, error) {
 	}
 
 	var manifest ComposeManifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse compose file: %w", err)
+	if unmarshalErr := yaml.Unmarshal(data, &manifest); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse compose file: %w", unmarshalErr)
 	}
 
 	// Validate the manifest
 	if len(manifest.Services) == 0 {
-		return nil, fmt.Errorf("compose file must contain at least one service")
+		return nil, errors.New("compose file must contain at least one service")
 	}
 
 	for name, service := range manifest.Services {

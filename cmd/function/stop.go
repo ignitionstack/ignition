@@ -31,7 +31,7 @@ Stopped functions will still appear in 'ignition ps' but with a "stopped" status
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			namespace, name, _, err := parseNamespaceAndName(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid function name format: %w", err)
@@ -56,7 +56,7 @@ Stopped functions will still appear in 'ignition ps' but with a "stopped" status
 
 				client := http.Client{
 					Transport: &http.Transport{
-						DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+						DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 							return net.Dial("unix", stopSocketPath)
 						},
 					},
@@ -92,7 +92,10 @@ Stopped functions will still appear in 'ignition ps' but with a "stopped" status
 				return err
 			}
 
-			finalModel := m.(spinner.SpinnerModel)
+			finalModel, ok := m.(spinner.Model)
+			if !ok {
+				return fmt.Errorf("unexpected model type returned from spinner")
+			}
 			if finalModel.HasError() {
 				err := finalModel.GetError()
 				return err

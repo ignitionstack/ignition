@@ -2,6 +2,7 @@ package builders
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,16 +15,17 @@ type goBuilder struct{}
 func (g *goBuilder) VerifyDependencies() error {
 	cmd := exec.Command("tinygo", "version")
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("TinyGo verification failed: %v", exitErr.Error())
 		}
 		// If the error is not an ExitError, it likely means the command wasn't found
-		return fmt.Errorf("TinyGo is not installed or not found in PATH")
+		return errors.New("TinyGo is not installed or not found in PATH")
 	}
 	return nil
 }
 
-func (g goBuilder) Build(path string) (*BuildResult, error) {
+func (g *goBuilder) Build(path string) (*BuildResult, error) {
 	cmd := exec.Command("tinygo", "build", "-o", "plugin.wasm", "-target", "wasi", "main.go")
 	cmd.Dir = path
 

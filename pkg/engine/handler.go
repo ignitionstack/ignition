@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -17,14 +18,14 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// Handlers contains HTTP handlers for engine endpoints
+// Handlers contains HTTP handlers for engine endpoints.
 type Handlers struct {
-	engine    *Engine
+	engine    *Engine // The engine instance that provides all functionality
 	logger    logging.Logger
 	validator *validator.Validate
 }
 
-// NewHandlers creates a new Handlers instance
+// NewHandlers creates a new Handlers instance.
 func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	return &Handlers{
 		engine:    engine,
@@ -33,8 +34,7 @@ func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	}
 }
 
-// Route Configuration
-// UnixSocketHandler returns a HTTP handler for unix socket endpoints
+// UnixSocketHandler returns a HTTP handler for unix socket endpoints.
 func (h *Handlers) UnixSocketHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -67,7 +67,7 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 	return mux
 }
 
-// HTTPHandler returns a HTTP handler for public endpoints
+// HTTPHandler returns a HTTP handler for public endpoints.
 func (h *Handlers) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -89,8 +89,7 @@ func (h *Handlers) HTTPHandler() http.Handler {
 	return mux
 }
 
-// Utility methods for request/response handling
-// decodeJSONRequest decodes a JSON request body into a struct
+// decodeJSONRequest decodes a JSON request body into a struct.
 func (h *Handlers) decodeJSONRequest(r *http.Request, v interface{}) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return NewBadRequestError("Invalid request body")
@@ -98,7 +97,7 @@ func (h *Handlers) decodeJSONRequest(r *http.Request, v interface{}) error {
 	return nil
 }
 
-// decodeAndValidate decodes and validates a request
+// decodeAndValidate decodes and validates a request.
 func (h *Handlers) decodeAndValidate(r *http.Request, v interface{}) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return NewBadRequestError("Invalid request body")
@@ -111,14 +110,13 @@ func (h *Handlers) decodeAndValidate(r *http.Request, v interface{}) error {
 	return nil
 }
 
-// writeJSONResponse writes a JSON response
+// writeJSONResponse writes a JSON response.
 func (h *Handlers) writeJSONResponse(w http.ResponseWriter, data interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(data)
 }
 
-// Handler Implementations
-// handleLoad loads a function into memory
+// handleLoad loads a function into memory.
 func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	var req types.LoadRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -128,14 +126,15 @@ func (h *Handlers) handleLoad(w http.ResponseWriter, r *http.Request) error {
 	h.logger.Printf("Received load request for function: %s/%s (digest: %s)",
 		req.Namespace, req.Name, req.Digest)
 
-	if err := h.engine.LoadFunctionWithForce(req.Namespace, req.Name, req.Digest, req.Config, req.ForceLoad); err != nil {
+	ctx := r.Context()
+	if err := h.engine.LoadFunctionWithForce(ctx, req.Namespace, req.Name, req.Digest, req.Config, req.ForceLoad); err != nil {
 		return err
 	}
 
 	return h.writeJSONResponse(w, map[string]string{"message": "Function loaded successfully"})
 }
 
-// handleList lists functions in the registry
+// handleList lists functions in the registry.
 func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
 	var req types.FunctionRequest
 	if err := h.decodeJSONRequest(r, &req); err != nil {
@@ -155,7 +154,7 @@ func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
 
 	metadata, err := h.engine.GetRegistry().Get(req.Namespace, req.Name)
 	if err != nil {
-		if err == registry.ErrFunctionNotFound {
+		if errors.Is(err, registry.ErrFunctionNotFound) {
 			return NewNotFoundError("Function not found")
 		}
 		return fmt.Errorf("failed to fetch function metadata: %w", err)
@@ -164,7 +163,7 @@ func (h *Handlers) handleList(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, metadata)
 }
 
-// handleListAll lists all functions in the registry
+// handleListAll lists all functions in the registry.
 func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list all functions")
 
@@ -176,7 +175,7 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, functions)
 }
 
-// handleLoadedFunctions lists currently loaded, previously loaded, and stopped functions
+// handleLoadedFunctions lists currently loaded, previously loaded, and stopped functions.
 func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list loaded functions")
 
@@ -232,7 +231,7 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 	return h.writeJSONResponse(w, loadedFunctions)
 }
 
-// handleBuild builds a function and stores it in the registry
+// handleBuild builds a function and stores it in the registry.
 func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 	var req ExtendedBuildRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -256,133 +255,263 @@ func (h *Handlers) handleBuild(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, response)
 }
 
-// handleFunctionCall handles function calls via HTTP
+// handleFunctionCall handles function calls via HTTP.
 func (h *Handlers) handleFunctionCall(w http.ResponseWriter, r *http.Request) error {
+	// Parse the request
+	callParams, payload, err := h.parseFunctionCallRequest(r)
+	if err != nil {
+		return err
+	}
+
+	// Log the request
+	h.logger.Printf("Received call request for function: %s/%s, entrypoint: %s",
+		callParams.namespace, callParams.name, callParams.entrypoint)
+
+	// Execute the function with auto-reload capability
+	output, err := h.executeFunction(r.Context(), callParams, payload)
+	if err != nil {
+		return err
+	}
+
+	// Send the response
+	return h.sendFunctionResponse(w, output)
+}
+
+// functionCallParams contains the parsed parameters of a function call.
+type functionCallParams struct {
+	namespace  string
+	name       string
+	entrypoint string
+}
+
+// parseFunctionCallRequest parses the HTTP request for a function call.
+func (h *Handlers) parseFunctionCallRequest(r *http.Request) (*functionCallParams, string, error) {
 	// Parse path: /namespace/name/entrypoint
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	if len(pathParts) != 3 {
-		return NewBadRequestError("Invalid URL format: expected /namespace/name/entrypoint")
+		return nil, "", NewBadRequestError("Invalid URL format: expected /namespace/name/entrypoint")
 	}
 
+	// Parse payload from request body
 	var req struct {
 		Payload string `json:"payload"`
 	}
 	if err := h.decodeJSONRequest(r, &req); err != nil {
-		return err
+		return nil, "", err
 	}
 
-	namespace, name, entrypoint := pathParts[0], pathParts[1], pathParts[2]
-	h.logger.Printf("Received call request for function: %s/%s, entrypoint: %s",
-		namespace, name, entrypoint)
+	// Return the parsed parameters
+	return &functionCallParams{
+		namespace:  pathParts[0],
+		name:       pathParts[1],
+		entrypoint: pathParts[2],
+	}, req.Payload, nil
+}
 
-	// Create a context from the request that will be canceled if the client disconnects
-	ctx := r.Context()
-
+// executeFunction attempts to call a function, trying auto-reload if needed.
+func (h *Handlers) executeFunction(ctx context.Context, params *functionCallParams, payload string) ([]byte, error) {
 	// Try calling the function with the request context
-	output, err := h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
+	output, err := h.engine.CallFunctionWithContext(
+		ctx,
+		params.namespace,
+		params.name,
+		params.entrypoint,
+		[]byte(payload),
+	)
+
+	// Handle different error cases
 	if err != nil {
-		if err == ErrFunctionNotLoaded {
-			// Check if this function was previously loaded but was unloaded due to TTL
-
-			// Check if the function exists in the registry
-			metadata, err := h.engine.GetRegistry().Get(namespace, name)
-			if err != nil {
-				if err == registry.ErrFunctionNotFound {
-					return NewNotFoundError("Function not found in registry")
-				}
-				return fmt.Errorf("failed to fetch function metadata: %w", err)
-			}
-
-			// Check if this function was ever loaded before and get previous config
-			wasLoaded, previousConfig := h.engine.WasPreviouslyLoaded(namespace, name)
-			if !wasLoaded {
-				return NewNotFoundError("Function not loaded")
-			}
-
-			// Check if function is explicitly stopped - prevent auto-reload
-			if h.engine.IsFunctionStopped(namespace, name) {
-				h.logger.Printf("Function %s/%s is stopped and will not be auto-reloaded", namespace, name)
-				return NewNotFoundError("Function was explicitly stopped and will not be auto-reloaded")
-			}
-
-			// Function was loaded before, try to reload it
-			h.logger.Printf("Function %s/%s was previously loaded, attempting to reload with previous config", namespace, name)
-
-			// Find the latest version to load
-			if len(metadata.Versions) == 0 {
-				return NewNotFoundError("No versions available for this function")
-			}
-
-			// Try to find a version with the "latest" tag
-			var tagToLoad string
-			for _, version := range metadata.Versions {
-				for _, tag := range version.Tags {
-					if tag == "latest" {
-						tagToLoad = "latest"
-						break
-					}
-				}
-				if tagToLoad != "" {
-					break
-				}
-			}
-
-			// If no "latest" tag found, use the most recent version's digest
-			if tagToLoad == "" {
-				// Versions should be sorted with most recent first
-				latestVersion := metadata.Versions[0]
-				tagToLoad = latestVersion.FullDigest
-			}
-
-			// Load the function with the chosen tag and previous config using context
-			if err := h.engine.LoadFunctionWithContext(ctx, namespace, name, tagToLoad, previousConfig); err != nil {
-				return fmt.Errorf("failed to reload function: %w", err)
-			}
-
-			// Try calling the function again with context
-			output, err = h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(req.Payload))
-			if err != nil {
-				return err
-			}
-		} else {
-			// Check for context cancellation
-			if ctx.Err() != nil {
-				return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
-			}
-			return err
+		if errors.Is(err, ErrFunctionNotLoaded) {
+			// Try auto-reload if the function isn't loaded
+			return h.handleFunctionAutoReload(ctx, params.namespace, params.name, params.entrypoint, payload)
 		}
+
+		// Check for context cancellation
+		if ctx.Err() != nil {
+			return nil, NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+		}
+
+		// Return other errors unchanged
+		return nil, err
 	}
 
-	// Set appropriate headers and write the response
+	return output, nil
+}
+
+// sendFunctionResponse sends the function output as the HTTP response.
+func (h *Handlers) sendFunctionResponse(w http.ResponseWriter, output []byte) error {
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(output)
+	_, err := w.Write(output)
 	return err
 }
 
-// handleOneOffCall handles one-off function calls
+// handleFunctionAutoReload attempts to auto-reload a previously loaded function.
+func (h *Handlers) handleFunctionAutoReload(ctx context.Context, namespace, name, entrypoint, payload string) ([]byte, error) {
+	// Validate preconditions for auto-reload
+	if err := h.validateAutoReloadPreconditions(namespace, name); err != nil {
+		return nil, err
+	}
+
+	// Get the function metadata and configuration
+	metadata, previousConfig, err := h.getMetadataAndConfig(namespace, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Function was loaded before, try to reload it
+	h.logger.Printf("Function %s/%s was previously loaded, attempting to reload with previous config", namespace, name)
+
+	// Find the latest version tag and reload the function
+	if err := h.reloadFunction(ctx, metadata, namespace, name, previousConfig); err != nil {
+		return nil, err
+	}
+
+	// Try calling the function again
+	return h.engine.CallFunctionWithContext(ctx, namespace, name, entrypoint, []byte(payload))
+}
+
+// validateAutoReloadPreconditions checks if auto-reload is allowed for this function.
+func (h *Handlers) validateAutoReloadPreconditions(namespace, name string) error {
+	// Check if this function was ever loaded before
+	wasLoaded, _ := h.engine.WasPreviouslyLoaded(namespace, name)
+	if !wasLoaded {
+		return NewNotFoundError("Function not loaded")
+	}
+
+	// Check if function is explicitly stopped - prevent auto-reload
+	if h.engine.IsFunctionStopped(namespace, name) {
+		h.logger.Printf("Function %s/%s is stopped and will not be auto-reloaded", namespace, name)
+		return NewNotFoundError("Function was explicitly stopped and will not be auto-reloaded")
+	}
+
+	return nil
+}
+
+// getMetadataAndConfig retrieves function metadata and previous configuration.
+func (h *Handlers) getMetadataAndConfig(namespace, name string) (*registry.FunctionMetadata, map[string]string, error) {
+	// Check if the function exists in the registry
+	metadata, err := h.engine.GetRegistry().Get(namespace, name)
+	if err != nil {
+		if errors.Is(err, registry.ErrFunctionNotFound) {
+			return nil, nil, NewNotFoundError("Function not found in registry")
+		}
+		return nil, nil, fmt.Errorf("failed to fetch function metadata: %w", err)
+	}
+
+	// Check if there are any versions available
+	if len(metadata.Versions) == 0 {
+		return nil, nil, NewNotFoundError("No versions available for this function")
+	}
+
+	// Get the previous configuration
+	_, previousConfig := h.engine.WasPreviouslyLoaded(namespace, name)
+
+	return metadata, previousConfig, nil
+}
+
+// reloadFunction reloads a function with the latest tag and previous configuration.
+func (h *Handlers) reloadFunction(ctx context.Context, metadata *registry.FunctionMetadata, namespace, name string, previousConfig map[string]string) error {
+	// Find the best tag to load
+	tagToLoad := h.findLatestTag(metadata)
+
+	// Load the function with the chosen tag and previous config
+	if err := h.engine.LoadFunctionWithContext(ctx, namespace, name, tagToLoad, previousConfig); err != nil {
+		return fmt.Errorf("failed to reload function: %w", err)
+	}
+
+	return nil
+}
+
+// findLatestTag looks for the latest tag in metadata, falling back to the most recent digest.
+func (h *Handlers) findLatestTag(metadata *registry.FunctionMetadata) string {
+	// Try to find a version with the "latest" tag
+	for _, version := range metadata.Versions {
+		for _, tag := range version.Tags {
+			if tag == "latest" {
+				return "latest"
+			}
+		}
+	}
+
+	// If no "latest" tag found, use the most recent version's digest
+	// (Versions should be sorted with most recent first)
+	if len(metadata.Versions) > 0 {
+		return metadata.Versions[0].FullDigest
+	}
+
+	return ""
+}
+
+// handleOneOffCall handles one-off function calls by splitting the process into clear stages.
 func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) error {
-	var req types.OneOffCallRequest
-	if err := h.decodeAndValidate(r, &req); err != nil {
+	// Parse and validate the request
+	req, err := h.parseOneOffCallRequest(r)
+	if err != nil {
 		return err
 	}
 
+	// Log the request
 	h.logger.Printf("Received one-off call request for function: %s/%s (reference: %s, entrypoint: %s)",
 		req.Namespace, req.Name, req.Reference, req.Entrypoint)
 
 	// Get context from the request for cancellation support
 	ctx := r.Context()
 
-	// Create a channel for the result
+	// Execute the one-off call with cancellation support
+	output, err := h.executeOneOffCall(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	// Return the output
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(output)
+	return err
+}
+
+// parseOneOffCallRequest parses and validates the one-off call request.
+func (h *Handlers) parseOneOffCallRequest(r *http.Request) (*types.OneOffCallRequest, error) {
+	var req types.OneOffCallRequest
+	if err := h.decodeAndValidate(r, &req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+// 3. Call the function.
+func (h *Handlers) executeOneOffCall(ctx context.Context, req *types.OneOffCallRequest) ([]byte, error) {
+	// Stage 1: Pull the function
+	wasmBytes, versionInfo, err := h.pullFunction(ctx, req.Namespace, req.Name, req.Reference)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stage 2: Create plugin
+	plugin, err := h.createPlugin(ctx, wasmBytes, versionInfo, req.Config)
+	if err != nil {
+		return nil, err
+	}
+	defer plugin.Close(context.Background())
+
+	// Stage 3: Call the function
+	return h.callFunction(ctx, plugin, req.Entrypoint, req.Payload)
+}
+
+// pullFunction pulls a function from the registry with cancellation support.
+func (h *Handlers) pullFunction(ctx context.Context, namespace, name, reference string) ([]byte, *registry.VersionInfo, error) {
+	// Define result type
 	type pullResult struct {
 		wasmBytes   []byte
 		versionInfo *registry.VersionInfo
 		err         error
 	}
 
-	// Fetch the function from the registry in a goroutine
+	// Create a channel for the result
 	pullCh := make(chan pullResult, 1)
+
+	// Fetch the function in a goroutine
 	go func() {
-		wasmBytes, versionInfo, err := h.engine.GetRegistry().Pull(req.Namespace, req.Name, req.Reference)
+		wasmBytes, versionInfo, err := h.engine.GetRegistry().Pull(namespace, name, reference)
 		select {
 		case pullCh <- pullResult{wasmBytes, versionInfo, err}:
 		case <-ctx.Done():
@@ -402,28 +531,34 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 		result = <-pullCh // Clean up goroutine
 	}
 
-	// Check for errors
+	// Handle errors
 	if result.err != nil {
-		if result.err == registry.ErrFunctionNotFound || result.err == registry.ErrVersionNotFound {
-			return NewNotFoundError(result.err.Error())
+		if errors.Is(result.err, registry.ErrFunctionNotFound) || errors.Is(result.err, registry.ErrVersionNotFound) {
+			return nil, nil, NewNotFoundError(result.err.Error())
 		}
 		if ctx.Err() != nil {
-			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+			return nil, nil, NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
 		}
-		return result.err
+		return nil, nil, result.err
 	}
 
-	wasmBytes, versionInfo := result.wasmBytes, result.versionInfo
+	return result.wasmBytes, result.versionInfo, nil
+}
 
-	// Initialize the plugin in a goroutine
+// createPlugin creates an Extism plugin from WASM bytes with cancellation support.
+func (h *Handlers) createPlugin(ctx context.Context, wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
+	// Define result type
 	type pluginResult struct {
 		plugin *extism.Plugin
 		err    error
 	}
 
+	// Create channel for the result
 	pluginCh := make(chan pluginResult, 1)
+
+	// Initialize the plugin in a goroutine
 	go func() {
-		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, req.Config)
+		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, config)
 		select {
 		case pluginCh <- pluginResult{plugin, err}:
 		case <-ctx.Done():
@@ -445,26 +580,31 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 		pluginRes = <-pluginCh // Clean up goroutine
 	}
 
-	// Check for errors
+	// Handle errors
 	if pluginRes.err != nil {
 		if ctx.Err() != nil {
-			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+			return nil, NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
 		}
-		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", pluginRes.err))
+		return nil, NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", pluginRes.err))
 	}
 
-	plugin := pluginRes.plugin
-	defer plugin.Close(context.Background())
+	return pluginRes.plugin, nil
+}
 
-	// Call the function in a goroutine
+// callFunction calls a function in a plugin with cancellation support.
+func (h *Handlers) callFunction(ctx context.Context, plugin *extism.Plugin, entrypoint string, payload string) ([]byte, error) {
+	// Define result type
 	type callResult struct {
 		output []byte
 		err    error
 	}
 
+	// Create channel for the result
 	callCh := make(chan callResult, 1)
+
+	// Call the function in a goroutine
 	go func() {
-		_, output, err := plugin.Call(req.Entrypoint, []byte(req.Payload))
+		_, output, err := plugin.Call(entrypoint, []byte(payload))
 		select {
 		case callCh <- callResult{output, err}:
 		case <-ctx.Done():
@@ -483,21 +623,18 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 		callRes = <-callCh // Clean up goroutine
 	}
 
-	// Check for errors
+	// Handle errors
 	if callRes.err != nil {
 		if ctx.Err() != nil {
-			return NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+			return nil, NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
 		}
-		return NewInternalServerError(fmt.Sprintf("Failed to call function: %v", callRes.err))
+		return nil, NewInternalServerError(fmt.Sprintf("Failed to call function: %v", callRes.err))
 	}
 
-	// Return the output
-	w.Header().Set("Content-Type", "application/json")
-	_, err := w.Write(callRes.output)
-	return err
+	return callRes.output, nil
 }
 
-// handleReassignTag handles tag reassignment requests
+// handleReassignTag handles tag reassignment requests.
 func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) error {
 	var req types.ReassignTagRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -517,8 +654,8 @@ func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) err
 	return h.writeJSONResponse(w, map[string]string{"message": "Tag reassigned successfully"})
 }
 
-// handleStatus returns the current status of the engine
-func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
+// handleStatus returns the current status of the engine.
+func (h *Handlers) handleStatus(w http.ResponseWriter, _ *http.Request) error {
 	// Get the count of loaded functions from the plugin manager
 	loadedCount := h.engine.pluginManager.GetLoadedFunctionCount()
 
@@ -530,12 +667,12 @@ func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, status)
 }
 
-// handleHealth is a simple health check endpoint
-func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) error {
+// handleHealth is a simple health check endpoint.
+func (h *Handlers) handleHealth(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"status": "ok"})
 }
 
-// handleUnload unloads a function from memory
+// handleUnload unloads a function from memory.
 func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
 	var req types.FunctionRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -551,7 +688,7 @@ func (h *Handlers) handleUnload(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"message": "Function unloaded successfully"})
 }
 
-// handleStop stops a function and prevents automatic reloading
+// handleStop stops a function and prevents automatic reloading.
 func (h *Handlers) handleStop(w http.ResponseWriter, r *http.Request) error {
 	var req types.FunctionRequest
 	if err := h.decodeAndValidate(r, &req); err != nil {
@@ -567,7 +704,7 @@ func (h *Handlers) handleStop(w http.ResponseWriter, r *http.Request) error {
 	return h.writeJSONResponse(w, map[string]string{"message": "Function stopped successfully"})
 }
 
-// handleFunctionLogs returns logs for a specific function
+// handleFunctionLogs returns logs for a specific function.
 func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) error {
 	// Parse path: /logs/namespace/name
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/logs/"), "/")
@@ -617,7 +754,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 	return h.writeJSONResponse(w, logs)
 }
 
-// getEngineLogs retrieves logs for a specific function from the engine's log store
+// getEngineLogs retrieves logs for a specific function from the engine's log store.
 func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
 	functionKey := components.GetFunctionKey(namespace, name)
 
@@ -631,11 +768,10 @@ func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail i
 				fmt.Sprintf("[%s] No logs available for function %s. The function is loaded but has not recorded any activity yet.",
 					time.Now().Format(time.RFC3339), functionKey),
 			}
-		} else {
-			return []string{
-				fmt.Sprintf("[%s] No logs available for function %s. The function is not currently loaded.",
-					time.Now().Format(time.RFC3339), functionKey),
-			}
+		}
+		return []string{
+			fmt.Sprintf("[%s] No logs available for function %s. The function is not currently loaded.",
+				time.Now().Format(time.RFC3339), functionKey),
 		}
 	}
 

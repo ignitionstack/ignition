@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// BuildRequest represents a request to build a function
+// BuildRequest represents a request to build a function.
 type BuildRequest struct {
 	Namespace string `json:"namespace" validate:"required"`
 	Name      string `json:"name" validate:"required"`
@@ -12,7 +12,7 @@ type BuildRequest struct {
 	Tag       string `json:"tag"`
 }
 
-// BuildResponse represents the response from a build operation
+// BuildResponse represents the response from a build operation.
 type BuildResponse struct {
 	Digest    string `json:"digest"`
 	Tag       string `json:"tag"`
@@ -20,31 +20,31 @@ type BuildResponse struct {
 	BuildTime string `json:"build_time"`
 }
 
-// BuildResult contains information about a successful build
+// BuildResult contains information about a successful build.
 type BuildResult struct {
-	Name      string
-	Namespace string
-	Digest    string
-	BuildTime time.Duration
-	Tag       string
-	Reused    bool
+	Name      string        `json:"name"`
+	Namespace string        `json:"namespace"`
+	Digest    string        `json:"digest"`
+	BuildTime time.Duration `json:"build_time"`
+	Tag       string        `json:"tag"`
+	Reused    bool          `json:"reused"`
 }
 
-// LoadResult contains information about a successful load operation
+// LoadResult contains information about a successful load operation.
 type LoadResult struct {
-	Namespace string
-	Name      string
-	Digest    string
-	LoadTime  time.Duration
+	Namespace string        `json:"namespace"`
+	Name      string        `json:"name"`
+	Digest    string        `json:"digest"`
+	LoadTime  time.Duration `json:"load_time"`
 }
 
-// FunctionRequest is a base request with function identification
+// FunctionRequest is a base request with function identification.
 type FunctionRequest struct {
 	Namespace string `json:"namespace" validate:"required"`
 	Name      string `json:"name" validate:"required"`
 }
 
-// LoadRequest represents a request to load a function
+// LoadRequest represents a request to load a function.
 type LoadRequest struct {
 	FunctionRequest
 	Digest    string            `json:"digest" validate:"required"`
@@ -52,7 +52,7 @@ type LoadRequest struct {
 	ForceLoad bool              `json:"force_load,omitempty"`
 }
 
-// OneOffCallRequest represents a request to call a function once
+// OneOffCallRequest represents a request to call a function once..
 type OneOffCallRequest struct {
 	FunctionRequest
 	Reference  string            `json:"reference" validate:"required"`
@@ -61,19 +61,19 @@ type OneOffCallRequest struct {
 	Config     map[string]string `json:"config,omitempty"`
 }
 
-// ReassignTagRequest represents a request to reassign a tag
+// ReassignTagRequest represents a request to reassign a tag..
 type ReassignTagRequest struct {
 	FunctionRequest
 	Tag    string `json:"tag" validate:"required"`
 	Digest string `json:"digest" validate:"required"`
 }
 
-// ListResponse represents the response from a list operation
+// ListResponse represents the response from a list operation.
 type ListResponse struct {
 	Functions []FunctionInfo `json:"functions"`
 }
 
-// FunctionInfo provides summary information about a function
+// FunctionInfo provides summary information about a function.
 type FunctionInfo struct {
 	Namespace    string   `json:"namespace"`
 	Name         string   `json:"name"`
@@ -81,7 +81,7 @@ type FunctionInfo struct {
 	Tags         []string `json:"tags,omitempty"`
 }
 
-// PluginOptions defines configuration options for plugins
+// PluginOptions defines configuration options for plugins.
 type PluginOptions struct {
 	EnableWasi    bool     `json:"enable_wasi"`
 	AllowedHosts  []string `json:"allowed_hosts"`
@@ -90,7 +90,7 @@ type PluginOptions struct {
 	TimeoutMillis int      `json:"timeout_millis"`
 }
 
-// LoadedFunction represents a function that is currently loaded in memory
+// LoadedFunction represents a function that is currently loaded in memory.
 type LoadedFunction struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`

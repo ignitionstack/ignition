@@ -26,7 +26,7 @@ func NewFunctionRunCommand() *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			namespace, name, identifier, err := parseNamespaceAndName(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid function name format: %w", err)
@@ -67,7 +67,7 @@ func NewFunctionRunCommand() *cobra.Command {
 
 				client := http.Client{
 					Transport: &http.Transport{
-						DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+						DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 							return net.Dial("unix", runSocketPath)
 						},
 					},
@@ -104,7 +104,10 @@ func NewFunctionRunCommand() *cobra.Command {
 				return err
 			}
 
-			finalModel := m.(spinner.SpinnerModel)
+			finalModel, ok := m.(spinner.Model)
+			if !ok {
+				return fmt.Errorf("unexpected model type returned from spinner")
+			}
 			if finalModel.HasError() {
 				err := finalModel.GetError()
 				return err
@@ -118,14 +121,4 @@ func NewFunctionRunCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&runSocketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
 	cmd.Flags().StringArrayVarP(&runConfigFlag, "config", "c", []string{}, "Configuration values to pass to the function (format: key=value)")
 	return cmd
-}
-
-// Helper function to split a key=value string
-func splitKeyValue(s string) []string {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '=' {
-			return []string{s[:i], s[i+1:]}
-		}
-	}
-	return []string{s}
 }

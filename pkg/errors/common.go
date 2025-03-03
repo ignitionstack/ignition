@@ -22,7 +22,7 @@ var (
 	ErrBuildFailed         = errors.New("function build failed")
 )
 
-// Common error prefixes to clean up
+// Common error prefixes to clean up.
 var errorPrefixes = []string{
 	"Build failed: ",
 	"builder initialization failed: ",
@@ -36,8 +36,7 @@ func WithDetails(err error, details string) error {
 	return fmt.Errorf("%s: %w", details, err)
 }
 
-// CleanErrorMessage removes common verbose prefixes from error messages
-// to produce more concise error messages for the user
+// to produce more concise error messages for the user.
 func CleanErrorMessage(err error) string {
 	if err == nil {
 		return ""

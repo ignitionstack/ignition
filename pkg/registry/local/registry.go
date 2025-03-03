@@ -1,4 +1,4 @@
-package localRegistry
+package localregistry
 
 import (
 	"encoding/json"
@@ -132,7 +132,7 @@ func (r *localRegistry) DigestExists(namespace, name, digest string) (bool, erro
 	err := r.withReadTx(func(txn *badger.Txn) error {
 		var metadata *registry.FunctionMetadata
 		if err := r.getFunctionMetadata(txn, namespace, name, &metadata); err != nil {
-			if err == registry.ErrFunctionNotFound {
+			if errors.Is(err, registry.ErrFunctionNotFound) {
 				// If the function doesn't exist, the digest doesn't exist either
 				exists = false
 				return nil
@@ -194,13 +194,13 @@ func (r *localRegistry) withWriteTx(fn func(txn *badger.Txn) error) error {
 	return r.dbRepo.Update(fn)
 }
 
-// getFunctionMetadata retrieves a function's metadata from the database
+// getFunctionMetadata retrieves a function's metadata from the database.
 func (r *localRegistry) getFunctionMetadata(txn *badger.Txn, namespace, name string, metadata **registry.FunctionMetadata) error {
 	key := buildFunctionKey(namespace, name)
 
 	// Try to get the item from the database
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		return registry.ErrFunctionNotFound
 	}
 	if err != nil {
@@ -217,13 +217,13 @@ func (r *localRegistry) getFunctionMetadata(txn *badger.Txn, namespace, name str
 	})
 }
 
-// getOrCreateMetadata gets a function's metadata or creates it if it doesn't exist
+// getOrCreateMetadata gets a function's metadata or creates it if it doesn't exist.
 func (r *localRegistry) getOrCreateMetadata(txn *badger.Txn, namespace, name string) (*registry.FunctionMetadata, error) {
 	key := buildFunctionKey(namespace, name)
 
 	// Try to get existing metadata
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		// Create new metadata if it doesn't exist
 		return &registry.FunctionMetadata{
 			Namespace: namespace,
@@ -249,7 +249,7 @@ func (r *localRegistry) getOrCreateMetadata(txn *badger.Txn, namespace, name str
 	return &metadata, nil
 }
 
-// updateMetadata writes updated metadata to the database
+// updateMetadata writes updated metadata to the database.
 func (r *localRegistry) updateMetadata(txn *badger.Txn, namespace, name string, metadata *registry.FunctionMetadata) error {
 	key := buildFunctionKey(namespace, name)
 
@@ -270,7 +270,7 @@ func (r *localRegistry) updateMetadata(txn *badger.Txn, namespace, name string, 
 	return nil
 }
 
-// versionExists checks if a version with the given digest exists
+// versionExists checks if a version with the given digest exists.
 func (r *localRegistry) versionExists(metadata *registry.FunctionMetadata, shortDigest string) bool {
 	for _, v := range metadata.Versions {
 		if v.Hash == shortDigest {
@@ -280,7 +280,7 @@ func (r *localRegistry) versionExists(metadata *registry.FunctionMetadata, short
 	return false
 }
 
-// pullByDigest retrieves a function by its digest
+// pullByDigest retrieves a function by its digest.
 func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byte, *registry.VersionInfo, error) {
 	// Build the path to the WASM file
 	path := r.storage.BuildWASMPath(namespace, name, shortDigest)
@@ -320,7 +320,7 @@ func (r *localRegistry) pullByDigest(namespace, name, shortDigest string) ([]byt
 	return wasmBytes, versionInfo, nil
 }
 
-// pullByTag retrieves a function by its tag
+// pullByTag retrieves a function by its tag.
 func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, *registry.VersionInfo, error) {
 	var wasmBytes []byte
 	var versionInfo *registry.VersionInfo
@@ -360,7 +360,7 @@ func (r *localRegistry) pullByTag(namespace, name, tag string) ([]byte, *registr
 	return wasmBytes, versionInfo, nil
 }
 
-// buildFunctionKey creates a database key for a function
+// buildFunctionKey creates a database key for a function.
 func buildFunctionKey(namespace, name string) []byte {
 	return []byte(fmt.Sprintf("func:%s/%s", namespace, name))
 }

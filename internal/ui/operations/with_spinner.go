@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"errors"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,7 +41,11 @@ func WithSpinner(message string, operation OperationFunc, display DisplayFunc) e
 		return err
 	}
 
-	finalModel := model.(spinner.SpinnerModel)
+	finalModel, ok := model.(spinner.Model)
+	if !ok {
+		return errors.New("program finished with invalid model")
+	}
+
 	if finalModel.HasError() {
 		return finalModel.GetError()
 	}

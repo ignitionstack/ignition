@@ -41,12 +41,12 @@ Key capabilities:
   ignition function list`,
 }
 
-// Container holds the dependency injection container
+// Container holds the dependency injection container.
 var Container = di.NewContainer()
 
 func Execute() {
 	// Add logo display to root command with pre-run hook
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
 		// Skip logo for help commands and plain output
 		if cmd.Name() == "help" || cmd.Name() == "completion" {
 			return

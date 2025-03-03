@@ -12,8 +12,7 @@ import (
 	"github.com/muesli/reflow/indent"
 )
 
-// cleanErrorMessage removes common prefixes from error messages to provide
-// more concise and user-friendly error messages
+// more concise and user-friendly error messages.
 func cleanErrorMessage(errMsg string) string {
 	prefixes := []string{
 		"Build failed: ",
@@ -41,8 +40,8 @@ func cleanErrorMessage(errMsg string) string {
 	return errMsg
 }
 
-// SpinnerModel represents an interactive spinner with state
-type SpinnerModel struct {
+// Model represents an interactive spinner with state.
+type Model struct {
 	spinner       spinner.Model
 	step          string
 	steps         []string
@@ -55,55 +54,55 @@ type SpinnerModel struct {
 	progressValue int
 }
 
-// HasError checks if the spinner has an error
-func (m SpinnerModel) HasError() bool {
+// HasError checks if the spinner has an error.
+func (m Model) HasError() bool {
 	return m.err != nil
 }
 
-// HasResult checks if the spinner has a result
-func (m SpinnerModel) HasResult() bool {
+// HasResult checks if the spinner has a result.
+func (m Model) HasResult() bool {
 	return m.result != nil
 }
 
-// SetResult sets the result and marks the spinner as done
-func (m *SpinnerModel) SetResult(result interface{}) {
+// Note: This should only be used outside of tea.Model Update cycle.
+func SetResult(m *Model, result interface{}) {
 	m.result = result
 }
 
-// GetResult returns the spinner result
-func (m SpinnerModel) GetResult() interface{} {
+// GetResult returns the spinner result.
+func (m Model) GetResult() interface{} {
 	return m.result
 }
 
-// GetError returns the spinner error
-func (m SpinnerModel) GetError() error {
+// GetError returns the spinner error.
+func (m Model) GetError() error {
 	return m.err
 }
 
-// AddStep adds a step to the history
-func (m *SpinnerModel) AddStep(step string) {
+// Note: This should only be used outside of tea.Model Update cycle.
+func AddStep(m *Model, step string) {
 	m.steps = append(m.steps, step)
 }
 
-// SetProgress sets the progress value for progress indicators
-func (m *SpinnerModel) SetProgress(value, max int) {
+// Note: This should only be used outside of tea.Model Update cycle.
+func SetProgress(m *Model, value, progressMax int) {
 	m.progressValue = value
-	m.progressMax = max
+	m.progressMax = progressMax
 	m.showProgress = true
 }
 
-// SetDone marks the spinner as done
-func (m *SpinnerModel) SetDone() {
+// Note: This should only be used outside of tea.Model Update cycle.
+func SetDone(m *Model) {
 	m.done = true
 }
 
-// NewSpinnerModel creates a default spinner model
-func NewSpinnerModel() SpinnerModel {
+// NewSpinnerModel creates a default spinner model.
+func NewSpinnerModel() Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot // Default spinner style
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.InfoColor))
 
-	return SpinnerModel{
+	return Model{
 		spinner:   s,
 		step:      "Starting...",
 		steps:     []string{},
@@ -111,8 +110,8 @@ func NewSpinnerModel() SpinnerModel {
 	}
 }
 
-// NewSpinnerModelWithMessage creates a spinner model with a custom initial message
-func NewSpinnerModelWithMessage(message string) SpinnerModel {
+// NewSpinnerModelWithMessage creates a spinner model with a custom initial message.
+func NewSpinnerModelWithMessage(message string) Model {
 	s := spinner.New()
 
 	// Use line spinner for a more modern feel
@@ -120,7 +119,7 @@ func NewSpinnerModelWithMessage(message string) SpinnerModel {
 
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.PrimaryColor))
 
-	return SpinnerModel{
+	return Model{
 		spinner:   s,
 		step:      message,
 		steps:     []string{message},
@@ -128,14 +127,14 @@ func NewSpinnerModelWithMessage(message string) SpinnerModel {
 	}
 }
 
-// Init initializes the spinner model
-func (m SpinnerModel) Init() tea.Cmd {
+// Init initializes the spinner model.
+func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 	)
 }
 
-// Message types for spinner communication
+// Message types for spinner communication.
 type ResultMsg struct {
 	Result interface{}
 }
@@ -153,8 +152,8 @@ type ProgressMsg struct {
 	Max   int
 }
 
-// Update handles spinner state updates
-func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update handles spinner state updates.
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "q" || msg.String() == "ctrl+c" {
@@ -162,26 +161,29 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case error:
-		m.err = msg
-		m.done = true
-		return m, tea.Sequence(
+		newModel := m
+		newModel.err = msg
+		newModel.done = true
+		return newModel, tea.Sequence(
 			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s %s", ui.ErrorSymbol, cleanErrorMessage(msg.Error())))),
 			tea.Quit,
 		)
 
 	case ErrorMsg:
-		m.err = msg.Err
-		m.done = true
-		return m, tea.Sequence(
+		newModel := m
+		newModel.err = msg.Err
+		newModel.done = true
+		return newModel, tea.Sequence(
 			tea.Printf("%s", ui.ErrorStyle.Bold(true).Render(fmt.Sprintf("\n%s %s", ui.ErrorSymbol, cleanErrorMessage(msg.Err.Error())))),
 			tea.Quit,
 		)
 
 	case DoneMsg:
-		m.result = msg.Result
-		m.done = true
+		newModel := m
+		newModel.result = msg.Result
+		newModel.done = true
 		duration := time.Since(m.startTime).Round(time.Millisecond)
-		return m, tea.Sequence(
+		return newModel, tea.Sequence(
 			tea.Printf("\n%s %s %s",
 				ui.SuccessStyle.Bold(true).Render(ui.SuccessSymbol),
 				ui.SuccessStyle.Render("Done!"),
@@ -190,10 +192,11 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case ResultMsg:
-		m.result = msg.Result
-		m.done = true
+		newModel := m
+		newModel.result = msg.Result
+		newModel.done = true
 		duration := time.Since(m.startTime).Round(time.Millisecond)
-		return m, tea.Sequence(
+		return newModel, tea.Sequence(
 			tea.Printf("\n%s %s %s",
 				ui.SuccessStyle.Bold(true).Render(ui.SuccessSymbol),
 				ui.SuccessStyle.Render("Done!"),
@@ -202,31 +205,34 @@ func (m SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case ProgressMsg:
-		m.progressValue = msg.Value
-		m.progressMax = msg.Max
-		m.showProgress = true
+		newModel := m
+		newModel.progressValue = msg.Value
+		newModel.progressMax = msg.Max
+		newModel.showProgress = true
 		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		newModel.spinner, cmd = m.spinner.Update(msg)
+		return newModel, cmd
 
 	case string:
-		m.step = msg
-		m.AddStep(msg)
+		newModel := m
+		newModel.step = msg
+		newModel.steps = append(newModel.steps, msg)
 		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		newModel.spinner, cmd = m.spinner.Update(msg)
+		return newModel, cmd
 
 	default:
+		newModel := m
 		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		newModel.spinner, cmd = m.spinner.Update(msg)
+		return newModel, cmd
 	}
 
 	return m, nil
 }
 
-// renderProgressBar creates a visual progress bar
-func (m SpinnerModel) renderProgressBar() string {
+// renderProgressBar creates a visual progress bar.
+func (m Model) renderProgressBar() string {
 	if !m.showProgress || m.progressMax <= 0 {
 		return ""
 	}
@@ -242,12 +248,15 @@ func (m SpinnerModel) renderProgressBar() string {
 
 	// Create the progress bar characters
 	bar := "["
-	for i := 0; i < width; i++ {
-		if i < filled {
+
+	// Using a switch statement instead of if-else chain
+	for i := range width {
+		switch {
+		case i < filled:
 			bar += "="
-		} else if i == filled {
+		case i == filled:
 			bar += ">"
-		} else {
+		default:
 			bar += " "
 		}
 	}
@@ -259,8 +268,8 @@ func (m SpinnerModel) renderProgressBar() string {
 	return "\n" + ui.InfoStyle.Render(bar)
 }
 
-// renderStepHistory shows recent steps
-func (m SpinnerModel) renderStepHistory() string {
+// renderStepHistory shows recent steps.
+func (m Model) renderStepHistory() string {
 	// Show only the last few steps
 	maxSteps := 3
 	if len(m.steps) <= 1 {
@@ -285,8 +294,8 @@ func (m SpinnerModel) renderStepHistory() string {
 	return history
 }
 
-// View renders the spinner model
-func (m SpinnerModel) View() string {
+// View renders the spinner model.
+func (m Model) View() string {
 	if m.err != nil || m.done {
 		return ""
 	}

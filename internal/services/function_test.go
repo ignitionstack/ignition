@@ -11,16 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockBuilderFactory is a test implementation of BuilderFactory
+// mockBuilderFactory is a test implementation of BuilderFactory.
 type mockBuilderFactory struct {
 	mockBuilder builders.Builder
 }
 
-func (f *mockBuilderFactory) GetBuilder(language string) (builders.Builder, error) {
+func (f *mockBuilderFactory) GetBuilder(_ string) (builders.Builder, error) {
 	return f.mockBuilder, nil
 }
 
-// mockBuilder is a test implementation of builders.Builder
+// mockBuilder is a test implementation of builders.Builder.
 type mockBuilder struct {
 	buildFunc              func(path string) (*builders.BuildResult, error)
 	verifyDependenciesFunc func() error
@@ -132,7 +132,7 @@ func TestBuildFunction_WithMock(t *testing.T) {
 
 	// Create a mock builder that returns our test WASM file
 	mockBuilder := &mockBuilder{
-		buildFunc: func(path string) (*builders.BuildResult, error) {
+		buildFunc: func(_ string) (*builders.BuildResult, error) {
 			return &builders.BuildResult{
 				OutputPath: wasmPath,
 			}, nil
@@ -264,7 +264,7 @@ func TestGetTemplateURL(t *testing.T) {
 			if test.expectError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, test.expectedURL, url)
 			}
 		})

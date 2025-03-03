@@ -78,8 +78,11 @@ func TestLoadFunction(t *testing.T) {
 	engine, tmpDir := setupTestEngine(t)
 	defer cleanupTest(tmpDir)
 
+	// Create context for loading
+	ctx := t.Context()
+
 	// Test loading non-existent function
-	err := engine.LoadFunction("test-namespace", "non-existent", "latest", nil)
+	err := engine.LoadFunctionWithContext(ctx, "test-namespace", "non-existent", "latest", nil)
 	assert.Error(t, err)
 
 	// Verify no plugin was loaded
@@ -91,8 +94,11 @@ func TestCallFunction(t *testing.T) {
 	engine, tmpDir := setupTestEngine(t)
 	defer cleanupTest(tmpDir)
 
+	// Create context for function call
+	ctx := t.Context()
+
 	// Test calling non-existent function
-	output, err := engine.CallFunction("test-namespace", "non-existent", "test", []byte("test-payload"))
+	output, err := engine.CallFunctionWithContext(ctx, "test-namespace", "non-existent", "test", []byte("test-payload"))
 	assert.Error(t, err)
 	assert.Equal(t, ErrFunctionNotLoaded, err)
 	assert.Nil(t, output)
@@ -131,12 +137,15 @@ func TestIntegration(t *testing.T) {
 	require.Error(t, err) // Expected error since we don't have actual build implementation
 
 	if buildResult != nil {
+		// Create context for operations
+		ctx := t.Context()
+
 		// Load function
-		err = engine.LoadFunction("test-namespace", "test-function", "latest", nil)
+		err = engine.LoadFunctionWithContext(ctx, "test-namespace", "test-function", "latest", nil)
 		require.Error(t, err) // Expected error since build failed
 
 		// Call function
-		output, err := engine.CallFunction("test-namespace", "test-function", "test", []byte("test-payload"))
+		output, err := engine.CallFunctionWithContext(ctx, "test-namespace", "test-function", "test", []byte("test-payload"))
 		assert.Error(t, err)
 		assert.Nil(t, output)
 

@@ -1,7 +1,6 @@
-package localRegistry
+package localregistry
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,7 +43,7 @@ func TestReadWASMFile(t *testing.T) {
 		nonexistentPath := filepath.Join(tmpDir, "nonexistent.wasm")
 		_, err := storage.ReadWASMFile(nonexistentPath)
 		require.Error(t, err, "expected error for nonexistent file")
-		assert.True(t, errors.Is(err, registry.ErrFunctionNotFound), "error should be ErrFunctionNotFound")
+		assert.ErrorIs(t, err, registry.ErrFunctionNotFound, "error should be ErrFunctionNotFound")
 	})
 
 	t.Run("read with permission error", func(t *testing.T) {

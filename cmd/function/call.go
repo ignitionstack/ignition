@@ -2,6 +2,7 @@ package function
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,7 +47,7 @@ The command requires a running engine to execute the function.`,
   # Call using function digest instead of tag
   ignition call default/hello-world:d7a8fbb307d7809469ca9abcb0082e4f`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			namespace, name, reference, err := parseNamespaceAndName(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid function name format: %w", err)
@@ -87,7 +88,12 @@ The command requires a running engine to execute the function.`,
 				return fmt.Errorf("failed to encode request: %w", err)
 			}
 
-			resp, err := client.Post("http://unix/call-once", "application/json", bytes.NewBuffer(reqBytes))
+			httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://unix/call-once", bytes.NewBuffer(reqBytes))
+			if err != nil {
+				return fmt.Errorf("failed to create request: %w", err)
+			}
+			httpReq.Header.Set("Content-Type", "application/json")
+			resp, err := client.Do(httpReq)
 			if err != nil {
 				return fmt.Errorf("failed to call function: %w", err)
 			}

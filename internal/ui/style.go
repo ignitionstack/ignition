@@ -8,14 +8,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Modern, consistent color scheme inspired by developer tools
+// Modern, consistent color scheme inspired by developer tools.
 var (
-	// Primary colors
+	// Primary colors.
 	PrimaryColor   = "#7C3AED" // Vibrant purple
 	SecondaryColor = "#2563EB" // Deep blue
 	TertiaryColor  = "#10B981" // Emerald green
 
-	// Status colors
+	// Status colors.
 	SuccessColor  = "#10B981" // Emerald green
 	ErrorColor    = "#EF4444" // Red
 	WarningColor  = "#F59E0B" // Amber
@@ -25,7 +25,7 @@ var (
 	PendingColor  = "#F59E0B" // Amber for pending status
 	UnloadedColor = "#9CA3AF" // Light gray for unloaded status
 
-	// Text colors
+	// Text colors.
 	HeaderColor  = "#F9FAFB" // Near white
 	TextColor    = "#E5E7EB" // Light gray
 	DimTextColor = "#9CA3AF" // Dimmed gray
@@ -34,7 +34,7 @@ var (
 	AccentColor  = "#8B5CF6" // For backward compatibility
 	SelectColor  = "#FFFFFF" // For backward compatibility
 
-	// Border and accents
+	// Border and accents.
 	BorderColor        = "#374151" // Dark gray border
 	HighlightColor     = "#8B5CF6" // Bright purple for highlights
 	SelectionColor     = "#1F2937" // Dark blue-gray for selections
@@ -46,9 +46,9 @@ var (
 // Currently not used but kept here for reference
 // Example: termenv.ColorProfile() != termenv.Ascii
 
-// Style definitions
+// Style definitions.
 var (
-	// Base styles
+	// Base styles.
 	BaseStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(TextColor)).
 			Padding(0, 0, 1, 2)
@@ -57,7 +57,7 @@ var (
 			Foreground(lipgloss.Color(HeaderColor)).
 			Bold(true)
 
-	// Semantic styles
+		// Semantic styles.
 	SuccessStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(SuccessColor))
 
@@ -77,7 +77,7 @@ var (
 			Foreground(lipgloss.Color(LinkColor)).
 			Underline(true)
 
-	// For backwards compatibility
+		// For backwards compatibility.
 	Highlight = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(AccentColor)).
 			Bold(true)
@@ -85,7 +85,7 @@ var (
 	SelectStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(SelectColor))
 
-	// Component styles
+		// Component styles.
 	TitleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(PrimaryColor)).
 			Bold(true).
@@ -108,7 +108,7 @@ var (
 			MarginTop(1).
 			MarginBottom(1)
 
-	// Table styles
+		// Table styles.
 	TableHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color(HeaderColor))
@@ -116,7 +116,7 @@ var (
 	TableRowStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(TextColor))
 
-	// Status styles
+		// Status styles.
 	RunningStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(RunningColor))
 
@@ -127,7 +127,7 @@ var (
 			Foreground(lipgloss.Color(PendingColor))
 )
 
-// Terminal width detection (for responsive layouts)
+// Terminal width detection (for responsive layouts).
 func TerminalWidth() int {
 	// Safe default for terminals
 	width := 80
@@ -137,12 +137,12 @@ func TerminalWidth() int {
 	return width
 }
 
-// Check if we're in a CI environment
+// Check if we're in a CI environment.
 func IsCI() bool {
 	return os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" || os.Getenv("TRAVIS") != ""
 }
 
-// Center text on the terminal line
+// Center text on the terminal line.
 func CenterText(text string) string {
 	width := TerminalWidth()
 	fmtWidth := len(text)
@@ -153,7 +153,7 @@ func CenterText(text string) string {
 	return fmt.Sprintf("%s%s", strings.Repeat(" ", padding), text)
 }
 
-// Truncate a string to fit the given width with ellipsis
+// Truncate a string to fit the given width with ellipsis.
 func TruncateWithEllipsis(s string, width int) string {
 	if len(s) <= width {
 		return s
