@@ -10,6 +10,7 @@ import (
 	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/pkg/engine"
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	localRegistry "github.com/ignitionstack/ignition/pkg/registry/local"
 	"go.uber.org/fx"
@@ -100,7 +101,7 @@ var Module = fx.Options(
 		// Engine logger
 		fx.Annotate(
 			NewEngineLogger,
-			fx.As(new(engine.Logger)),
+			fx.As(new(logging.Logger)),
 		),
 	),
 
@@ -133,7 +134,7 @@ type EngineParams struct {
 	Registry        registry.Registry
 	FunctionService services.FunctionService
 	Config          AppConfig
-	Logger          engine.Logger
+	Logger          logging.Logger
 }
 
 func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
@@ -169,7 +170,7 @@ func NewZapBaseLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	return zapLogger, nil
 }
 
-func NewEngineLogger(baseLogger *zap.Logger) engine.Logger {
+func NewEngineLogger(baseLogger *zap.Logger) logging.Logger {
 	// Create a specialized logger for engine with higher verbosity
 	config := zap.NewDevelopmentConfig()
 

@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
+	"github.com/ignitionstack/ignition/pkg/engine/components"
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	"github.com/ignitionstack/ignition/pkg/types"
 )
@@ -18,12 +19,12 @@ import (
 // Handlers contains HTTP handlers for engine endpoints
 type Handlers struct {
 	engine    *Engine
-	logger    Logger
+	logger    logging.Logger
 	validator *validator.Validate
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(engine *Engine, logger Logger) *Handlers {
+func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	return &Handlers{
 		engine:    engine,
 		logger:    logger,
@@ -177,11 +178,11 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list loaded functions")
 
-	// Get all loaded functions
-	h.engine.pluginsMux.RLock()
-	loadedFunctions := make([]types.LoadedFunction, 0, len(h.engine.plugins))
+	// Get list of loaded functions from the plugin manager
+	functionKeys := h.engine.pluginManager.ListLoadedFunctions()
 
-	for key := range h.engine.plugins {
+	loadedFunctions := make([]types.LoadedFunction, 0, len(functionKeys))
+	for _, key := range functionKeys {
 		parts := strings.Split(key, "/")
 		if len(parts) == 2 {
 			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
@@ -190,7 +191,6 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 			})
 		}
 	}
-	h.engine.pluginsMux.RUnlock()
 
 	return h.writeJSONResponse(w, loadedFunctions)
 }
@@ -326,22 +326,8 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 
-	// Create a manifest for the function
-	manifest := extism.Manifest{
-		AllowedHosts: versionInfo.Settings.AllowedUrls,
-		Wasm: []extism.Wasm{
-			extism.WasmData{Data: wasmBytes},
-		},
-		Config: req.Config,
-	}
-
-	// Create and configure the plugin
-	pluginConfig := extism.PluginConfig{
-		EnableWasi: versionInfo.Settings.Wasi,
-	}
-
-	// Initialize the plugin
-	plugin, err := extism.NewPlugin(context.Background(), manifest, pluginConfig, []extism.HostFunction{})
+	// Initialize the plugin using our helper function
+	plugin, err := components.CreatePlugin(wasmBytes, versionInfo, req.Config)
 	if err != nil {
 		return NewInternalServerError(fmt.Sprintf("Failed to initialize plugin: %v", err))
 	}
@@ -381,10 +367,12 @@ func (h *Handlers) handleReassignTag(w http.ResponseWriter, r *http.Request) err
 
 // handleStatus returns the current status of the engine
 func (h *Handlers) handleStatus(w http.ResponseWriter, r *http.Request) error {
-	// In a real implementation, this would gather actual metrics
+	// Get the count of loaded functions from the plugin manager
+	loadedCount := h.engine.pluginManager.GetLoadedFunctionCount()
+
 	status := map[string]interface{}{
 		"status":           "running",
-		"loaded_functions": len(h.engine.plugins),
+		"loaded_functions": loadedCount,
 	}
 
 	return h.writeJSONResponse(w, status)
@@ -424,12 +412,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 	h.logger.Printf("Received logs request for function: %s/%s", namespace, name)
 
 	// Check if function exists and is loaded
-	functionKey := getFunctionKey(namespace, name)
-	h.engine.pluginsMux.RLock()
-	_, exists := h.engine.plugins[functionKey]
-	h.engine.pluginsMux.RUnlock()
-
-	if !exists {
+	if !h.engine.IsLoaded(namespace, name) {
 		return NewNotFoundError(fmt.Sprintf("Function %s/%s is not loaded", namespace, name))
 	}
 
@@ -468,7 +451,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 
 // getEngineLogs retrieves logs for a specific function from the engine's log store
 func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
-	functionKey := getFunctionKey(namespace, name)
+	functionKey := components.GetFunctionKey(namespace, name)
 
 	// Retrieve logs from the engine's log store
 	logs := h.engine.logStore.GetLogs(functionKey, since, tail)

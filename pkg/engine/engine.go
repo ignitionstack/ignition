@@ -5,64 +5,47 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
-	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/internal/services"
+	"github.com/ignitionstack/ignition/pkg/engine/components"
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	localRegistry "github.com/ignitionstack/ignition/pkg/registry/local"
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-type CircuitBreaker struct {
-	failures         int
-	lastFailure      time.Time
-	state            string
-	failureThreshold int
-	resetTimeout     time.Duration
-	mutex            sync.RWMutex
-}
+// Alias logging levels for backward compatibility
+const (
+	LevelInfo    = logging.LevelInfo
+	LevelWarning = logging.LevelWarning
+	LevelError   = logging.LevelError
+	LevelDebug   = logging.LevelDebug
+)
 
 type Engine struct {
 	registry        registry.Registry
 	functionService services.FunctionService
-	plugins         map[string]*extism.Plugin
-	pluginsMux      sync.RWMutex
 	socketPath      string
 	httpAddr        string
-	logger          Logger
+	logger          logging.Logger
 	initialized     bool
-
-	pluginLastUsed map[string]time.Time
-	ttlDuration    time.Duration
-	cleanupTicker  *time.Ticker
-
 	defaultTimeout  time.Duration
-	circuitBreakers map[string]*CircuitBreaker
-	cbMux           sync.RWMutex
+	logStore        *logging.FunctionLogStore
 
-	logStore *FunctionLogStore
-
-	// Track each function's current digest and configuration
-	pluginDigests map[string]string
-	pluginConfigs map[string]map[string]string
-
-	// Track functions that were previously loaded (even after unload)
-	previouslyLoaded    map[string]bool
-	previouslyLoadedMux sync.RWMutex
+	pluginManager   *components.PluginManager
+	circuitBreakers *components.CircuitBreakerManager
 }
 
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
-	logger := NewStdLogger(os.Stdout)
-
+	logger := logging.NewStdLogger(os.Stdout)
 	return NewEngineWithLogger(socketPath, httpAddr, registryDir, logger)
 }
 
-func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger Logger) (*Engine, error) {
+func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger logging.Logger) (*Engine, error) {
 	registry, err := setupRegistry(registryDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup registry: %w", err)
@@ -84,26 +67,23 @@ func NewEngineWithDependencies(
 	httpAddr string,
 	registry registry.Registry,
 	functionService services.FunctionService,
-	logger Logger,
+	logger logging.Logger,
 ) *Engine {
+	pluginOptions := components.DefaultPluginOptions()
+	pluginManager := components.NewPluginManager(logger, pluginOptions)
+	circuitBreakerManager := components.NewCircuitBreakerManager()
+
 	return &Engine{
 		registry:        registry,
 		functionService: functionService,
-		plugins:         make(map[string]*extism.Plugin),
 		socketPath:      socketPath,
 		httpAddr:        httpAddr,
 		logger:          logger,
 		initialized:     true,
-
-		pluginLastUsed:  make(map[string]time.Time),
-		ttlDuration:     1 * time.Minute,
 		defaultTimeout:  30 * time.Second,
-		circuitBreakers: make(map[string]*CircuitBreaker),
-		logStore:        NewFunctionLogStore(1000),
-
-		pluginDigests:    make(map[string]string),
-		pluginConfigs:    make(map[string]map[string]string),
-		previouslyLoaded: make(map[string]bool),
+		logStore:        logging.NewFunctionLogStore(1000),
+		pluginManager:   pluginManager,
+		circuitBreakers: circuitBreakerManager,
 	}
 }
 
@@ -126,17 +106,10 @@ func (e *Engine) Start() error {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	defer func() {
-		e.logger.Printf("Engine Start function exiting, stopping cleanup goroutine")
-		if e.cleanupTicker != nil {
-			e.cleanupTicker.Stop()
-		}
-		cancel()
-	}()
-
-	e.cleanupTicker = time.NewTicker(5 * time.Minute)
-	go e.cleanupUnusedPlugins(ctx)
+	// Start the plugin manager's cleanup routine
+	e.pluginManager.StartCleanup(ctx)
 
 	handlers := NewHandlers(e, e.logger)
 	server := NewServer(e.socketPath, e.httpAddr, handlers, e.logger)
@@ -144,162 +117,37 @@ func (e *Engine) Start() error {
 	return server.Start()
 }
 
-func (e *Engine) cleanupUnusedPlugins(ctx context.Context) {
-	e.logger.Printf("Starting plugin cleanup goroutine")
-
-	for {
-		select {
-		case <-e.cleanupTicker.C:
-			e.logger.Printf("Running plugin cleanup")
-			e.pluginsMux.Lock()
-			now := time.Now()
-			for key, lastUsed := range e.pluginLastUsed {
-				if now.Sub(lastUsed) > e.ttlDuration {
-					if plugin, exists := e.plugins[key]; exists {
-						plugin.Close(context.TODO())
-						delete(e.plugins, key)
-						delete(e.pluginLastUsed, key)
-						delete(e.pluginDigests, key)
-
-						e.logger.Printf("Plugin %s unloaded due to inactivity, preserving configuration for potential reload", key)
-					}
-				}
-			}
-			e.pluginsMux.Unlock()
-
-		case <-ctx.Done():
-			e.logger.Printf("Cleanup goroutine received shutdown signal")
-			return
-		}
-	}
-}
-
-func getFunctionKey(namespace, name string) string {
-	return fmt.Sprintf("%s/%s", namespace, name)
-}
-
 func (e *Engine) IsLoaded(namespace, name string) bool {
-	functionKey := getFunctionKey(namespace, name)
-
-	e.pluginsMux.RLock()
-	_, exists := e.plugins[functionKey]
-	e.pluginsMux.RUnlock()
-
-	return exists
+	functionKey := components.GetFunctionKey(namespace, name)
+	return e.pluginManager.IsPluginLoaded(functionKey)
 }
 
 func (e *Engine) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
-	functionKey := getFunctionKey(namespace, name)
-
-	e.previouslyLoadedMux.RLock()
-	wasLoaded, exists := e.previouslyLoaded[functionKey]
-	e.previouslyLoadedMux.RUnlock()
-
-	// Get the last known config for this function
-	var config map[string]string
-	e.pluginsMux.RLock()
-	lastConfig, hasConfig := e.pluginConfigs[functionKey]
-	if hasConfig {
-		// Make a copy of the config
-		config = make(map[string]string, len(lastConfig))
-		for k, v := range lastConfig {
-			config[k] = v
-		}
-	}
-	e.pluginsMux.RUnlock()
-
-	return exists && wasLoaded, config
+	functionKey := components.GetFunctionKey(namespace, name)
+	return e.pluginManager.WasPreviouslyLoaded(functionKey)
 }
 
 func (e *Engine) GetRegistry() registry.Registry {
 	return e.registry
 }
 
-func newCircuitBreaker() *CircuitBreaker {
-	return &CircuitBreaker{
-		failures:         0,
-		state:            "closed",
-		failureThreshold: 5,
-		resetTimeout:     30 * time.Second,
-	}
-}
-
-func (cb *CircuitBreaker) recordSuccess() {
-	cb.mutex.Lock()
-	defer cb.mutex.Unlock()
-
-	if cb.state == "half-open" {
-		cb.failures = 0
-		cb.state = "closed"
-	}
-}
-
-func (cb *CircuitBreaker) recordFailure() bool {
-	cb.mutex.Lock()
-	defer cb.mutex.Unlock()
-
-	cb.failures++
-	cb.lastFailure = time.Now()
-
-	if cb.state == "closed" && cb.failures >= cb.failureThreshold {
-		cb.state = "open"
-	}
-
-	return cb.state == "open"
-}
-
-func (cb *CircuitBreaker) isOpen() bool {
-	cb.mutex.RLock()
-	defer cb.mutex.RUnlock()
-
-	if cb.state == "open" {
-		if time.Since(cb.lastFailure) > cb.resetTimeout {
-			cb.mutex.RUnlock()
-			cb.mutex.Lock()
-			cb.state = "half-open"
-			cb.mutex.Unlock()
-			cb.mutex.RLock()
-			return false
-		}
-		return true
-	}
-
-	return false
-}
-
 func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte) ([]byte, error) {
-	functionKey := getFunctionKey(namespace, name)
+	functionKey := components.GetFunctionKey(namespace, name)
 
-	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Function call: %s with payload size %d bytes", entrypoint, len(payload)))
+	e.logStore.AddLog(functionKey, logging.LevelInfo, fmt.Sprintf("Function call: %s with payload size %d bytes", entrypoint, len(payload)))
 
-	e.cbMux.RLock()
-	cb, cbExists := e.circuitBreakers[functionKey]
-	e.cbMux.RUnlock()
-
-	if !cbExists {
-		e.cbMux.Lock()
-		cb = newCircuitBreaker()
-		e.circuitBreakers[functionKey] = cb
-		e.cbMux.Unlock()
-	}
-
-	if cb.isOpen() {
+	cb := e.circuitBreakers.GetCircuitBreaker(functionKey)
+	if cb.IsOpen() {
 		errMsg := fmt.Sprintf("Circuit breaker is open for function %s", functionKey)
-		e.logStore.AddLog(functionKey, LevelError, errMsg)
+		e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
 		return nil, fmt.Errorf("%s", errMsg)
 	}
 
-	e.pluginsMux.RLock()
-	plugin, ok := e.plugins[functionKey]
-	if ok {
-		e.pluginLastUsed[functionKey] = time.Now()
-	} else {
-		e.pluginsMux.RUnlock()
-		e.logStore.AddLog(functionKey, LevelError, "Function not loaded")
+	plugin, ok := e.pluginManager.GetPlugin(functionKey)
+	if !ok {
+		e.logStore.AddLog(functionKey, logging.LevelError, "Function not loaded")
 		return nil, ErrFunctionNotLoaded
 	}
-	e.pluginsMux.RUnlock()
-
 	ctx, cancel := context.WithTimeout(context.Background(), e.defaultTimeout)
 	defer cancel()
 
@@ -321,7 +169,7 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
-			isOpen := cb.recordFailure()
+			isOpen := cb.RecordFailure()
 			errMsg := fmt.Sprintf("Failed to call function: %v", result.err)
 			e.logStore.AddLog(functionKey, LevelError, errMsg)
 
@@ -339,11 +187,11 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 			fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
 				entrypoint, execTime, len(result.output)))
 
-		cb.recordSuccess()
+		cb.RecordSuccess()
 		return result.output, nil
 
 	case <-ctx.Done():
-		isOpen := cb.recordFailure()
+		isOpen := cb.RecordFailure()
 		errMsg := fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
 		e.logStore.AddLog(functionKey, LevelError, errMsg)
 
@@ -359,14 +207,9 @@ func (e *Engine) CallFunction(namespace, name, entrypoint string, payload []byte
 
 func (e *Engine) LoadFunction(namespace, name, identifier string, config map[string]string) error {
 	e.logger.Printf("Loading function: %s/%s (identifier: %s)", namespace, name, identifier)
-	functionKey := getFunctionKey(namespace, name)
+	functionKey := components.GetFunctionKey(namespace, name)
 
 	e.logStore.AddLog(functionKey, LevelInfo, fmt.Sprintf("Loading function with identifier: %s", identifier))
-
-	// Mark the function as having been loaded before
-	e.previouslyLoadedMux.Lock()
-	e.previouslyLoaded[functionKey] = true
-	e.previouslyLoadedMux.Unlock()
 
 	// Create a copy of the config map
 	configCopy := make(map[string]string)
@@ -388,58 +231,26 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 
 	actualDigest := versionInfo.FullDigest
 
-	e.pluginsMux.RLock()
-	_, alreadyLoaded := e.plugins[functionKey]
+	// Check if already loaded with same digest and config
+	alreadyLoaded := e.pluginManager.IsPluginLoaded(functionKey)
 
 	if alreadyLoaded {
-		currentDigest, hasDigest := e.pluginDigests[functionKey]
-		currentConfig, hasConfig := e.pluginConfigs[functionKey]
-		e.pluginsMux.RUnlock()
-
-		digestChanged := hasDigest && currentDigest != actualDigest
-
-		configChanged := false
-		if hasConfig {
-
-			if len(currentConfig) != len(configCopy) {
-				configChanged = true
-			} else {
-
-				for k, v := range configCopy {
-					if currentValue, exists := currentConfig[k]; !exists || currentValue != v {
-						configChanged = true
-						break
-					}
-				}
-
-				if !configChanged {
-					for k := range currentConfig {
-						if _, exists := configCopy[k]; !exists {
-							configChanged = true
-							break
-						}
-					}
-				}
-			}
-		}
+		digestChanged := e.pluginManager.HasDigestChanged(functionKey, actualDigest)
+		configChanged := e.pluginManager.HasConfigChanged(functionKey, configCopy)
 
 		if !digestChanged && !configChanged {
 			e.logger.Printf("Function %s already loaded with same digest and config", functionKey)
 			e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded with same digest and config")
-
-			e.pluginsMux.Lock()
-			e.pluginLastUsed[functionKey] = time.Now()
-			e.pluginsMux.Unlock()
-
 			return nil
 		}
 
 		if digestChanged {
+			oldDigest, _ := e.pluginManager.GetPluginDigest(functionKey)
 			e.logger.Printf("Function %s digest changed from %s to %s, reloading",
-				functionKey, currentDigest, actualDigest)
+				functionKey, oldDigest, actualDigest)
 			e.logStore.AddLog(functionKey, LevelInfo,
 				fmt.Sprintf("Function digest changed from %s to %s, reloading",
-					currentDigest, actualDigest))
+					oldDigest, actualDigest))
 		}
 
 		if configChanged {
@@ -447,18 +258,16 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 			e.logStore.AddLog(functionKey, LevelInfo, "Function configuration changed, reloading")
 		}
 
-		if err := e.UnloadFunction(namespace, name); err != nil {
-			errMsg := fmt.Sprintf("Failed to unload function before reload: %v", err)
-			e.logger.Errorf(errMsg)
-			e.logStore.AddLog(functionKey, LevelError, errMsg)
-			return fmt.Errorf("failed to unload function before reload: %w", err)
-		}
-	} else {
-		e.pluginsMux.RUnlock()
+		// Remove the old plugin from the plugin manager
+		e.pluginManager.RemovePlugin(functionKey)
+
+		// Remove circuit breaker for this function
+		e.circuitBreakers.RemoveCircuitBreaker(functionKey)
 	}
 
+	// Create a new plugin instance
 	initStart := time.Now()
-	plugin, err := createPlugin(wasmBytes, versionInfo, configCopy)
+	plugin, err := components.CreatePlugin(wasmBytes, versionInfo, configCopy)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
 		e.logger.Errorf(errMsg)
@@ -468,47 +277,13 @@ func (e *Engine) LoadFunction(namespace, name, identifier string, config map[str
 	e.logStore.AddLog(functionKey, LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
-	e.pluginsMux.Lock()
-	defer e.pluginsMux.Unlock()
-
-	// Race condition check - another request might have loaded the function
-	if _, exists := e.plugins[functionKey]; exists {
-		plugin.Close(context.TODO())
-		e.logStore.AddLog(functionKey, LevelInfo, "Function already loaded by another request")
-		return nil
-	}
-
-	e.plugins[functionKey] = plugin
-	e.pluginLastUsed[functionKey] = time.Now()
-	e.pluginDigests[functionKey] = actualDigest
-	e.pluginConfigs[functionKey] = configCopy
-
-	e.cbMux.Lock()
-	if _, exists := e.circuitBreakers[functionKey]; !exists {
-		e.circuitBreakers[functionKey] = newCircuitBreaker()
-	}
-	e.cbMux.Unlock()
+	// Store the plugin in the plugin manager
+	e.pluginManager.StorePlugin(functionKey, plugin, actualDigest, configCopy)
 
 	successMsg := fmt.Sprintf("Function loaded successfully: %s", functionKey)
 	e.logger.Printf(successMsg)
 	e.logStore.AddLog(functionKey, LevelInfo, successMsg)
 	return nil
-}
-
-func createPlugin(wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
-	manifest := extism.Manifest{
-		AllowedHosts: versionInfo.Settings.AllowedUrls,
-		Wasm: []extism.Wasm{
-			extism.WasmData{Data: wasmBytes},
-		},
-		Config: config,
-	}
-
-	pluginConfig := extism.PluginConfig{
-		EnableWasi: versionInfo.Settings.Wasi,
-	}
-
-	return extism.NewPlugin(context.Background(), manifest, pluginConfig, []extism.HostFunction{})
 }
 
 func (e *Engine) BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error) {
@@ -568,34 +343,25 @@ func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 
 func (e *Engine) UnloadFunction(namespace, name string) error {
 	e.logger.Printf("Unloading function: %s/%s", namespace, name)
-	functionKey := getFunctionKey(namespace, name)
+	functionKey := components.GetFunctionKey(namespace, name)
 
 	e.logStore.AddLog(functionKey, LevelInfo, "Unloading function")
 
-	e.pluginsMux.RLock()
-	plugin, exists := e.plugins[functionKey]
-	e.pluginsMux.RUnlock()
-
-	if !exists {
+	// Check if the function is loaded
+	if !e.pluginManager.IsPluginLoaded(functionKey) {
 		notLoadedMsg := fmt.Sprintf("Function %s is not loaded, nothing to unload", functionKey)
 		e.logger.Printf(notLoadedMsg)
 		e.logStore.AddLog(functionKey, LevelInfo, notLoadedMsg)
 		return nil
 	}
 
-	e.pluginsMux.Lock()
-	defer e.pluginsMux.Unlock()
-
 	unloadStart := time.Now()
 
-	plugin.Close(context.TODO())
-	delete(e.plugins, functionKey)
-	delete(e.pluginLastUsed, functionKey)
-	delete(e.pluginDigests, functionKey)
+	// Remove the plugin from the plugin manager
+	e.pluginManager.RemovePlugin(functionKey)
 
-	e.cbMux.Lock()
-	delete(e.circuitBreakers, functionKey)
-	e.cbMux.Unlock()
+	// Remove circuit breaker for this function
+	e.circuitBreakers.RemoveCircuitBreaker(functionKey)
 
 	successMsg := fmt.Sprintf("Function %s unloaded successfully (time: %v)", functionKey, time.Since(unloadStart))
 	e.logger.Printf(successMsg)
