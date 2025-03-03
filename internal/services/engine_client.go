@@ -26,6 +26,7 @@ type EngineClient struct {
 type EngineFunctionDetails struct {
 	Namespace string
 	Name      string
+	Status    string
 }
 
 func NewEngineClientWithDefaults() *EngineClient {
@@ -223,6 +224,7 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetai
 		functions = append(functions, EngineFunctionDetails{
 			Namespace: fn.Namespace,
 			Name:      fn.Name,
+			Status:    fn.Status,
 		})
 	}
 

@@ -79,13 +79,17 @@ is not running, it will display a warning and show no functions.`,
 			// Print header
 			fmt.Printf(headerFormat, "NAMESPACE", "NAME", "STATUS")
 
-			// Print all running functions
+			// Print all functions
 			if engineRunning && len(runningFunctions) > 0 {
 				for _, fn := range runningFunctions {
-					fmt.Printf(dataFormat, fn.Namespace, fn.Name, "running")
+					status := "running"
+					if fn.Status == "unloaded" {
+						status = "unloaded"
+					}
+					fmt.Printf(dataFormat, fn.Namespace, fn.Name, status)
 				}
 			} else {
-				fmt.Println("No running functions")
+				fmt.Println("No functions found")
 			}
 			return nil
 		}
@@ -93,16 +97,32 @@ is not running, it will display a warning and show no functions.`,
 		// Create a table using the centralized table component
 		table := ui.NewTable([]string{"NAMESPACE", "NAME", "STATUS"})
 
-		// Add rows for all running functions
+		// Add rows for all functions
 		if engineRunning && len(runningFunctions) > 0 {
+			unloadedFunctionsExist := false
+
 			for _, fn := range runningFunctions {
-				table.AddRow(fn.Namespace, fn.Name, ui.StyleStatusValue("running"))
+				var statusStyle string
+
+				if fn.Status == "unloaded" {
+					statusStyle = ui.StyleStatusValue("unloaded")
+					unloadedFunctionsExist = true
+				} else {
+					statusStyle = ui.StyleStatusValue("running")
+				}
+
+				table.AddRow(fn.Namespace, fn.Name, statusStyle)
 			}
 
 			// Render the table
 			fmt.Println(ui.RenderTable(table))
+
+			if unloadedFunctionsExist {
+				fmt.Println()
+				ui.PrintInfo("Note", "Functions with 'unloaded' status are available but not currently loaded in memory")
+			}
 		} else {
-			ui.PrintInfo("Status", "No running functions")
+			ui.PrintInfo("Status", "No functions found")
 		}
 
 		return nil

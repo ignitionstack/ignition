@@ -16,13 +16,14 @@ var (
 	TertiaryColor  = "#10B981" // Emerald green
 
 	// Status colors
-	SuccessColor = "#10B981" // Emerald green
-	ErrorColor   = "#EF4444" // Red
-	WarningColor = "#F59E0B" // Amber
-	InfoColor    = "#3B82F6" // Blue
-	RunningColor = "#10B981" // Green for running status
-	StoppedColor = "#6B7280" // Gray for stopped status
-	PendingColor = "#F59E0B" // Amber for pending status
+	SuccessColor  = "#10B981" // Emerald green
+	ErrorColor    = "#EF4444" // Red
+	WarningColor  = "#F59E0B" // Amber
+	InfoColor     = "#3B82F6" // Blue
+	RunningColor  = "#10B981" // Green for running status
+	StoppedColor  = "#6B7280" // Gray for stopped status
+	PendingColor  = "#F59E0B" // Amber for pending status
+	UnloadedColor = "#9CA3AF" // Light gray for unloaded status
 
 	// Text colors
 	HeaderColor  = "#F9FAFB" // Near white

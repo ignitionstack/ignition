@@ -109,12 +109,14 @@ These values are accessible within your function via the Extism plugin config me
 
 Ignition provides templates for multiple languages:
 
-| Language   | Based On          |
-|------------|-------------------|
-| Rust       | Extism Rust PDK   |
-| TypeScript | Extism TS PDK     |
-| JavaScript | Extism JS PDK     |
-| Go         | Extism Go PDK     |
+| Language       | Based On          |
+|----------------|-------------------|
+| Rust           | Extism Rust PDK   |
+| TypeScript     | Extism TS PDK     |
+| JavaScript     | Extism JS PDK     |
+| Go             | Extism Go PDK     |
+| Python         | Extism Python PDK |
+| AssemblyScript | Extism AssemblyScript PDK    |
 
 Each template includes project structure, dependencies, and example code.
 
@@ -162,14 +164,14 @@ services:
   api:
     function: my_namespace/api_service:latest
     config:
-      DEBUG: "true"
+      debug: "true"
+      greeting: "hallo"
   processor:
     function: my_namespace/processor:v1.2.0
     depends_on:
       - api
   worker:
     function: my_namespace/worker:latest
-    restart: always
 ```
 
 ### Start Services

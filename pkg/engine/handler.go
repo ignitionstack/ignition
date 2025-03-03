@@ -175,13 +175,20 @@ func (h *Handlers) handleListAll(w http.ResponseWriter, _ *http.Request) error {
 	return h.writeJSONResponse(w, functions)
 }
 
-// handleLoadedFunctions lists currently loaded functions in memory
+// handleLoadedFunctions lists currently loaded and previously loaded functions
 func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request) error {
 	h.logger.Printf("Received request to list loaded functions")
 
 	// Get list of loaded functions from the plugin manager
 	functionKeys := h.engine.pluginManager.ListLoadedFunctions()
 
+	// Create a set of loaded functions for fast lookup
+	loadedFunctionsSet := make(map[string]bool, len(functionKeys))
+	for _, key := range functionKeys {
+		loadedFunctionsSet[key] = true
+	}
+
+	// Start with currently running functions
 	loadedFunctions := make([]types.LoadedFunction, 0, len(functionKeys))
 	for _, key := range functionKeys {
 		parts := strings.Split(key, "/")
@@ -189,6 +196,25 @@ func (h *Handlers) handleLoadedFunctions(w http.ResponseWriter, _ *http.Request)
 			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
 				Namespace: parts[0],
 				Name:      parts[1],
+				Status:    "running",
+			})
+		}
+	}
+
+	// Get previously loaded functions
+	previouslyLoadedMap := h.engine.pluginManager.GetPreviouslyLoadedFunctions()
+	for key := range previouslyLoadedMap {
+		// Skip if it's already in the loaded list
+		if loadedFunctionsSet[key] {
+			continue
+		}
+
+		parts := strings.Split(key, "/")
+		if len(parts) == 2 {
+			loadedFunctions = append(loadedFunctions, types.LoadedFunction{
+				Namespace: parts[0],
+				Name:      parts[1],
+				Status:    "unloaded",
 			})
 		}
 	}

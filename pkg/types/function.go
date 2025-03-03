@@ -93,4 +93,5 @@ type PluginOptions struct {
 type LoadedFunction struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
+	Status    string `json:"status,omitempty"` // Status can be "running" or "unloaded"
 }

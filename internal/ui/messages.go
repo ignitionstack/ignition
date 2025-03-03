@@ -232,6 +232,8 @@ func StyleStatusValue(status string) string {
 		return ErrorStyle.Render(ErrorSymbol + " " + status)
 	case "pending":
 		return PendingStyle.Render("⋯ " + status)
+	case "unloaded":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(UnloadedColor)).Render("◌ " + status)
 	default:
 		return status
 	}
