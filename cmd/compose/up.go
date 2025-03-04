@@ -15,6 +15,7 @@ import (
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/ignitionstack/ignition/internal/ui/models/spinner"
+	"github.com/ignitionstack/ignition/pkg/engine/models"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +50,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 			}
 
 			// Check if engine is running
-			if err := engineClient.Ping(context.Background()); err != nil {
+			if err := engineClient.Status(context.Background()); err != nil {
 				ui.PrintError(fmt.Sprintf("Failed to connect to engine: %v", err))
 				return err
 			}
@@ -74,7 +75,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 				// Cancel the context to signal all operations to stop
 				cancel()
 
-				var functionsToUnload []services.FunctionReference
+				var functionsToUnload []models.FunctionReference
 
 				for name, service := range composeManifest.Services {
 					parts := strings.Split(service.Function, ":")
@@ -82,7 +83,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					nameParts := strings.Split(functionRef, "/")
 					if len(nameParts) == 2 {
 						namespace, funcName := nameParts[0], nameParts[1]
-						functionsToUnload = append(functionsToUnload, services.FunctionReference{
+						functionsToUnload = append(functionsToUnload, models.FunctionReference{
 							Namespace: namespace,
 							Name:      funcName,
 							Service:   name,
@@ -97,7 +98,7 @@ func NewComposeUpCommand(container *di.Container) *cobra.Command {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
 
-					err := engineClient.UnloadFunctions(ctx, functionsToUnload)
+					err := engineClient.StopFunctions(ctx, functionsToUnload)
 					if err != nil {
 						if isConnectionError(err) {
 							unloadProgram.Send(spinner.DoneMsg{Result: 0})

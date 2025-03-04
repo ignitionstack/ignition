@@ -92,106 +92,102 @@ func (e *FunctionExecutor) executeFunction(
 	payload []byte,
 ) ([]byte, error) {
 	startTime := time.Now()
-
-	// Result channel with buffer to prevent goroutine leaks
+	
+	// Create a done channel to ensure goroutine cleanup
+	done := make(chan struct{})
+	defer close(done)
+	
+	// Create a buffered result channel
 	resultCh := make(chan callResult, 1)
-
-	// Cancel context for the goroutine if this function returns
-	execCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
+	
 	// Execute the plugin call in a goroutine
 	go func() {
 		_, output, err := plugin.Call(entrypoint, payload)
-
-		// Send the result, handling the case where the context is cancelled
+		
+		// Try to send the result, but don't block if the parent function has returned
 		select {
 		case resultCh <- callResult{output, err}:
 			// Result sent successfully
-		case <-execCtx.Done():
-			// Context was cancelled, nothing to do
+		case <-done:
+			// Parent function has returned, nothing to do
 		}
 	}()
-
+	
 	// Wait for the result or context cancellation
 	select {
 	case result := <-resultCh:
-		return e.handleResult(functionKey, cb, entrypoint, result, startTime)
-
+		return e.processResult(functionKey, cb, entrypoint, result, startTime)
 	case <-ctx.Done():
-		err := e.handleContextCancellation(ctx, functionKey, cb)
-		return nil, err
+		return e.handleCancellation(ctx, functionKey, cb)
 	}
 }
 
-// handleResult processes the function execution result.
-func (e *FunctionExecutor) handleResult(
+// processResult handles both success and error cases from function execution
+func (e *FunctionExecutor) processResult(
 	functionKey string,
 	cb CircuitBreaker,
 	entrypoint string,
 	result callResult,
 	startTime time.Time,
 ) ([]byte, error) {
-	if result.err != nil {
-		return e.handleExecutionError(functionKey, cb, result.err)
-	}
-
-	// Handle success case
 	execTime := time.Since(startTime)
+	
+	// Handle error case
+	if result.err != nil {
+		// Record failure in circuit breaker
+		isOpen := cb.RecordFailure()
+		
+		// Log the error
+		errMsg := fmt.Sprintf("Failed to call function: %v", result.err)
+		e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
+		
+		// Log if circuit breaker opened
+		if isOpen {
+			cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
+			e.logger.Printf(cbMsg)
+			e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
+		}
+		
+		return nil, WrapEngineError("failed to call function", result.err)
+	}
+	
+	// Handle success case
 	e.logStore.AddLog(functionKey, logging.LevelInfo,
 		fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
 			entrypoint, execTime, len(result.output)))
-
+	
 	cb.RecordSuccess()
 	return result.output, nil
 }
 
-// handleExecutionError handles errors that occur during function execution.
-func (e *FunctionExecutor) handleExecutionError(
-	functionKey string,
-	cb CircuitBreaker,
-	err error,
-) ([]byte, error) {
-	// Record the failure in the circuit breaker
-	isOpen := cb.RecordFailure()
-	errMsg := fmt.Sprintf("Failed to call function: %v", err)
-	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-
-	if isOpen {
-		cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
-		e.logger.Printf(cbMsg)
-		e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
-	}
-
-	return nil, WrapEngineError("failed to call function", err)
-}
-
-// handleContextCancellation handles the case where execution is cancelled or times out.
-func (e *FunctionExecutor) handleContextCancellation(
+// handleCancellation handles context cancellation and timeout cases
+func (e *FunctionExecutor) handleCancellation(
 	ctx context.Context,
 	functionKey string,
 	cb CircuitBreaker,
-) error {
+) ([]byte, error) {
 	// Record the failure in the circuit breaker
 	isOpen := cb.RecordFailure()
-
-	// Determine the specific error cause
+	
+	// Determine the specific error message based on cancellation reason
 	var errMsg string
 	if ctx.Err() == context.DeadlineExceeded {
 		errMsg = fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
 	} else {
 		errMsg = "Function execution was cancelled"
 	}
-
+	
+	// Log the error
 	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-
+	
+	// Log if circuit breaker opened
 	if isOpen {
 		cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
 		e.logger.Printf(cbMsg)
 		e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
 	}
-
-	return WrapEngineError(errMsg, ctx.Err())
+	
+	return nil, WrapEngineError(errMsg, ctx.Err())
 }
 
 // Returns:

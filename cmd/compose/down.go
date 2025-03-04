@@ -11,6 +11,7 @@ import (
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/ignitionstack/ignition/internal/ui/models/spinner"
+	"github.com/ignitionstack/ignition/pkg/engine/models"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/spf13/cobra"
 )
@@ -54,7 +55,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 
 			// Gather functions to unload
 			ui.PrintInfo("Status", "Functions to stop")
-			var functionsToUnload []services.FunctionReference
+			var functionsToUnload []models.FunctionReference
 
 			for name, service := range composeManifest.Services {
 				parts := strings.Split(service.Function, ":")
@@ -67,7 +68,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 				namespace, funcName := nameParts[0], nameParts[1]
 				ui.PrintMetadata(name, fmt.Sprintf("%s/%s", namespace, funcName))
 
-				functionsToUnload = append(functionsToUnload, services.FunctionReference{
+				functionsToUnload = append(functionsToUnload, models.FunctionReference{
 					Namespace: namespace,
 					Name:      funcName,
 					Service:   name,

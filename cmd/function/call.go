@@ -5,13 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/ignitionstack/ignition/pkg/engine/api"
+	"github.com/ignitionstack/ignition/pkg/engine/client"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +27,7 @@ func NewFunctionCallCommand() *cobra.Command {
 		Short: "Call a function once using a temporary plugin instance",
 		Long: `Call a WebAssembly function with the specified payload.
 
-This command creates a temporary instance of the function, sends the provided payload 
+This command creates a temporary instance of the function, sends the provided payload
 to the specified entrypoint, and returns the result. The function is loaded from the
 registry using the namespace/name:reference format, where:
 
@@ -64,56 +63,34 @@ The command requires a running engine to execute the function.`,
 				}
 			}
 
-			req := map[string]interface{}{
-				"namespace":  namespace,
-				"name":       name,
-				"reference":  reference,
-				"entrypoint": entrypoint,
-				"payload":    payload,
+			// Create engine client
+			engineClient, err := client.New(client.Options{
+				SocketPath: callSocketPath,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create engine client: %w", err)
 			}
 
-			// Only add config if there are values
-			if len(config) > 0 {
-				req["config"] = config
-			}
-
-			client := http.Client{
-				Transport: &http.Transport{
-					Dial: func(_, _ string) (net.Conn, error) {
-						return net.Dial("unix", callSocketPath)
-					},
+			// Create request
+			req := api.OneOffCallRequest{
+				BaseRequest: api.BaseRequest{
+					Namespace: namespace,
+					Name:      name,
 				},
+				Reference:  reference,
+				Entrypoint: entrypoint,
+				Payload:    payload,
+				Config:     config,
 			}
 
-			reqBytes, err := json.Marshal(req)
-			if err != nil {
-				return fmt.Errorf("failed to encode request: %w", err)
-			}
-
-			httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://unix/call-once", bytes.NewBuffer(reqBytes))
-			if err != nil {
-				return fmt.Errorf("failed to create request: %w", err)
-			}
-			httpReq.Header.Set("Content-Type", "application/json")
-			resp, err := client.Do(httpReq)
+			// Call function
+			output, err := engineClient.OneOffCall(context.Background(), req)
 			if err != nil {
 				return fmt.Errorf("failed to call function: %w", err)
 			}
-			defer resp.Body.Close()
 
-			if resp.StatusCode != http.StatusOK {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				return fmt.Errorf("engine returned error (status %s): %s", resp.Status, string(bodyBytes))
-			}
-
-			// Read and print the response
-			output, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read response: %w", err)
-			}
-
-			// If the output looks like JSON, pretty print it
-			if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+			// Check if output looks like JSON
+			if isJSON(output) {
 				var prettyJSON bytes.Buffer
 				if err := json.Indent(&prettyJSON, output, "", "  "); err == nil {
 					fmt.Println(prettyJSON.String())
@@ -141,4 +118,38 @@ The command requires a running engine to execute the function.`,
 	cmd.Flags().StringArrayVarP(&callConfigFlag, "config", "c", []string{}, "Configuration values to pass to the function (format: key=value)")
 
 	return cmd
+}
+
+// isJSON checks if a byte slice contains valid JSON
+func isJSON(data []byte) bool {
+	var js interface{}
+	return json.Unmarshal(data, &js) == nil
+}
+
+// parseNamespaceAndName parses a string in the format namespace/name:tag
+func parseNamespaceAndName(input string) (namespace, name, tag string, err error) {
+	// Split namespace and name/tag
+	parts := strings.Split(input, "/")
+	if len(parts) != 2 {
+		return "", "", "", fmt.Errorf("invalid format: %s (expected namespace/name:tag)", input)
+	}
+	
+	namespace = parts[0]
+	nameRef := parts[1]
+	
+	// Split name and reference
+	parts = strings.Split(nameRef, ":")
+	if len(parts) != 2 {
+		return "", "", "", fmt.Errorf("invalid format: %s (expected namespace/name:tag)", input)
+	}
+	
+	name = parts[0]
+	tag = parts[1]
+	
+	// Validate all parts are non-empty
+	if namespace == "" || name == "" || tag == "" {
+		return "", "", "", fmt.Errorf("invalid format: %s (all parts must be non-empty)", input)
+	}
+	
+	return namespace, name, tag, nil
 }

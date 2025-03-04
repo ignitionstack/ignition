@@ -99,24 +99,27 @@ func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, n
 }
 
 // validateLoadPermissions checks if a function can be loaded based on its stopped status.
+// Returns nil if the function can be loaded, error otherwise.
 func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force bool) error {
 	functionKey := components.GetFunctionKey(namespace, name)
-
-	// Check if the function is stopped - only allow loading if force is true
-	if l.IsStopped(namespace, name) && !force {
-		l.logger.Printf("Function %s/%s is stopped and cannot be loaded without force option", namespace, name)
-		l.logStore.AddLog(functionKey, logging.LevelError, "Cannot load stopped function. Use 'ignition function run' to explicitly load it")
-		return WrapEngineError("function was explicitly stopped - use 'ignition function run' to load it", nil)
+	isStopped := l.IsStopped(namespace, name)
+	
+	// Function is not stopped or force is true - allow loading
+	if !isStopped || (isStopped && force) {
+		// If force-loading a stopped function, clear the stopped status
+		if isStopped && force {
+			l.logger.Printf("Force loading stopped function %s - clearing stopped status", functionKey)
+			l.logStore.AddLog(functionKey, logging.LevelInfo, "Force loading stopped function - clearing stopped status")
+			l.pluginManager.ClearStoppedStatus(functionKey)
+		}
+		return nil
 	}
-
-	// If force is true and function is stopped, clear the stopped status
-	if force && l.IsStopped(namespace, name) {
-		l.logger.Printf("Force loading stopped function %s/%s - clearing stopped status", namespace, name)
-		l.logStore.AddLog(functionKey, logging.LevelInfo, "Force loading stopped function - clearing stopped status")
-		l.pluginManager.ClearStoppedStatus(functionKey)
-	}
-
-	return nil
+	
+	// Function is stopped and force is false - prevent loading
+	l.logger.Printf("Function %s is stopped and cannot be loaded without force option", functionKey)
+	l.logStore.AddLog(functionKey, logging.LevelError, 
+		"Cannot load stopped function. Use 'ignition function run' to explicitly load it")
+	return WrapEngineError("function was explicitly stopped - use 'ignition function run' to load it", nil)
 }
 
 // copyConfig creates a deep copy of a configuration map.
@@ -128,7 +131,7 @@ func (l *FunctionLoader) copyConfig(config map[string]string) map[string]string 
 	return configCopy
 }
 
-// handlePullError handles errors from pulling a function from the registry.
+// handlePullError logs and wraps errors from pulling a function from the registry.
 func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
 	errMsg := fmt.Sprintf("Failed to fetch WASM file from registry: %v", err)
 	l.logger.Errorf(errMsg)
@@ -136,24 +139,26 @@ func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
 	return WrapEngineError("failed to fetch WASM file from registry", err)
 }
 
-// handleExistingFunction checks if the function is already loaded and handles accordingly.
+// handleExistingFunction checks if a function needs to be reloaded based on changes.
+// Returns nil if no reload is needed or if reload preparation was successful.
 func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy map[string]string, actualDigest string) error {
-	// Check if already loaded with same digest and config
-	alreadyLoaded := l.pluginManager.IsPluginLoaded(functionKey)
-	if !alreadyLoaded {
+	// If function is not loaded, nothing to do
+	if !l.pluginManager.IsPluginLoaded(functionKey) {
 		return nil
 	}
-
+	
+	// Check if anything has changed
 	digestChanged := l.pluginManager.HasDigestChanged(functionKey, actualDigest)
 	configChanged := l.pluginManager.HasConfigChanged(functionKey, configCopy)
-
+	
+	// If nothing changed, we can skip reloading
 	if !digestChanged && !configChanged {
 		l.logger.Printf("Function %s already loaded with same digest and config", functionKey)
 		l.logStore.AddLog(functionKey, logging.LevelInfo, "Function already loaded with same digest and config")
 		return nil
 	}
-
-	// Log changes
+	
+	// Log what changed for debugging
 	if digestChanged {
 		oldDigest, _ := l.pluginManager.GetPluginDigest(functionKey)
 		l.logger.Printf("Function %s digest changed from %s to %s, reloading",
@@ -162,16 +167,16 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 			fmt.Sprintf("Function digest changed from %s to %s, reloading",
 				oldDigest, actualDigest))
 	}
-
+	
 	if configChanged {
 		l.logger.Printf("Function %s configuration changed, reloading", functionKey)
 		l.logStore.AddLog(functionKey, logging.LevelInfo, "Function configuration changed, reloading")
 	}
-
-	// Clean up the existing function resources
+	
+	// Cleanup resources for reload
 	l.pluginManager.RemovePlugin(functionKey)
 	l.circuitBreakers.RemoveCircuitBreaker(functionKey)
-
+	
 	return nil
 }
 
@@ -334,84 +339,83 @@ func (l *FunctionLoader) IsStopped(namespace, name string) bool {
 
 // Helper methods
 
-// pullWithContext fetches a WASM module with context.
+// pullWithContext fetches a WASM module with cancellation support
 func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, identifier string) ([]byte, *registry.VersionInfo, error) {
-	// Create a channel for the result
-	type pullResult struct {
-		wasmBytes   []byte
-		versionInfo *registry.VersionInfo
-		err         error
-	}
-
-	// Use a channel with buffer size 1 to prevent goroutine leaks
-	resultCh := make(chan pullResult, 1)
-
-	// Pull in a separate goroutine to allow for cancellation
+	// Create a done channel to ensure goroutine cleanup
+	done := make(chan struct{})
+	defer close(done)
+	
+	// Create a buffered result channel
+	resultCh := make(chan struct {
+		bytes []byte
+		info  *registry.VersionInfo
+		err   error
+	}, 1)
+	
+	// Start the pull operation in a goroutine
 	go func() {
-		wasmBytes, versionInfo, err := l.registry.Pull(namespace, name, identifier)
+		bytes, info, err := l.registry.Pull(namespace, name, identifier)
+		
+		// Try to send the result, but don't block if the parent function has returned
 		select {
-		case resultCh <- pullResult{wasmBytes, versionInfo, err}:
-			// Result sent successfully
-		case <-ctx.Done():
-			// Context was cancelled, but we need to send the result to avoid goroutine leak
-			select {
-			case resultCh <- pullResult{nil, nil, ctx.Err()}:
-			default:
-				// Channel is already closed or full, nothing to do
-			}
+		case resultCh <- struct {
+			bytes []byte
+			info  *registry.VersionInfo
+			err   error
+		}{bytes, info, err}:
+		case <-done:
+			// Parent function has returned, clean up if needed
 		}
 	}()
-
-	// Wait for the result or context cancellation
-	var result pullResult
+	
+	// Wait for either the result or context cancellation
 	select {
-	case result = <-resultCh:
-		// Result received
+	case result := <-resultCh:
+		return result.bytes, result.info, result.err
 	case <-ctx.Done():
-		// Context cancelled, wait for the result to avoid goroutine leak
-		result = <-resultCh
+		// Context was cancelled
+		return nil, nil, ctx.Err()
 	}
-
-	return result.wasmBytes, result.versionInfo, result.err
 }
 
-// createPluginWithContext creates a plugin with context.
-func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
-	// Create plugin in a cancellable goroutine
-	type pluginResult struct {
+// createPluginWithContext creates a plugin with cancellation support
+func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte, 
+                                               versionInfo *registry.VersionInfo, 
+                                               config map[string]string) (*extism.Plugin, error) {
+	// Create a done channel to ensure goroutine cleanup
+	done := make(chan struct{})
+	defer close(done)
+	
+	// Create a buffered result channel
+	resultCh := make(chan struct {
 		plugin *extism.Plugin
 		err    error
-	}
-
-	pluginCh := make(chan pluginResult, 1)
-
+	}, 1)
+	
+	// Start plugin creation in a goroutine
 	go func() {
 		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, config)
+		
+		// Clean up on cancellation
 		select {
-		case pluginCh <- pluginResult{plugin, err}:
-			// Result sent successfully
-		case <-ctx.Done():
-			// Context was cancelled, but cleanup and send result to avoid goroutine leak
+		case resultCh <- struct {
+			plugin *extism.Plugin
+			err    error
+		}{plugin, err}:
+		case <-done:
+			// Parent function has returned, clean up resources
 			if plugin != nil && err == nil {
 				plugin.Close(context.Background())
 			}
-			select {
-			case pluginCh <- pluginResult{nil, ctx.Err()}:
-			default:
-				// Channel is already closed or full, nothing to do
-			}
 		}
 	}()
-
-	// Wait for plugin creation or context cancellation
-	var pluginRes pluginResult
+	
+	// Wait for either the result or context cancellation
 	select {
-	case pluginRes = <-pluginCh:
-		// Result received
+	case result := <-resultCh:
+		return result.plugin, result.err
 	case <-ctx.Done():
-		// Context cancelled, wait for the result to avoid goroutine leak
-		pluginRes = <-pluginCh
+		// Context was cancelled
+		return nil, ctx.Err()
 	}
-
-	return pluginRes.plugin, pluginRes.err
 }

@@ -19,7 +19,7 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// Alias logging levels for backward compatibility.
+// Log levels in the engine
 const (
 	LevelInfo    = logging.LevelInfo
 	LevelWarning = logging.LevelWarning
@@ -55,91 +55,47 @@ type Engine struct {
 	config  *config.Config
 }
 
+// NewEngine creates a new engine instance with default settings.
+// It's a convenient way to create an engine with minimal configuration.
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
-	logger := logging.NewStdLogger(os.Stdout)
-	options := DefaultEngineOptions()
-	return NewEngineWithOptions(socketPath, httpAddr, registryDir, logger, options)
+	return NewEngineWithOptions(socketPath, httpAddr, registryDir, nil, nil)
 }
 
-// NewEngineWithLogger creates a new engine instance with custom logger.
-func NewEngineWithLogger(socketPath, httpAddr string, registryDir string, logger logging.Logger) (*Engine, error) {
-	options := DefaultEngineOptions()
-	return NewEngineWithOptions(socketPath, httpAddr, registryDir, logger, options)
-}
+// NewEngineWithOptions creates a new engine instance with custom settings.
+// Accepts optional logger and options parameters (nil values use defaults).
+func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, 
+                         logger logging.Logger, options *Options) (*Engine, error) {
+	// Use defaults for nil parameters
+	if logger == nil {
+		logger = logging.NewStdLogger(os.Stdout)
+	}
+	if options == nil {
+		options = DefaultEngineOptions()
+	}
 
-// NewEngineWithOptions creates a new engine instance with custom logger and options.
-func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, logger logging.Logger, options *Options) (*Engine, error) {
+	// Setup the registry
 	registry, err := setupRegistry(registryDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup registry: %w", err)
 	}
 
+	// Create function service
 	functionService := services.NewFunctionService()
 
-	return NewEngineWithDependencies(
-		socketPath,
-		httpAddr,
-		registry,
-		functionService,
-		logger,
-		options,
-	), nil
-}
-
-// NewEngineWithConfig creates a new engine instance using the provided configuration.
-func NewEngineWithConfig(cfg *config.Config, logger logging.Logger) (*Engine, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("configuration cannot be nil")
-	}
-
-	registry, err := setupRegistry(cfg.Server.RegistryDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup registry: %w", err)
-	}
-
-	functionService := services.NewFunctionService()
-	options := OptionsFromConfig(cfg)
-
-	engine := NewEngineWithDependencies(
-		cfg.Server.SocketPath,
-		cfg.Server.HTTPAddr,
-		registry,
-		functionService,
-		logger,
-		options,
-	)
-
-	engine.config = cfg
-	return engine, nil
-}
-
-// NewEngineWithDependencies creates a new engine with custom dependencies.
-func NewEngineWithDependencies(
-	socketPath,
-	httpAddr string,
-	registry registry.Registry,
-	functionService services.FunctionService,
-	logger logging.Logger,
-	options *Options,
-) *Engine {
-	if options == nil {
-		options = DefaultEngineOptions()
-	}
-
+	// Create common components
 	logStore := logging.NewFunctionLogStore(options.LogStoreCapacity)
-
-	// Create core components
 	pluginManager := components.NewPluginManager(logger, components.PluginManagerSettings{
 		TTL:             options.PluginManagerSettings.TTL,
 		CleanupInterval: options.PluginManagerSettings.CleanupInterval,
 	})
 	circuitBreakerManager := components.NewCircuitBreakerManagerWithOptions(options.CircuitBreakerSettings)
 
-	// Create function management abstractions
+	// Create function management components
 	functionLoader := NewFunctionLoader(registry, pluginManager, circuitBreakerManager, logStore, logger)
 	functionExecutor := NewFunctionExecutor(pluginManager, circuitBreakerManager, logStore, logger, options.DefaultTimeout)
 	functionManager := NewFunctionManager(functionLoader, functionExecutor, registry, functionService, options.DefaultTimeout)
 
+	// Assemble the engine
 	return &Engine{
 		registry:         registry,
 		functionSvc:      functionService,
@@ -155,7 +111,39 @@ func NewEngineWithDependencies(
 		functionExecutor: functionExecutor,
 		functionManager:  functionManager,
 		options:          options,
+	}, nil
+}
+
+// NewEngineWithConfig creates a new engine instance using a configuration object.
+func NewEngineWithConfig(cfg *config.Config, logger logging.Logger) (*Engine, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("configuration cannot be nil")
 	}
+
+	// Use default logger if none provided
+	if logger == nil {
+		logger = logging.NewStdLogger(os.Stdout)
+	}
+
+	// Create options from config
+	options := OptionsFromConfig(cfg)
+	
+	// Create engine with config-derived settings
+	engine, err := NewEngineWithOptions(
+		cfg.Server.SocketPath,
+		cfg.Server.HTTPAddr,
+		cfg.Server.RegistryDir,
+		logger,
+		options,
+	)
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	// Store the config for reference
+	engine.config = cfg
+	return engine, nil
 }
 
 func setupRegistry(registryDir string) (registry.Registry, error) {
