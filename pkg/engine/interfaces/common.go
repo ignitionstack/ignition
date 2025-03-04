@@ -37,7 +37,7 @@ func ParseFunctionKey(key string) (FunctionKey, error) {
 
 // SplitFunctionKey splits a string key into namespace and name components
 func SplitFunctionKey(key string) (namespace, name string, ok bool) {
-	for i := 0; i < len(key); i++ {
+	for i := range key {
 		if key[i] == '/' {
 			return key[:i], key[i+1:], true
 		}

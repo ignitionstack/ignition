@@ -78,7 +78,8 @@ func (h *Handlers) errorMiddleware() Middleware {
 				}
 
 				// Add domain and code if available for better debugging
-				if de, ok := err.(*domainerrors.DomainError); ok {
+				var de *domainerrors.DomainError
+				if errors.As(err, &de) {
 					response["domain"] = string(de.ErrDomain)
 					response["code"] = string(de.ErrCode)
 				}
@@ -92,11 +93,7 @@ func (h *Handlers) errorMiddleware() Middleware {
 	}
 }
 
-// isDomainError checks if an error is a domain error
-func isDomainError(err error) bool {
-	var domainErr *domainerrors.DomainError
-	return errors.As(err, &domainErr)
-}
+// We use the isDomainError function from errors.go
 
 func (h *Handlers) loggingMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {

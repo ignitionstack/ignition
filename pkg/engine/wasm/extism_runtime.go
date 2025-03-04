@@ -71,7 +71,7 @@ func (r *ExtismRuntime) ExecuteFunction(ctx context.Context, entrypoint string, 
 }
 
 // Close implements interfaces.WasmRuntime
-func (r *ExtismRuntime) Close(ctx context.Context) error {
+func (r *ExtismRuntime) Close(_ context.Context) error {
 	// Extism's Close doesn't support context, so we'll ignore it for now
 	r.plugin.Close(context.Background())
 	return nil

@@ -140,7 +140,7 @@ type ExecutionStats struct {
 }
 
 // GetStats returns execution statistics for a function
-func (e *FunctionExecutor) GetStats(namespace, name string) ExecutionStats {
+func (e *FunctionExecutor) GetStats(_, _ string) ExecutionStats {
 	// Currently we don't track these stats, so return empty values
 	// This is a placeholder for future implementation
 	return ExecutionStats{

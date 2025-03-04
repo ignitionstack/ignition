@@ -322,7 +322,6 @@ func (h *Handlers) executeFunction(ctx context.Context, params *functionCallPara
 
 	// Handle different error cases
 	if err != nil {
-
 		// Try auto-reload if the function isn't loaded - check both old and new error types
 		if errors.Is(err, ErrFunctionNotLoaded) ||
 			domainerrors.Is(err, domainerrors.DomainFunction, domainerrors.CodeFunctionNotLoaded) {

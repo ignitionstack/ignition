@@ -13,7 +13,7 @@ type functionState struct {
 	loaded           bool
 	stopped          bool
 	previouslyLoaded bool
-	runtime          interfaces.WasmRuntime
+	// Removed unused runtime field
 }
 
 // DefaultStateManager implements interfaces.StateManager
@@ -135,10 +135,8 @@ func (m *DefaultStateManager) MarkUnloaded(namespace, name string) {
 
 	state.loaded = false
 
-	// Remove runtime if it exists
-	if _, ok := m.runtimes[key]; ok {
-		delete(m.runtimes, key)
-	}
+	// Remove runtime
+	delete(m.runtimes, key)
 }
 
 // MarkStopped implements interfaces.StateManager
@@ -157,10 +155,8 @@ func (m *DefaultStateManager) MarkStopped(namespace, name string) {
 	state.stopped = true
 	state.loaded = false
 
-	// Remove runtime if it exists
-	if _, ok := m.runtimes[key]; ok {
-		delete(m.runtimes, key)
-	}
+	// Remove runtime
+	delete(m.runtimes, key)
 }
 
 // ClearStoppedStatus implements interfaces.StateManager

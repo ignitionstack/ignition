@@ -2,13 +2,14 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/ignitionstack/ignition/internal/services"
-	"github.com/ignitionstack/ignition/pkg/engine/errors"
+	domainerrors "github.com/ignitionstack/ignition/pkg/engine/errors"
 	"github.com/ignitionstack/ignition/pkg/engine/interfaces"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/engine/wasm"
@@ -69,7 +70,7 @@ func (s *FunctionServiceImpl) LoadFunction(ctx context.Context, namespace, name,
 		s.logger.Printf(errMsg)
 		s.logStore.AddLog(key, logging.LevelError,
 			"Cannot load stopped function. Use 'ignition function run' to explicitly load it")
-		return errors.Wrap(errors.DomainFunction, errors.CodeFunctionStopped,
+		return domainerrors.Wrap(domainerrors.DomainFunction, domainerrors.CodeFunctionStopped,
 			"function was explicitly stopped - use 'ignition function run' to load it", nil).
 			WithNamespace(namespace).
 			WithName(name)
@@ -95,14 +96,14 @@ func (s *FunctionServiceImpl) LoadFunction(ctx context.Context, namespace, name,
 		s.logger.Errorf(errMsg)
 		s.logStore.AddLog(key, logging.LevelError, errMsg)
 
-		if err == registry.ErrFunctionNotFound || err == registry.ErrVersionNotFound {
-			return errors.Wrap(errors.DomainRegistry, errors.CodeFunctionNotFound,
+		if errors.Is(err, registry.ErrFunctionNotFound) || errors.Is(err, registry.ErrVersionNotFound) {
+			return domainerrors.Wrap(domainerrors.DomainRegistry, domainerrors.CodeFunctionNotFound,
 				"Function or version not found in registry", err).
 				WithNamespace(namespace).
 				WithName(name)
 		}
 
-		return errors.Wrap(errors.DomainRegistry, errors.CodeRegistryError,
+		return domainerrors.Wrap(domainerrors.DomainRegistry, domainerrors.CodeRegistryError,
 			"Failed to fetch function from registry", err).
 			WithNamespace(namespace).
 			WithName(name)
@@ -268,7 +269,7 @@ func (s *FunctionServiceImpl) BuildFunction(namespace, name, path, tag string, c
 	// Build the function
 	buildResult, err := s.functionSvc.BuildFunction(path, config)
 	if err != nil {
-		return nil, errors.Wrap(errors.DomainFunction, errors.CodeInternalError,
+		return nil, domainerrors.Wrap(domainerrors.DomainFunction, domainerrors.CodeInternalError,
 			"Failed to build function", err).
 			WithNamespace(namespace).
 			WithName(name)
@@ -277,7 +278,7 @@ func (s *FunctionServiceImpl) BuildFunction(namespace, name, path, tag string, c
 	// Read the WASM file
 	wasmBytes, err := os.ReadFile(buildResult.Path)
 	if err != nil {
-		return nil, errors.Wrap(errors.DomainFunction, errors.CodeInternalError,
+		return nil, domainerrors.Wrap(domainerrors.DomainFunction, domainerrors.CodeInternalError,
 			"Failed to read wasm file", err).
 			WithNamespace(namespace).
 			WithName(name)
@@ -290,7 +291,7 @@ func (s *FunctionServiceImpl) BuildFunction(namespace, name, path, tag string, c
 
 	// Store the function in the registry
 	if err := s.registry.Push(namespace, name, wasmBytes, buildResult.Digest, tag, config.FunctionSettings.VersionSettings); err != nil {
-		return nil, errors.Wrap(errors.DomainRegistry, errors.CodeRegistryError,
+		return nil, domainerrors.Wrap(domainerrors.DomainRegistry, domainerrors.CodeRegistryError,
 			"Failed to store in registry", err).
 			WithNamespace(namespace).
 			WithName(name)
@@ -310,7 +311,7 @@ func (s *FunctionServiceImpl) BuildFunction(namespace, name, path, tag string, c
 // ReassignTag implements interfaces.FunctionService
 func (s *FunctionServiceImpl) ReassignTag(namespace, name, tag, newDigest string) error {
 	if err := s.registry.ReassignTag(namespace, name, tag, newDigest); err != nil {
-		return errors.Wrap(errors.DomainRegistry, errors.CodeRegistryError,
+		return domainerrors.Wrap(domainerrors.DomainRegistry, domainerrors.CodeRegistryError,
 			"Failed to reassign tag", err).
 			WithNamespace(namespace).
 			WithName(name)
@@ -335,7 +336,7 @@ func (s *FunctionServiceImpl) copyConfig(config map[string]string) map[string]st
 
 // createAndStoreRuntime creates a new runtime instance and stores it in the state manager
 func (s *FunctionServiceImpl) createAndStoreRuntime(
-	ctx context.Context,
+	_ context.Context,
 	namespace, name string,
 	wasmBytes []byte,
 	versionInfo *registry.VersionInfo,
@@ -350,7 +351,7 @@ func (s *FunctionServiceImpl) createAndStoreRuntime(
 		errMsg := fmt.Sprintf("Failed to initialize runtime: %v", err)
 		s.logger.Errorf(errMsg)
 		s.logStore.AddLog(key, logging.LevelError, errMsg)
-		return errors.Wrap(errors.DomainPlugin, errors.CodePluginCreationFailed,
+		return domainerrors.Wrap(domainerrors.DomainPlugin, domainerrors.CodePluginCreationFailed,
 			"Failed to initialize runtime", err).
 			WithNamespace(namespace).
 			WithName(name)

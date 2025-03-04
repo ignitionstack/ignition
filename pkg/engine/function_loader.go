@@ -370,8 +370,7 @@ func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, i
 
 // createPluginWithContext creates a plugin with cancellation support
 func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte,
-	versionInfo *registry.VersionInfo,
-	config map[string]string) (*extism.Plugin, error) {
+	versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
 
 	// Create a wrapper function to use the shared utility
 	wrapper := func() (*extism.Plugin, error) {
