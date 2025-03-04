@@ -14,7 +14,6 @@ import (
 // Global flags
 var (
 	socketPath        string
-	engineClient      *services.EngineClient
 	defaultSocketPath string
 )
 
@@ -58,11 +57,12 @@ Key capabilities:
 		}
 
 		// Setup engine client with socket path
-		err := setupEngineClient()
+		_, err := setupEngineClient()
 		if err != nil {
 			// Don't return error, as some commands don't need the engine
 			// Just silently continue with default client
-			engineClient = services.NewEngineClientWithDefaults()
+			client := services.NewEngineClientWithDefaults()
+			Container.Register("engineClient", client)
 		}
 
 		// Check if any command in the hierarchy has a plain flag set to true
@@ -108,14 +108,13 @@ func init() {
 }
 
 // setupEngineClient creates an engine client using the socket path
-func setupEngineClient() error {
+func setupEngineClient() (*services.EngineClient, error) {
 	// Create client using the socket path
 	client, err := services.NewEngineClient(socketPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	engineClient = client
 	Container.Register("engineClient", client)
-	return nil
+	return client, nil
 }
