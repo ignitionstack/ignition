@@ -133,12 +133,13 @@ The engine can be configured with various flags, environment variables, or a YAM
 
 	// Register command flags
 	// Use a different flag name and shorthand for socket to avoid conflicts with root command
-	cmd.Flags().StringVarP(&cmdConfig.socketPath, "socket-path", "S", defaultSocketPath, "Path to the Unix socket (overrides config)")
-	cmd.Flags().StringVarP(&cmdConfig.httpAddr, "http", "H", "", "HTTP server address (overrides config)")
-	cmd.Flags().StringVarP(&cmdConfig.registryDir, "directory", "d", "", "Registry directory (overrides config)")
+	cmd.Flags().StringVarP(&cmdConfig.socketPath, "socket-path", "S", defaultSocketPath, "Path to the Unix socket")
+	cmd.Flags().StringVarP(&cmdConfig.httpAddr, "http", "H", "", "HTTP server address")
+	cmd.Flags().StringVarP(&cmdConfig.registryDir, "directory", "d", "", "Registry directory")
 	cmd.Flags().StringVarP(&cmdConfig.logFile, "log-file", "l", "", "Log file path (logs to stdout if not specified)")
 	cmd.Flags().StringVarP(&cmdConfig.logLevel, "log-level", "L", "info", "Log level (error, info, debug)")
-	// Don't define config flag as it's already defined in root command
+	// Add config flag for the engine start command only
+	cmd.Flags().StringVarP(&globalConfig.ConfigPath, "config", "c", config.DefaultConfigPath, "Path to the configuration file")
 	cmd.Flags().BoolVarP(&cmdConfig.showConfig, "show-config", "C", false, "Show the configuration and exit")
 	cmd.Flags().BoolVar(&cmdConfig.defaultsOnly, "defaults-only", false, "Use only default configuration, ignore config file and env vars")
 

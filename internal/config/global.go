@@ -18,7 +18,7 @@ func DefaultSocketPath() string {
 
 // Global configuration variables
 var (
-	// ConfigPath is the path to the configuration file
+	// ConfigPath is the path to the configuration file (only used by engine start command)
 	ConfigPath = config.DefaultConfigPath
 
 	// DefaultSocket is the default path to the engine socket

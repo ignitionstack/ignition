@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"os"
-	"path/filepath"
 
 	globalConfig "github.com/ignitionstack/ignition/internal/config"
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
-	"github.com/ignitionstack/ignition/pkg/engine/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -47,22 +45,19 @@ Key capabilities:
   ignition run ./my-function.wasm
 
   # List all functions
-  ignition function list
-
-  # Use a custom config file
-  ignition --config ~/.ignition/custom-config.yaml function list`,
+  ignition function list`,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		// Skip for help commands
 		if cmd.Name() == "help" || cmd.Name() == "completion" {
 			return nil
 		}
 
-		// Skip loading config for engine start command, as it handles config directly
+		// Skip for engine start command, as it handles configuration directly
 		if cmd.CommandPath() == "ignition engine start" {
 			return nil
 		}
 
-		// Setup engine client from config
+		// Setup engine client with socket path
 		err := setupEngineClient()
 		if err != nil {
 			// Don't return error, as some commands don't need the engine
@@ -101,8 +96,7 @@ func init() {
 	defaultSocketPath = globalConfig.DefaultSocket
 
 	// Add global flags
-	rootCmd.PersistentFlags().StringVarP(&globalConfig.ConfigPath, "config", "c", config.DefaultConfigPath, "Path to the configuration file")
-	rootCmd.PersistentFlags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the engine socket (overrides config)")
+	rootCmd.PersistentFlags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the engine socket")
 
 	// Register services in the container
 	functionService := services.NewFunctionService()
@@ -113,28 +107,10 @@ func init() {
 	Container.Register("engineClient", services.NewEngineClientWithDefaults())
 }
 
-// setupEngineClient creates an engine client using the config file or command line flags
+// setupEngineClient creates an engine client using the socket path
 func setupEngineClient() error {
-	// If socket path is explicitly provided, use it directly
-	if socketPath != "" {
-		client, err := services.NewEngineClient(socketPath)
-		if err != nil {
-			return err
-		}
-
-		engineClient = client
-		Container.Register("engineClient", client)
-		return nil
-	}
-
-	// Try to load from config file
-	cfg, err := loadEngineConfig()
-	if err != nil {
-		return err
-	}
-
-	// Create client using socket path from config
-	client, err := services.NewEngineClient(cfg.Server.SocketPath)
+	// Create client using the socket path
+	client, err := services.NewEngineClient(socketPath)
 	if err != nil {
 		return err
 	}
@@ -142,25 +118,4 @@ func setupEngineClient() error {
 	engineClient = client
 	Container.Register("engineClient", client)
 	return nil
-}
-
-// loadEngineConfig loads the engine configuration from the specified path
-func loadEngineConfig() (*config.Config, error) {
-	// Expand tilde in config path if needed
-	expandedPath := globalConfig.ConfigPath
-	if len(globalConfig.ConfigPath) > 0 && globalConfig.ConfigPath[0] == '~' {
-		homeDir, err := os.UserHomeDir()
-		if err == nil {
-			expandedPath = filepath.Join(homeDir, globalConfig.ConfigPath[1:])
-		}
-	}
-
-	// Try to load config
-	cfg, err := config.LoadConfig(expandedPath)
-	if err != nil {
-		// Fall back to default config
-		return config.DefaultConfig(), nil
-	}
-
-	return cfg, nil
 }
