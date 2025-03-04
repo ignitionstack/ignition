@@ -19,10 +19,10 @@ func parseNamespaceAndName(input string) (namespace, name, tag string, err error
 	if len(parts) != 2 {
 		return "", "", "", fmt.Errorf("invalid format: %s (expected namespace/name or namespace/name:tag)", input)
 	}
-	
+
 	namespace = parts[0]
 	nameRef := parts[1]
-	
+
 	// Split name and reference
 	parts = strings.Split(nameRef, ":")
 	if len(parts) == 1 {
@@ -36,11 +36,11 @@ func parseNamespaceAndName(input string) (namespace, name, tag string, err error
 	} else {
 		return "", "", "", fmt.Errorf("invalid format: %s (expected namespace/name or namespace/name:tag)", input)
 	}
-	
+
 	// Validate all parts are non-empty
 	if namespace == "" || name == "" || tag == "" {
 		return "", "", "", fmt.Errorf("invalid format: %s (all parts must be non-empty)", input)
 	}
-	
+
 	return namespace, name, tag, nil
 }

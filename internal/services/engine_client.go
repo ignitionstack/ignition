@@ -22,7 +22,7 @@ func NewEngineClientWithDefaults() *EngineClient {
 	client, _ := client.New(client.Options{
 		SocketPath: config.DefaultSocket,
 	})
-	
+
 	return &EngineClient{
 		client: client,
 	}
@@ -35,7 +35,7 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &EngineClient{
 		client: engineClient,
 	}, nil
@@ -63,7 +63,7 @@ func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag st
 		Config:    config,
 		ForceLoad: true,
 	}
-	
+
 	_, err := c.client.LoadFunction(ctx, req)
 	return err
 }
@@ -76,7 +76,7 @@ func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name strin
 			Name:      name,
 		},
 	}
-	
+
 	return c.client.UnloadFunction(ctx, req)
 }
 
@@ -88,7 +88,7 @@ func (c *EngineClient) StopFunction(ctx context.Context, namespace, name string)
 			Name:      name,
 		},
 	}
-	
+
 	return c.client.StopFunction(ctx, req)
 }
 
@@ -103,7 +103,7 @@ func (c *EngineClient) CallFunction(ctx context.Context, namespace, name, entryp
 		Payload:    string(payload),
 		Config:     config,
 	}
-	
+
 	return c.client.CallFunction(ctx, req)
 }
 
@@ -119,7 +119,7 @@ func (c *EngineClient) OneOffCall(ctx context.Context, namespace, name, referenc
 		Payload:    string(payload),
 		Config:     config,
 	}
-	
+
 	return c.client.OneOffCall(ctx, req)
 }
 
@@ -134,12 +134,12 @@ func (c *EngineClient) BuildFunction(ctx context.Context, namespace, name, path,
 		Tag:      tag,
 		Manifest: manifest,
 	}
-	
+
 	resp, err := c.client.BuildFunction(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert to the expected type
 	return &types.BuildResult{
 		Name:      resp.BuildResult.Name,
@@ -157,7 +157,7 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]types.LoadedFunctio
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert from models.Function to types.LoadedFunction
 	var result []types.LoadedFunction
 	for _, fn := range modelFunctions {
@@ -167,7 +167,7 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]types.LoadedFunctio
 			Status:    fn.Status,
 		})
 	}
-	
+
 	return result, nil
 }
 
@@ -175,7 +175,6 @@ func (c *EngineClient) ListFunctions(ctx context.Context) ([]types.LoadedFunctio
 func (c *EngineClient) GetFunctionLogs(ctx context.Context, namespace, name string, since time.Duration, tail int) ([]string, error) {
 	return c.client.GetFunctionLogs(ctx, namespace, name, since, tail)
 }
-
 
 // UnloadFunctions unloads multiple functions at once
 func (c *EngineClient) UnloadFunctions(ctx context.Context, functions []models.FunctionReference) error {

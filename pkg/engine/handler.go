@@ -322,10 +322,10 @@ func (h *Handlers) executeFunction(ctx context.Context, params *functionCallPara
 
 	// Handle different error cases
 	if err != nil {
-		
+
 		// Try auto-reload if the function isn't loaded - check both old and new error types
-		if errors.Is(err, ErrFunctionNotLoaded) || 
-		   domainerrors.Is(err, domainerrors.DomainFunction, domainerrors.CodeFunctionNotLoaded) {
+		if errors.Is(err, ErrFunctionNotLoaded) ||
+			domainerrors.Is(err, domainerrors.DomainFunction, domainerrors.CodeFunctionNotLoaded) {
 			// Try auto-reload if the function isn't loaded
 			return h.handleFunctionAutoReload(ctx, params.namespace, params.name, params.entrypoint, payload)
 		}
@@ -337,10 +337,10 @@ func (h *Handlers) executeFunction(ctx context.Context, params *functionCallPara
 			}
 			return nil, NewRequestError("Request cancelled by client", http.StatusGatewayTimeout)
 		}
-		
+
 		// Check for circuit breaker open
 		if domainerrors.Is(err, domainerrors.DomainExecution, domainerrors.CodeCircuitBreakerOpen) {
-			return nil, NewRequestError("Function circuit breaker is open due to repeated failures", 
+			return nil, NewRequestError("Function circuit breaker is open due to repeated failures",
 				http.StatusServiceUnavailable)
 		}
 

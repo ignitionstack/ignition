@@ -105,7 +105,7 @@ func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, n
 func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force bool) error {
 	functionKey := GetFunctionKey(namespace, name)
 	isStopped := l.IsStopped(namespace, name)
-	
+
 	// Function is not stopped or force is true - allow loading
 	if !isStopped || (isStopped && force) {
 		// If force-loading a stopped function, clear the stopped status
@@ -116,10 +116,10 @@ func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force b
 		}
 		return nil
 	}
-	
+
 	// Function is stopped and force is false - prevent loading
 	l.logger.Printf("Function %s is stopped and cannot be loaded without force option", functionKey)
-	l.logStore.AddLog(functionKey, logging.LevelError, 
+	l.logStore.AddLog(functionKey, logging.LevelError,
 		"Cannot load stopped function. Use 'ignition function run' to explicitly load it")
 	return WrapEngineError("function was explicitly stopped - use 'ignition function run' to load it", nil)
 }
@@ -154,18 +154,18 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 	if !l.pluginManager.IsPluginLoaded(functionKey) {
 		return nil
 	}
-	
+
 	// Check if anything has changed
 	digestChanged := l.pluginManager.HasDigestChanged(functionKey, actualDigest)
 	configChanged := l.pluginManager.HasConfigChanged(functionKey, configCopy)
-	
+
 	// If nothing changed, we can skip reloading
 	if !digestChanged && !configChanged {
 		l.logger.Printf("Function %s already loaded with same digest and config", functionKey)
 		l.logStore.AddLog(functionKey, logging.LevelInfo, "Function already loaded with same digest and config")
 		return nil
 	}
-	
+
 	// Log what changed for debugging
 	if digestChanged {
 		oldDigest, _ := l.pluginManager.GetPluginDigest(functionKey)
@@ -175,16 +175,16 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 			fmt.Sprintf("Function digest changed from %s to %s, reloading",
 				oldDigest, actualDigest))
 	}
-	
+
 	if configChanged {
 		l.logger.Printf("Function %s configuration changed, reloading", functionKey)
 		l.logStore.AddLog(functionKey, logging.LevelInfo, "Function configuration changed, reloading")
 	}
-	
+
 	// Cleanup resources for reload
 	l.pluginManager.RemovePlugin(functionKey)
 	l.circuitBreakers.RemoveCircuitBreaker(functionKey)
-	
+
 	return nil
 }
 
@@ -352,40 +352,40 @@ func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, i
 		bytes []byte
 		info  *registry.VersionInfo
 	}
-	
+
 	// Create a wrapper function to use the shared utility
 	wrapper := func() (pullResult, error) {
 		bytes, info, err := l.registry.Pull(namespace, name, identifier)
 		return pullResult{bytes, info}, err
 	}
-	
+
 	// Execute with context handling
 	result, err := utils.ExecuteWithContext(ctx, wrapper)
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	return result.bytes, result.info, nil
 }
 
 // createPluginWithContext creates a plugin with cancellation support
-func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte, 
-                                               versionInfo *registry.VersionInfo, 
-                                               config map[string]string) (*extism.Plugin, error) {
-	
+func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte,
+	versionInfo *registry.VersionInfo,
+	config map[string]string) (*extism.Plugin, error) {
+
 	// Create a wrapper function to use the shared utility
 	wrapper := func() (*extism.Plugin, error) {
 		return components.CreatePlugin(wasmBytes, versionInfo, config)
 	}
-	
+
 	// Execute with context cancellation handling
 	plugin, err := utils.ExecuteWithContext(ctx, wrapper)
-	
+
 	// Clean up resources on error
 	if err != nil && plugin != nil {
 		plugin.Close(context.Background())
 	}
-	
+
 	return plugin, err
 }
 

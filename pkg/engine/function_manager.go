@@ -63,7 +63,7 @@ func (m *FunctionManagerImpl) GetFunctionState(namespace, name string) FunctionS
 	isLoaded := m.loader.IsLoaded(namespace, name)
 	isStopped := m.loader.IsStopped(namespace, name)
 	wasLoaded, config := m.loader.WasPreviouslyLoaded(namespace, name)
-	
+
 	// Build the initial function state with core information
 	state := FunctionState{
 		Loaded:           isLoaded,
@@ -71,7 +71,7 @@ func (m *FunctionManagerImpl) GetFunctionState(namespace, name string) FunctionS
 		PreviouslyLoaded: wasLoaded,
 		Config:           config,
 	}
-	
+
 	// Only try to fetch additional information if we have a loaded function
 	// or previously loaded function to avoid unnecessary operations
 	if isLoaded || wasLoaded {
@@ -84,11 +84,11 @@ func (m *FunctionManagerImpl) GetFunctionState(namespace, name string) FunctionS
 				state.Running = isLoaded && !cb.IsOpen()
 			}
 		}
-		
+
 		// Try to get digest from loader
 		if digest, found := m.loader.GetDigest(namespace, name); found {
 			state.Digest = digest
-			
+
 			// Get tags by enumerating all versions that match the digest
 			metadata, err := m.registry.Get(namespace, name)
 			if err == nil && metadata != nil {
@@ -103,7 +103,7 @@ func (m *FunctionManagerImpl) GetFunctionState(namespace, name string) FunctionS
 			}
 		}
 	}
-	
+
 	return state
 }
 

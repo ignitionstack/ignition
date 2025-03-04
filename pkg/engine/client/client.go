@@ -324,7 +324,7 @@ func (c *clientImpl) sendRequest(ctx context.Context, method, endpoint string, b
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
-	
+
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

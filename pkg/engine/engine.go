@@ -63,8 +63,8 @@ func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error)
 
 // NewEngineWithOptions creates a new engine instance with custom settings.
 // Accepts optional logger and options parameters (nil values use defaults).
-func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, 
-                         logger logging.Logger, options *Options) (*Engine, error) {
+func NewEngineWithOptions(socketPath, httpAddr string, registryDir string,
+	logger logging.Logger, options *Options) (*Engine, error) {
 	// Use defaults for nil parameters
 	if logger == nil {
 		logger = logging.NewStdLogger(os.Stdout)
@@ -127,7 +127,7 @@ func NewEngineWithConfig(cfg *config.Config, logger logging.Logger) (*Engine, er
 
 	// Create options from config
 	options := OptionsFromConfig(cfg)
-	
+
 	// Create engine with config-derived settings
 	engine, err := NewEngineWithOptions(
 		cfg.Server.SocketPath,
@@ -136,11 +136,11 @@ func NewEngineWithConfig(cfg *config.Config, logger logging.Logger) (*Engine, er
 		logger,
 		options,
 	)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Store the config for reference
 	engine.config = cfg
 	return engine, nil

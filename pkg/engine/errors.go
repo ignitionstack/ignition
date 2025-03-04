@@ -149,13 +149,13 @@ func ErrorToStatusCode(err error) int {
 	if errors.As(err, &reqErr) {
 		return reqErr.StatusCode
 	}
-	
+
 	// Then check domain errors and map them to appropriate HTTP codes
 	var domainErr *domainerrors.DomainError
 	if errors.As(err, &domainErr) {
 		return DomainErrorToStatusCode(domainErr)
 	}
-	
+
 	return http.StatusInternalServerError
 }
 
@@ -190,7 +190,7 @@ func DomainErrorToStatusCode(err *domainerrors.DomainError) int {
 			return http.StatusNotFound
 		}
 	}
-	
+
 	// Default to internal server error for unmatched codes
 	return http.StatusInternalServerError
 }

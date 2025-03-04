@@ -92,21 +92,21 @@ func (e *FunctionExecutor) executeFunction(
 	payload []byte,
 ) ([]byte, error) {
 	startTime := time.Now()
-	
+
 	// Create a wrapper function for the shared utility
 	wrapper := func() (callResult, error) {
 		_, output, callErr := plugin.Call(entrypoint, payload)
 		return callResult{output, callErr}, nil
 	}
-	
+
 	// Execute with context cancellation handling
 	result, _ := utils.ExecuteWithContext(ctx, wrapper)
-	
+
 	// If the context was cancelled, handle it specially
 	if ctx.Err() != nil {
 		return e.handleCancellation(ctx, functionKey, cb)
 	}
-	
+
 	// Otherwise process the result with the actual call result
 	return e.processResult(functionKey, cb, entrypoint, result, startTime)
 }
@@ -139,7 +139,7 @@ type ExecutionStats struct {
 	FailedExecutions     int64
 }
 
-// GetStats returns execution statistics for a function 
+// GetStats returns execution statistics for a function
 func (e *FunctionExecutor) GetStats(namespace, name string) ExecutionStats {
 	// Currently we don't track these stats, so return empty values
 	// This is a placeholder for future implementation
@@ -160,25 +160,25 @@ func (e *FunctionExecutor) processResult(
 	startTime time.Time,
 ) ([]byte, error) {
 	execTime := time.Since(startTime)
-	
+
 	// Handle error case
 	if result.err != nil {
 		// Record failure in circuit breaker
 		isOpen := cb.RecordFailure()
-		
+
 		// Log if circuit breaker opened
 		if isOpen {
 			e.logCircuitBreakerOpen(functionKey)
 		}
-		
+
 		return nil, e.logAndWrapError(functionKey, "failed to call function", result.err)
 	}
-	
+
 	// Handle success case
 	e.logStore.AddLog(functionKey, logging.LevelInfo,
 		fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
 			entrypoint, execTime, len(result.output)))
-	
+
 	cb.RecordSuccess()
 	return result.output, nil
 }
@@ -191,7 +191,7 @@ func (e *FunctionExecutor) handleCancellation(
 ) ([]byte, error) {
 	// Record the failure in the circuit breaker
 	isOpen := cb.RecordFailure()
-	
+
 	// Determine the specific error message based on cancellation reason
 	var operation string
 	if ctx.Err() == context.DeadlineExceeded {
@@ -199,12 +199,12 @@ func (e *FunctionExecutor) handleCancellation(
 	} else {
 		operation = "function execution was cancelled"
 	}
-	
+
 	// Log if circuit breaker opened
 	if isOpen {
 		e.logCircuitBreakerOpen(functionKey)
 	}
-	
+
 	return nil, e.logAndWrapError(functionKey, operation, ctx.Err())
 }
 

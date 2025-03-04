@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"time"
-	
+
 	domainerrors "github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 
@@ -47,15 +47,15 @@ func (h *Handlers) errorMiddleware() Middleware {
 
 				// Handle different error types with proper conversion logic
 				switch {
-				case errors.As(err, &reqErr): 
+				case errors.As(err, &reqErr):
 					// Already a RequestError, use as is
-				
+
 				case isDomainError(err):
 					// Convert domain error to request error with appropriate status code
 					var domainErr *domainerrors.DomainError
 					errors.As(err, &domainErr)
 					reqErr = DomainErrorToRequestError(domainErr)
-					
+
 				default:
 					// Unknown error type, convert to internal server error
 					reqErr = RequestError{
@@ -76,7 +76,7 @@ func (h *Handlers) errorMiddleware() Middleware {
 					"error":  reqErr.Message,
 					"status": reqErr.StatusCode,
 				}
-				
+
 				// Add domain and code if available for better debugging
 				if de, ok := err.(*domainerrors.DomainError); ok {
 					response["domain"] = string(de.ErrDomain)

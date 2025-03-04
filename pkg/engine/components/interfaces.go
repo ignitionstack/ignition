@@ -38,7 +38,7 @@ type PluginManager interface {
 	GetPlugin(key string) (*extism.Plugin, bool)
 	StorePlugin(key string, plugin *extism.Plugin, digest string, config map[string]string)
 	RemovePlugin(key string) bool
-	
+
 	// Plugin state management
 	IsPluginLoaded(key string) bool
 	WasPreviouslyLoaded(key string) (bool, map[string]string)
@@ -46,16 +46,16 @@ type PluginManager interface {
 	HasDigestChanged(key string, newDigest string) bool
 	GetPluginDigest(key string) (string, bool)
 	GetPluginConfig(key string) (map[string]string, bool)
-	
+
 	// Function state control
 	StopFunction(key string) bool
 	IsFunctionStopped(key string) bool
 	ClearStoppedStatus(key string)
-	
+
 	// Lifecycle management
 	StartCleanup(ctx context.Context)
 	Shutdown()
-	
+
 	// Information provider
 	ListLoadedFunctions() []string
 	GetLoadedFunctionCount() int

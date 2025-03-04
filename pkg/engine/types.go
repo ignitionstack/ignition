@@ -17,10 +17,10 @@ import (
 type FunctionManager interface {
 	// Runtime operations - core function lifecycle management
 	RuntimeOperations
-	
-	// Build operations - function building and registry management 
+
+	// Build operations - function building and registry management
 	BuildOperations
-	
+
 	// State operations - function state queries
 	StateOperations
 }
@@ -30,13 +30,13 @@ type RuntimeOperations interface {
 	// LoadFunction loads a function with the specified identifier and configuration.
 	// If force is true, it will load even if the function is marked as stopped.
 	LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error
-	
+
 	// CallFunction calls a function with the specified parameters.
 	CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error)
-	
+
 	// UnloadFunction unloads a function, removing it from memory.
 	UnloadFunction(namespace, name string) error
-	
+
 	// StopFunction stops a function and marks it as stopped so it won't be auto-loaded.
 	StopFunction(namespace, name string) error
 }
@@ -45,7 +45,7 @@ type RuntimeOperations interface {
 type BuildOperations interface {
 	// BuildFunction builds a function from source and adds it to the registry.
 	BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error)
-	
+
 	// ReassignTag changes a tag to point to a different digest.
 	ReassignTag(namespace, name, tag, newDigest string) error
 }
@@ -60,26 +60,26 @@ type StateOperations interface {
 // It provides a unified view of a function's current status.
 type FunctionState struct {
 	// Basic state
-	Loaded           bool              // Whether the function is currently loaded
-	Running          bool              // Whether the function is currently running
-	Stopped          bool              // Whether the function has been explicitly stopped
-	PreviouslyLoaded bool              // Whether the function was previously loaded in this session
-	
+	Loaded           bool // Whether the function is currently loaded
+	Running          bool // Whether the function is currently running
+	Stopped          bool // Whether the function has been explicitly stopped
+	PreviouslyLoaded bool // Whether the function was previously loaded in this session
+
 	// Configuration
-	Config           map[string]string // Current function configuration
-	
+	Config map[string]string // Current function configuration
+
 	// Execution stats
-	LastExecutionTime    time.Time     // When the function was last executed
-	TotalExecutions      int64         // Total number of executions
-	SuccessfulExecutions int64         // Number of successful executions
-	FailedExecutions     int64         // Number of failed executions
-	
+	LastExecutionTime    time.Time // When the function was last executed
+	TotalExecutions      int64     // Total number of executions
+	SuccessfulExecutions int64     // Number of successful executions
+	FailedExecutions     int64     // Number of failed executions
+
 	// Circuit breaker status
-	CircuitBreakerOpen bool              // Whether the circuit breaker is open
-	
+	CircuitBreakerOpen bool // Whether the circuit breaker is open
+
 	// Registry info
-	Digest           string              // Current function digest
-	Tags             []string            // Tags associated with this function
+	Digest string   // Current function digest
+	Tags   []string // Tags associated with this function
 }
 
 // GetFunctionKey returns a unique key for a function based on namespace and name.

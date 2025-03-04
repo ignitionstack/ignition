@@ -49,8 +49,8 @@ type OneOffCallRequest struct {
 // BuildRequest represents a request to build a function
 type BuildRequest struct {
 	BaseRequest
-	Path     string                `json:"path"`
-	Tag      string                `json:"tag,omitempty"`
+	Path     string                    `json:"path"`
+	Tag      string                    `json:"tag,omitempty"`
 	Manifest manifest.FunctionManifest `json:"manifest"`
 }
 
