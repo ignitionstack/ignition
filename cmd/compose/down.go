@@ -94,7 +94,7 @@ func NewComposeDownCommand(container *di.Container) *cobra.Command {
 
 			// Unload functions in a goroutine
 			go func() {
-				err := engineClient.UnloadFunctions(context.Background(), functionsToUnload)
+				err := engineClient.StopFunctions(context.Background(), functionsToUnload)
 				if err != nil {
 					program.Send(spinner.ErrorMsg{Err: err})
 				} else {
