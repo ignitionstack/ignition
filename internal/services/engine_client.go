@@ -1,374 +1,187 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/ignitionstack/ignition/internal/config"
+	"github.com/ignitionstack/ignition/pkg/engine/api"
+	"github.com/ignitionstack/ignition/pkg/engine/client"
+	"github.com/ignitionstack/ignition/pkg/engine/models"
+	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// EngineClient is a client for communicating with the Ignition engine.
+// EngineClient implements the client.EngineClient interface
 type EngineClient struct {
-	socketPath string
-	httpClient *http.Client
-}
-
-// EngineFunctionDetails represents basic information about a function for the EngineClient.
-type EngineFunctionDetails struct {
-	Namespace string
-	Name      string
-	Status    string
-}
-
-// FunctionReference represents a reference to a function with its service name.
-type FunctionReference struct {
-	Namespace string
-	Name      string
-	Service   string
+	client api.Client
 }
 
 func NewEngineClientWithDefaults() *EngineClient {
 	// Use shared default socket path from global config
+	client, _ := client.New(client.Options{
+		SocketPath: config.DefaultSocket,
+	})
+
 	return &EngineClient{
-		socketPath: config.DefaultSocket,
-		httpClient: &http.Client{},
+		client: client,
 	}
 }
 
 func NewEngineClient(socketPath string) (*EngineClient, error) {
-	// Create an HTTP client that connects to the Unix socket
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
+	engineClient, err := client.New(client.Options{
+		SocketPath: socketPath,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &EngineClient{
-		socketPath: socketPath,
-		httpClient: httpClient,
+		client: engineClient,
 	}, nil
 }
 
-// Ping checks if the engine is running.
+// Status checks if the engine is running
+func (c *EngineClient) Status(ctx context.Context) error {
+	_, err := c.client.Status(ctx)
+	return err
+}
+
+// Ping is an alias for Status
 func (c *EngineClient) Ping(ctx context.Context) error {
-	// Create a context with a short timeout to avoid long hangs
-	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(
-		pingCtx,
-		http.MethodGet,
-		"http://unix/status",
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create ping request: %w", err)
-	}
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		// Check for common connection errors and provide more helpful messages
-		var netErr net.Error
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			return fmt.Errorf("engine connection timed out: %w", err)
-		}
-
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "connect: no such file or directory") {
-			return errors.New("engine is not running (socket file not found)")
-		} else if strings.Contains(errMsg, "connect: connection refused") {
-			return errors.New("engine is not running (connection refused)")
-		}
-
-		return fmt.Errorf("cannot connect to the engine: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check for a 200 OK response
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("engine returned unexpected status: %s", resp.Status)
-	}
-
-	return nil
+	return c.Status(ctx)
 }
 
+// LoadFunction loads a function into the engine
 func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag string, config map[string]string) error {
-	// Create HTTP request body
-	reqBody := map[string]interface{}{
-		"namespace":  namespace,
-		"name":       name,
-		"digest":     tag,
-		"force_load": true,
+	req := api.LoadRequest{
+		BaseRequest: api.BaseRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Digest:    tag,
+		Config:    config,
+		ForceLoad: true,
 	}
 
-	// Add config if provided
-	if len(config) > 0 {
-		reqBody["config"] = config
-	}
-
-	// Convert to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal load request: %w", err)
-	}
-
-	// Create HTTP request to the load endpoint
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		"http://unix/load",
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create load request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send load request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to load function (status code %d): %s",
-			resp.StatusCode, string(responseBody))
-	}
-
-	return nil
+	_, err := c.client.LoadFunction(ctx, req)
+	return err
 }
 
-// sendNamespaceNameRequest is a helper function to send a request with namespace and name.
-func (c *EngineClient) sendNamespaceNameRequest(ctx context.Context, endpoint, action string, namespace, name string) error {
-	// Create HTTP request body
-	reqBody := map[string]interface{}{
-		"namespace": namespace,
-		"name":      name,
-	}
-
-	// Convert to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal %s request: %w", action, err)
-	}
-
-	// Create HTTP request to the endpoint
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		"http://unix/"+endpoint,
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create %s request: %w", action, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send %s request: %w", action, err)
-	}
-	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to %s function (status code %d): %s",
-			action, resp.StatusCode, string(responseBody))
-	}
-
-	return nil
-}
-
+// UnloadFunction unloads a function from the engine
 func (c *EngineClient) UnloadFunction(ctx context.Context, namespace, name string) error {
-	return c.sendNamespaceNameRequest(ctx, "unload", "unload", namespace, name)
+	req := api.UnloadRequest{
+		BaseRequest: api.BaseRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+
+	return c.client.UnloadFunction(ctx, req)
 }
 
-// StopFunction stops a function and prevents it from being automatically reloaded.
+// StopFunction stops a function in the engine
 func (c *EngineClient) StopFunction(ctx context.Context, namespace, name string) error {
-	return c.sendNamespaceNameRequest(ctx, "stop", "stop", namespace, name)
+	req := api.StopRequest{
+		BaseRequest: api.BaseRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+
+	return c.client.StopFunction(ctx, req)
 }
 
-func (c *EngineClient) ListFunctions(ctx context.Context) ([]EngineFunctionDetails, error) {
-	// Create HTTP request to the loaded endpoint to get actually loaded functions
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		"http://unix/loaded", // Use the new endpoint for loaded functions
-		nil,
-	)
+// CallFunction calls a function
+func (c *EngineClient) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte, config map[string]string) ([]byte, error) {
+	req := api.CallRequest{
+		BaseRequest: api.BaseRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Entrypoint: entrypoint,
+		Payload:    string(payload),
+		Config:     config,
+	}
+
+	return c.client.CallFunction(ctx, req)
+}
+
+// OneOffCall loads a function temporarily and calls it
+func (c *EngineClient) OneOffCall(ctx context.Context, namespace, name, reference, entrypoint string, payload []byte, config map[string]string) ([]byte, error) {
+	req := api.OneOffCallRequest{
+		BaseRequest: api.BaseRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Reference:  reference,
+		Entrypoint: entrypoint,
+		Payload:    string(payload),
+		Config:     config,
+	}
+
+	return c.client.OneOffCall(ctx, req)
+}
+
+// BuildFunction builds a function
+func (c *EngineClient) BuildFunction(ctx context.Context, namespace, name, path, tag string, manifest manifest.FunctionManifest) (*types.BuildResult, error) {
+	req := api.BuildRequest{
+		BaseRequest: api.BaseRequest{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Path:     path,
+		Tag:      tag,
+		Manifest: manifest,
+	}
+
+	resp, err := c.client.BuildFunction(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create loaded functions request: %w", err)
+		return nil, err
 	}
 
-	// Send request
-	resp, err := c.httpClient.Do(req)
+	// Convert to the expected type
+	return &types.BuildResult{
+		Name:      resp.BuildResult.Name,
+		Namespace: resp.BuildResult.Namespace,
+		Digest:    resp.BuildResult.Digest,
+		BuildTime: resp.BuildResult.BuildTime,
+		Tag:       resp.BuildResult.Tag,
+		Reused:    resp.BuildResult.Reused,
+	}, nil
+}
+
+// ListFunctions lists all loaded functions
+func (c *EngineClient) ListFunctions(ctx context.Context) ([]types.LoadedFunction, error) {
+	modelFunctions, err := c.client.ListFunctions(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send loaded functions request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list loaded functions (status code %d): %s",
-			resp.StatusCode, string(responseBody))
+		return nil, err
 	}
 
-	// Parse response
-	var loadedFunctions []types.LoadedFunction
-	if err := json.NewDecoder(resp.Body).Decode(&loadedFunctions); err != nil {
-		return nil, fmt.Errorf("failed to decode loaded functions response: %w", err)
-	}
-
-	// Convert to EngineFunctionDetails
-	var functions []EngineFunctionDetails
-	for _, fn := range loadedFunctions {
-		functions = append(functions, EngineFunctionDetails{
+	// Convert from models.Function to types.LoadedFunction
+	var result []types.LoadedFunction
+	for _, fn := range modelFunctions {
+		result = append(result, types.LoadedFunction{
 			Namespace: fn.Namespace,
 			Name:      fn.Name,
 			Status:    fn.Status,
 		})
 	}
 
-	return functions, nil
+	return result, nil
 }
 
+// GetFunctionLogs gets logs for a function
 func (c *EngineClient) GetFunctionLogs(ctx context.Context, namespace, name string, since time.Duration, tail int) ([]string, error) {
-	// Create query parameters
-	query := url.Values{}
-
-	// Add since parameter (in seconds) if specified
-	if since > 0 {
-		sinceSeconds := int64(since.Seconds())
-		query.Add("since", strconv.FormatInt(sinceSeconds, 10))
-	}
-
-	// Add tail parameter if specified
-	if tail > 0 {
-		query.Add("tail", strconv.Itoa(tail))
-	}
-
-	// Create the URL with query parameters
-	logURL := fmt.Sprintf("http://unix/logs/%s/%s", namespace, name)
-	if len(query) > 0 {
-		logURL += "?" + query.Encode()
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		logURL,
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create logs request: %w", err)
-	}
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send logs request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to retrieve logs (status code %d): %s",
-			resp.StatusCode, string(responseBody))
-	}
-
-	// Parse response
-	var logs []string
-	if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
-		return nil, fmt.Errorf("failed to decode logs response: %w", err)
-	}
-
-	return logs, nil
+	return c.client.GetFunctionLogs(ctx, namespace, name, since, tail)
 }
 
-// UnloadFunctions unloads all functions in the provided list.
-func (c *EngineClient) UnloadFunctions(ctx context.Context, functions []FunctionReference) error {
-	var unloadErrs []string
-	var unloadErrsMu sync.Mutex
-	var wg sync.WaitGroup
-
-	for _, function := range functions {
-		wg.Add(1)
-		go func(namespace, name, serviceName string) {
-			defer wg.Done()
-
-			err := c.UnloadFunction(ctx, namespace, name)
-			if err != nil {
-				unloadErrsMu.Lock()
-				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v",
-					namespace, name, serviceName, err))
-				unloadErrsMu.Unlock()
-			}
-		}(function.Namespace, function.Name, function.Service)
-	}
-
-	// Wait for all unload operations to complete
-	wg.Wait()
-
-	// Check for errors
-	if len(unloadErrs) > 0 {
-		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
-	}
-
-	return nil
+// UnloadFunctions unloads multiple functions at once
+func (c *EngineClient) UnloadFunctions(ctx context.Context, functions []models.FunctionReference) error {
+	return c.client.UnloadFunctions(ctx, functions)
 }
 
-// UnloadFunctions unloads all functions in the provided list.
-func (c *EngineClient) StopFunctions(ctx context.Context, functions []FunctionReference) error {
-	var stopErrs []string
-	var stopErrsMu sync.Mutex
-	var wg sync.WaitGroup
-
-	for _, function := range functions {
-		wg.Add(1)
-		go func(namespace, name, serviceName string) {
-			defer wg.Done()
-
-			err := c.StopFunction(ctx, namespace, name)
-			if err != nil {
-				stopErrsMu.Lock()
-				stopErrs = append(stopErrs, fmt.Sprintf("failed to stop function '%s/%s' for service '%s': %v",
-					namespace, name, serviceName, err))
-				stopErrsMu.Unlock()
-			}
-		}(function.Namespace, function.Name, function.Service)
-	}
-
-	// Wait for all unload operations to complete
-	wg.Wait()
-
-	// Check for errors
-	if len(stopErrs) > 0 {
-		return fmt.Errorf("failed to stop some functions:\n%s", strings.Join(stopErrs, "\n"))
-	}
-
-	return nil
+// StopFunctions stops multiple functions at once
+func (c *EngineClient) StopFunctions(ctx context.Context, functions []models.FunctionReference) error {
+	return c.client.StopFunctions(ctx, functions)
 }

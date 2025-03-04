@@ -29,13 +29,15 @@ for easier management.`,
 }
 
 func init() {
+	// Add function subcommands to functionCmd
 	rootCmd.AddCommand(function.NewFunctionInitCommand())
 	rootCmd.AddCommand(function.NewFunctionBuildCommand())
 	rootCmd.AddCommand(function.NewFunctionCallCommand())
 	rootCmd.AddCommand(function.NewFunctionRunCommand())
 	rootCmd.AddCommand(function.NewFunctionStopCommand())
 	rootCmd.AddCommand(function.NewFunctionTagCommand())
+	rootCmd.AddCommand(function.NewFunctionListCommand())
 
-	functionCmd.AddCommand(function.NewFunctionListCommand())
+	// Add the functionCmd to the root command
 	rootCmd.AddCommand(functionCmd)
 }

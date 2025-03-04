@@ -1,13 +1,9 @@
 package function
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/ignitionstack/ignition/internal/ui/models/spinner"
-	"github.com/ignitionstack/ignition/pkg/engine"
+	"github.com/ignitionstack/ignition/pkg/engine/api"
+	"github.com/ignitionstack/ignition/pkg/engine/client"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/types"
 	"github.com/spf13/cobra"
@@ -96,15 +93,20 @@ func buildFunction(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create HTTP client for engine communication
-	client := createEngineClient(socketPath)
+	// Create engine client
+	engineClient, err := client.New(client.Options{
+		SocketPath: socketPath,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create engine client: %w", err)
+	}
 
 	// Start the build spinner
 	spinnerModel := spinner.NewSpinnerModelWithMessage("Building...")
 	program := tea.NewProgram(spinnerModel)
 
 	// Run the build in a goroutine to allow the spinner to update
-	go runBuild(program, absPath, tags, functionConfig, client)
+	go runBuild(program, absPath, tags, functionConfig, engineClient)
 
 	// Run the UI program and wait for completion
 	model, err := program.Run()
@@ -148,189 +150,167 @@ func validateAndPrepareBuildDir(args []string) (string, error) {
 	// Check if directory exists
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		ui.PrintError(fmt.Sprintf("path %s does not exist", absPath))
-		return "", err
+		return "", fmt.Errorf("path does not exist: %w", err)
+	}
+
+	// Check for ignition.yml file
+	manifestPath := filepath.Join(absPath, "ignition.yml")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		ui.PrintError(fmt.Sprintf("no ignition.yml found in %s", absPath))
+		return "", fmt.Errorf("ignition.yml not found: %w", err)
 	}
 
 	return absPath, nil
 }
 
-// loadFunctionManifest loads and parses the function manifest file.
-func loadFunctionManifest(absPath string) (manifest.FunctionManifest, error) {
-	var functionConfig manifest.FunctionManifest
+func loadFunctionManifest(path string) (manifest.FunctionManifest, error) {
+	var config manifest.FunctionManifest
 
-	// Check if manifest file exists
-	manifestPath := filepath.Join(absPath, "ignition.yml")
-	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
-		ui.PrintError(fmt.Sprintf("directory %s not an ignition project", absPath))
-		return functionConfig, fmt.Errorf("not an ignition project: %s does not exist", manifestPath)
-	}
-
-	// Read and parse the manifest file
-	manifestFile, err := os.ReadFile(manifestPath)
+	// Read ignition.yml file
+	manifestPath := filepath.Join(path, "ignition.yml")
+	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
-		return functionConfig, fmt.Errorf("failed to read ignition.yml: %w", err)
+		return config, fmt.Errorf("failed to read manifest: %w", err)
 	}
 
 	// Parse YAML
-	if err := yaml.Unmarshal(manifestFile, &functionConfig); err != nil {
-		return functionConfig, fmt.Errorf("failed to parse ignition.yml: %w", err)
+	if err := yaml.Unmarshal(manifestData, &config); err != nil {
+		return config, fmt.Errorf("failed to parse manifest: %w", err)
 	}
 
-	return functionConfig, nil
+	// Validate manifest
+	if config.FunctionSettings.Name == "" {
+		return config, errors.New("function name is required in ignition.yml")
+	}
+
+	if config.FunctionSettings.Language == "" {
+		return config, errors.New("function language is required in ignition.yml")
+	}
+
+	return config, nil
 }
 
-// parseTags parses tag information from command line flags.
 func parseTags(cmd *cobra.Command, absPath string) ([]TagInfo, error) {
-	var tags []TagInfo
-
-	// Get tags from flags
-	tagInputs, _ := cmd.Flags().GetStringArray("tag")
-
-	// If no tags provided, use default namespace and directory name
-	if len(tagInputs) == 0 {
-		tags = append(tags, TagInfo{
-			Namespace: "default",
-			Name:      filepath.Base(absPath),
-			Tag:       "latest",
-		})
-		return tags, nil
+	// Get tag flags
+	tagFlags, err := cmd.Flags().GetStringArray("tag")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tag flags: %w", err)
 	}
 
-	// Parse all provided tags
-	for _, tagInput := range tagInputs {
-		namespace, name, tag, err := parseNamespaceAndName(tagInput)
+	// If no tags provided, try to read from the manifest
+	if len(tagFlags) == 0 {
+		// Read ignition.yml file
+		manifestPath := filepath.Join(absPath, "ignition.yml")
+		manifestData, err := os.ReadFile(manifestPath)
 		if err != nil {
-			return nil, fmt.Errorf("invalid tag format in %q: %w", tagInput, err)
+			return nil, fmt.Errorf("failed to read manifest: %w", err)
 		}
-		tags = append(tags, TagInfo{namespace, name, tag})
+
+		// Parse YAML
+		var config manifest.FunctionManifest
+		if err := yaml.Unmarshal(manifestData, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse manifest: %w", err)
+		}
+
+		// Use the function name from the manifest with default namespace
+		if config.FunctionSettings.Name != "" {
+			namespace := "default" // Always use default namespace
+			tagFlags = append(tagFlags, fmt.Sprintf("%s/%s:latest", namespace, config.FunctionSettings.Name))
+		}
+	}
+
+	// Create tag info objects from tag strings
+	var tags []TagInfo
+	for _, tag := range tagFlags {
+		namespace, name, tagValue, err := parseTag(tag)
+		if err != nil {
+			return nil, err
+		}
+		tags = append(tags, TagInfo{
+			Namespace: namespace,
+			Name:      name,
+			Tag:       tagValue,
+		})
 	}
 
 	return tags, nil
 }
 
-// parseNamespaceAndName parses a tag string into namespace, name, and tag components.
-func parseNamespaceAndName(input string) (namespace, name, tag string, err error) {
-	// Split into namespace/name and tag
-	parts := strings.Split(input, ":")
-	if len(parts) > 2 {
-		return "", "", "", errors.New("invalid format: expected namespace/name[:tag]")
+// parseTag parses a tag in the format namespace/name:tag or namespace/name (defaults to :latest)
+func parseTag(tag string) (namespace, name, tagValue string, err error) {
+	// Split namespace and name from tag
+	parts := strings.Split(tag, "/")
+	if len(parts) != 2 {
+		return "", "", "", fmt.Errorf("invalid tag format: %s (expected namespace/name or namespace/name:tag)", tag)
 	}
 
-	// Extract namespace and name
-	namespaceName := parts[0]
-	namespaceNameParts := strings.Split(namespaceName, "/")
-	if len(namespaceNameParts) != 2 {
-		return "", "", "", errors.New("invalid format: expected namespace/name[:tag]")
+	namespace = parts[0]
+	nameTag := parts[1]
+
+	// Split name from tag
+	parts = strings.Split(nameTag, ":")
+	if len(parts) == 1 {
+		// No tag provided, use "latest" as default
+		name = parts[0]
+		tagValue = "latest"
+	} else if len(parts) == 2 {
+		// Tag provided
+		name = parts[0]
+		tagValue = parts[1]
+	} else {
+		return "", "", "", fmt.Errorf("invalid tag format: %s (expected namespace/name or namespace/name:tag)", tag)
 	}
 
-	namespace = strings.TrimSpace(namespaceNameParts[0])
-	name = strings.TrimSpace(namespaceNameParts[1])
-
-	// Extract tag if provided, otherwise use "latest"
-	tag = "latest"
-	if len(parts) == 2 {
-		tag = strings.TrimSpace(parts[1])
+	// Check that all parts are non-empty
+	if namespace == "" || name == "" || tagValue == "" {
+		return "", "", "", fmt.Errorf("invalid tag format: %s (all parts must be non-empty)", tag)
 	}
 
-	// If namespace or name is empty, use defaults
-	if namespace == "" {
-		namespace = "default"
-	}
-	if name == "" {
-		return "", "", "", errors.New("name cannot be empty")
-	}
-
-	return namespace, name, tag, nil
-}
-
-// createEngineClient creates an HTTP client for communicating with the engine over Unix socket.
-func createEngineClient(socketPath string) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
-	}
+	return namespace, name, tagValue, nil
 }
 
 // runBuild executes the build process and updates the spinner with progress.
 func runBuild(program *tea.Program, absPath string, tags []TagInfo,
-	functionConfig manifest.FunctionManifest, client *http.Client) {
+	functionConfig manifest.FunctionManifest, client api.Client) {
 	buildStart := time.Now()
 	var finalResult *types.BuildResult
 
 	// Send build requests for each tag
 	for _, tagInfo := range tags {
 		// Create build request
-		result, err := sendBuildRequest(client, tagInfo, absPath, functionConfig)
+		req := api.BuildRequest{
+			BaseRequest: api.BaseRequest{
+				Namespace: tagInfo.Namespace,
+				Name:      tagInfo.Name,
+			},
+			Path:     absPath,
+			Tag:      tagInfo.Tag,
+			Manifest: functionConfig,
+		}
+
+		// Send build request
+		result, err := client.BuildFunction(context.Background(), req)
 		if err != nil {
 			program.Send(err)
 			return
 		}
-		finalResult = result
+
+		// Convert models.BuildResult to types.BuildResult
+		typesResult := &types.BuildResult{
+			Name:      result.BuildResult.Name,
+			Namespace: result.BuildResult.Namespace,
+			Digest:    result.BuildResult.Digest,
+			BuildTime: result.BuildResult.BuildTime,
+			Tag:       result.BuildResult.Tag,
+			Reused:    result.BuildResult.Reused,
+		}
+		finalResult = typesResult
 	}
 
 	if finalResult != nil {
 		finalResult.BuildTime = time.Since(buildStart).String()
 		program.Send(spinner.ResultMsg{Result: *finalResult})
 	}
-}
-
-// sendBuildRequest sends a single build request to the engine.
-func sendBuildRequest(client *http.Client, tagInfo TagInfo,
-	absPath string, functionConfig manifest.FunctionManifest) (*types.BuildResult, error) {
-	// Create request body
-	reqBody := engine.ExtendedBuildRequest{
-		BuildRequest: types.BuildRequest{
-			Namespace: tagInfo.Namespace,
-			Name:      tagInfo.Name,
-			Path:      absPath,
-			Tag:       tagInfo.Tag,
-		},
-		Manifest: functionConfig,
-	}
-
-	// Marshal the request body
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Create the request
-	req, err := http.NewRequest(
-		http.MethodPost,
-		"http://unix/build",
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the request
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send build request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check for error response
-	if resp.StatusCode != http.StatusOK {
-		var errorMsg engine.RequestError
-		if err := json.NewDecoder(resp.Body).Decode(&errorMsg); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
-		}
-		return nil, errorMsg
-	}
-
-	// Decode successful response
-	var buildResult types.BuildResult
-	if err := json.NewDecoder(resp.Body).Decode(&buildResult); err != nil {
-		return nil, fmt.Errorf("failed to decode build response: %w", err)
-	}
-
-	return &buildResult, nil
 }
 
 // displayBuildResults shows the build results to the user.

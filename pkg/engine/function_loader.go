@@ -8,10 +8,10 @@ import (
 	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
+	"github.com/ignitionstack/ignition/pkg/engine/utils"
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// FunctionLoader is responsible for loading, unloading, and managing function state.
 type FunctionLoader struct {
 	registry        registry.Registry
 	pluginManager   PluginManager
@@ -20,7 +20,6 @@ type FunctionLoader struct {
 	logger          logging.Logger
 }
 
-// NewFunctionLoader creates a new function loader.
 func NewFunctionLoader(registry registry.Registry, pluginManager PluginManager,
 	circuitBreakers CircuitBreakerManager, logStore *logging.FunctionLogStore,
 	logger logging.Logger) *FunctionLoader {
@@ -34,36 +33,16 @@ func NewFunctionLoader(registry registry.Registry, pluginManager PluginManager,
 }
 
 // LoadFunction loads a function with the specified identifier and configuration.
-//
-// Parameters:
-//   - ctx: Context for cancellation and timeout
-//   - namespace: The function namespace
-//   - name: The function name
-//   - identifier: The function identifier (digest or tag)
-//   - config: Configuration values for the function
-//
-// Returns:
-//   - error: Any error that occurred during loading
+// This is a convenience method that calls LoadFunctionWithForce with force=false.
 func (l *FunctionLoader) LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
 	return l.LoadFunctionWithForce(ctx, namespace, name, identifier, config, false)
 }
 
 // LoadFunctionWithForce loads a function with the specified identifier and configuration,
 // with the option to force loading even if the function is marked as stopped.
-//
-// Parameters:
-//   - ctx: Context for cancellation and timeout
-//   - namespace: The function namespace
-//   - name: The function name
-//   - identifier: The function identifier (digest or tag)
-//   - config: Configuration values for the function
-//   - force: Whether to force loading even if the function is marked as stopped
-//
-// Returns:
-//   - error: Any error that occurred during loading
 func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	l.logger.Printf("Loading function: %s/%s (identifier: %s, force: %v)", namespace, name, identifier, force)
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	// Validate loading permissions
 	if err := l.validateLoadPermissions(namespace, name, force); err != nil {
@@ -99,24 +78,27 @@ func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, n
 }
 
 // validateLoadPermissions checks if a function can be loaded based on its stopped status.
+// Returns nil if the function can be loaded, error otherwise.
 func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force bool) error {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
+	isStopped := l.IsStopped(namespace, name)
 
-	// Check if the function is stopped - only allow loading if force is true
-	if l.IsStopped(namespace, name) && !force {
-		l.logger.Printf("Function %s/%s is stopped and cannot be loaded without force option", namespace, name)
-		l.logStore.AddLog(functionKey, logging.LevelError, "Cannot load stopped function. Use 'ignition function run' to explicitly load it")
-		return WrapEngineError("function was explicitly stopped - use 'ignition function run' to load it", nil)
+	// Function is not stopped or force is true - allow loading
+	if !isStopped || (isStopped && force) {
+		// If force-loading a stopped function, clear the stopped status
+		if isStopped && force {
+			l.logger.Printf("Force loading stopped function %s - clearing stopped status", functionKey)
+			l.logStore.AddLog(functionKey, logging.LevelInfo, "Force loading stopped function - clearing stopped status")
+			l.pluginManager.ClearStoppedStatus(functionKey)
+		}
+		return nil
 	}
 
-	// If force is true and function is stopped, clear the stopped status
-	if force && l.IsStopped(namespace, name) {
-		l.logger.Printf("Force loading stopped function %s/%s - clearing stopped status", namespace, name)
-		l.logStore.AddLog(functionKey, logging.LevelInfo, "Force loading stopped function - clearing stopped status")
-		l.pluginManager.ClearStoppedStatus(functionKey)
-	}
-
-	return nil
+	// Function is stopped and force is false - prevent loading
+	l.logger.Printf("Function %s is stopped and cannot be loaded without force option", functionKey)
+	l.logStore.AddLog(functionKey, logging.LevelError,
+		"Cannot load stopped function. Use 'ignition function run' to explicitly load it")
+	return WrapEngineError("function was explicitly stopped - use 'ignition function run' to load it", nil)
 }
 
 // copyConfig creates a deep copy of a configuration map.
@@ -128,32 +110,40 @@ func (l *FunctionLoader) copyConfig(config map[string]string) map[string]string 
 	return configCopy
 }
 
-// handlePullError handles errors from pulling a function from the registry.
-func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
-	errMsg := fmt.Sprintf("Failed to fetch WASM file from registry: %v", err)
+// logAndWrapError logs an error and wraps it with an EngineError.
+// This centralizes error handling to ensure consistent logging and wrapping.
+func (l *FunctionLoader) logAndWrapError(functionKey, operation string, err error) error {
+	errMsg := fmt.Sprintf("%s: %v", operation, err)
 	l.logger.Errorf(errMsg)
 	l.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-	return WrapEngineError("failed to fetch WASM file from registry", err)
+	return WrapEngineError(operation, err)
 }
 
-// handleExistingFunction checks if the function is already loaded and handles accordingly.
+// handlePullError logs and wraps errors from pulling a function from the registry.
+func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
+	return l.logAndWrapError(functionKey, "failed to fetch WASM file from registry", err)
+}
+
+// handleExistingFunction checks if a function needs to be reloaded based on changes.
+// Returns nil if no reload is needed or if reload preparation was successful.
 func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy map[string]string, actualDigest string) error {
-	// Check if already loaded with same digest and config
-	alreadyLoaded := l.pluginManager.IsPluginLoaded(functionKey)
-	if !alreadyLoaded {
+	// If function is not loaded, nothing to do
+	if !l.pluginManager.IsPluginLoaded(functionKey) {
 		return nil
 	}
 
+	// Check if anything has changed
 	digestChanged := l.pluginManager.HasDigestChanged(functionKey, actualDigest)
 	configChanged := l.pluginManager.HasConfigChanged(functionKey, configCopy)
 
+	// If nothing changed, we can skip reloading
 	if !digestChanged && !configChanged {
 		l.logger.Printf("Function %s already loaded with same digest and config", functionKey)
 		l.logStore.AddLog(functionKey, logging.LevelInfo, "Function already loaded with same digest and config")
 		return nil
 	}
 
-	// Log changes
+	// Log what changed for debugging
 	if digestChanged {
 		oldDigest, _ := l.pluginManager.GetPluginDigest(functionKey)
 		l.logger.Printf("Function %s digest changed from %s to %s, reloading",
@@ -168,7 +158,7 @@ func (l *FunctionLoader) handleExistingFunction(functionKey string, configCopy m
 		l.logStore.AddLog(functionKey, logging.LevelInfo, "Function configuration changed, reloading")
 	}
 
-	// Clean up the existing function resources
+	// Cleanup resources for reload
 	l.pluginManager.RemovePlugin(functionKey)
 	l.circuitBreakers.RemoveCircuitBreaker(functionKey)
 
@@ -186,18 +176,17 @@ func (l *FunctionLoader) createAndStorePlugin(
 	initStart := time.Now()
 	plugin, err := l.createPluginWithContext(ctx, wasm, vi, cfg)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
-		l.logger.Errorf(errMsg)
-		l.logStore.AddLog(key, logging.LevelError, errMsg)
-		return WrapEngineError("failed to initialize plugin", err)
+		return l.logAndWrapError(key, "failed to initialize plugin", err)
 	}
 
+	// Log successful initialization
 	l.logStore.AddLog(key, logging.LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
 	// Store the plugin in the plugin manager
 	l.pluginManager.StorePlugin(key, plugin, dg, cfg)
 
+	// Log success
 	successMsg := fmt.Sprintf("Function loaded successfully: %s", key)
 	l.logger.Printf(successMsg)
 	l.logStore.AddLog(key, logging.LevelInfo, successMsg)
@@ -215,7 +204,7 @@ func (l *FunctionLoader) createAndStorePlugin(
 //   - error: Any error that occurred during unloading
 func (l *FunctionLoader) UnloadFunction(namespace, name string) error {
 	l.logger.Printf("Unloading function: %s/%s", namespace, name)
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	l.logStore.AddLog(functionKey, logging.LevelInfo, "Unloading function")
 
@@ -270,7 +259,7 @@ func (l *FunctionLoader) performUnload(functionKey string) error {
 //   - error: Any error that occurred during stopping
 func (l *FunctionLoader) StopFunction(namespace, name string) error {
 	l.logger.Printf("Stopping function: %s/%s", namespace, name)
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	l.logStore.AddLog(functionKey, logging.LevelInfo, "Stopping function")
 
@@ -316,102 +305,69 @@ func (l *FunctionLoader) performStop(functionKey string) error {
 
 // IsLoaded checks if a function is loaded.
 func (l *FunctionLoader) IsLoaded(namespace, name string) bool {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	return l.pluginManager.IsPluginLoaded(functionKey)
 }
 
 // WasPreviouslyLoaded checks if a function was previously loaded.
 func (l *FunctionLoader) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	return l.pluginManager.WasPreviouslyLoaded(functionKey)
 }
 
 // IsStopped checks if a function is stopped.
 func (l *FunctionLoader) IsStopped(namespace, name string) bool {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	return l.pluginManager.IsFunctionStopped(functionKey)
 }
 
 // Helper methods
 
-// pullWithContext fetches a WASM module with context.
+// pullWithContext fetches a WASM module with cancellation support
 func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, identifier string) ([]byte, *registry.VersionInfo, error) {
-	// Create a channel for the result
 	type pullResult struct {
-		wasmBytes   []byte
-		versionInfo *registry.VersionInfo
-		err         error
+		bytes []byte
+		info  *registry.VersionInfo
 	}
 
-	// Use a channel with buffer size 1 to prevent goroutine leaks
-	resultCh := make(chan pullResult, 1)
-
-	// Pull in a separate goroutine to allow for cancellation
-	go func() {
-		wasmBytes, versionInfo, err := l.registry.Pull(namespace, name, identifier)
-		select {
-		case resultCh <- pullResult{wasmBytes, versionInfo, err}:
-			// Result sent successfully
-		case <-ctx.Done():
-			// Context was cancelled, but we need to send the result to avoid goroutine leak
-			select {
-			case resultCh <- pullResult{nil, nil, ctx.Err()}:
-			default:
-				// Channel is already closed or full, nothing to do
-			}
-		}
-	}()
-
-	// Wait for the result or context cancellation
-	var result pullResult
-	select {
-	case result = <-resultCh:
-		// Result received
-	case <-ctx.Done():
-		// Context cancelled, wait for the result to avoid goroutine leak
-		result = <-resultCh
+	// Create a wrapper function to use the shared utility
+	wrapper := func() (pullResult, error) {
+		bytes, info, err := l.registry.Pull(namespace, name, identifier)
+		return pullResult{bytes, info}, err
 	}
 
-	return result.wasmBytes, result.versionInfo, result.err
+	// Execute with context handling
+	result, err := utils.ExecuteWithContext(ctx, wrapper)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return result.bytes, result.info, nil
 }
 
-// createPluginWithContext creates a plugin with context.
+// createPluginWithContext creates a plugin with cancellation support
+//
+//nolint:whitespace // difficult to format exactly as linter expects
 func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte, versionInfo *registry.VersionInfo, config map[string]string) (*extism.Plugin, error) {
-	// Create plugin in a cancellable goroutine
-	type pluginResult struct {
-		plugin *extism.Plugin
-		err    error
+
+	// Create a wrapper function to use the shared utility
+	wrapper := func() (*extism.Plugin, error) {
+		return components.CreatePlugin(wasmBytes, versionInfo, config)
 	}
 
-	pluginCh := make(chan pluginResult, 1)
+	// Execute with context cancellation handling
+	plugin, err := utils.ExecuteWithContext(ctx, wrapper)
 
-	go func() {
-		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, config)
-		select {
-		case pluginCh <- pluginResult{plugin, err}:
-			// Result sent successfully
-		case <-ctx.Done():
-			// Context was cancelled, but cleanup and send result to avoid goroutine leak
-			if plugin != nil && err == nil {
-				plugin.Close(context.Background())
-			}
-			select {
-			case pluginCh <- pluginResult{nil, ctx.Err()}:
-			default:
-				// Channel is already closed or full, nothing to do
-			}
-		}
-	}()
-
-	// Wait for plugin creation or context cancellation
-	var pluginRes pluginResult
-	select {
-	case pluginRes = <-pluginCh:
-		// Result received
-	case <-ctx.Done():
-		// Context cancelled, wait for the result to avoid goroutine leak
-		pluginRes = <-pluginCh
+	// Clean up resources on error
+	if err != nil && plugin != nil {
+		plugin.Close(context.Background())
 	}
 
-	return pluginRes.plugin, pluginRes.err
+	return plugin, err
+}
+
+// GetDigest returns the current digest of a function
+func (l *FunctionLoader) GetDigest(namespace, name string) (string, bool) {
+	functionKey := GetFunctionKey(namespace, name)
+	return l.pluginManager.GetPluginDigest(functionKey)
 }

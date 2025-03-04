@@ -23,7 +23,7 @@ func setupTestEngine(t *testing.T) (*Engine, string) {
 	require.NoError(t, err)
 
 	logger := logging.NewStdLogger(os.Stdout)
-	engine, err := NewEngineWithLogger(socketPath, httpAddr, registryDir, logger)
+	engine, err := NewEngineWithOptions(socketPath, httpAddr, registryDir, logger, nil)
 	require.NoError(t, err)
 
 	return engine, tmpDir

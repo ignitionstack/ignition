@@ -7,6 +7,7 @@ import (
 
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
+	"github.com/ignitionstack/ignition/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +59,7 @@ is not running, it will display a warning and show no functions.`,
 		// Try to ping the engine to ensure it's running
 		ctx := context.Background()
 		engineRunning := true
-		if err := engineClient.Ping(ctx); err != nil {
+		if err := engineClient.Status(ctx); err != nil {
 			engineRunning = false
 			if !plainFormat {
 				ui.PrintWarning("Engine is not running. No functions will be shown.")
@@ -66,15 +67,16 @@ is not running, it will display a warning and show no functions.`,
 		}
 
 		// Get all loaded functions if engine is running
-		var runningFunctions []services.EngineFunctionDetails
+		var runningFunctions []types.LoadedFunction
 		if engineRunning {
-			runningFunctions, err = engineClient.ListFunctions(ctx)
+			loadedFunctions, err := engineClient.ListFunctions(ctx)
 			if err != nil {
 				if !plainFormat {
 					ui.PrintError(fmt.Sprintf("Failed to list functions: %v", err))
 				}
 				return fmt.Errorf("failed to list functions: %w", err)
 			}
+			runningFunctions = loadedFunctions
 		}
 
 		// Output in machine-readable format if required

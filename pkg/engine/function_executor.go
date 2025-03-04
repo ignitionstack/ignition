@@ -6,8 +6,8 @@ import (
 	"time"
 
 	extism "github.com/extism/go-sdk"
-	"github.com/ignitionstack/ignition/pkg/engine/components"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
+	"github.com/ignitionstack/ignition/pkg/engine/utils"
 )
 
 type FunctionExecutor struct {
@@ -42,7 +42,7 @@ func NewFunctionExecutor(pluginManager PluginManager, circuitBreakers CircuitBre
 //   - []byte: The output from the function call
 //   - error: Any error that occurred during execution
 func (e *FunctionExecutor) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	// Log the function call
 	e.logStore.AddLog(functionKey, logging.LevelInfo, fmt.Sprintf("Function call: %s with payload size %d bytes", entrypoint, len(payload)))
@@ -93,51 +93,88 @@ func (e *FunctionExecutor) executeFunction(
 ) ([]byte, error) {
 	startTime := time.Now()
 
-	// Result channel with buffer to prevent goroutine leaks
-	resultCh := make(chan callResult, 1)
+	// Create a wrapper function for the shared utility
+	wrapper := func() (callResult, error) {
+		_, output, callErr := plugin.Call(entrypoint, payload)
+		return callResult{output, callErr}, nil
+	}
 
-	// Cancel context for the goroutine if this function returns
-	execCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// Execute with context cancellation handling
+	result, _ := utils.ExecuteWithContext(ctx, wrapper)
 
-	// Execute the plugin call in a goroutine
-	go func() {
-		_, output, err := plugin.Call(entrypoint, payload)
+	// If the context was cancelled, handle it specially
+	if ctx.Err() != nil {
+		return e.handleCancellation(ctx, functionKey, cb)
+	}
 
-		// Send the result, handling the case where the context is cancelled
-		select {
-		case resultCh <- callResult{output, err}:
-			// Result sent successfully
-		case <-execCtx.Done():
-			// Context was cancelled, nothing to do
-		}
-	}()
+	// Otherwise process the result with the actual call result
+	return e.processResult(functionKey, cb, entrypoint, result, startTime)
+}
 
-	// Wait for the result or context cancellation
-	select {
-	case result := <-resultCh:
-		return e.handleResult(functionKey, cb, entrypoint, result, startTime)
+// logCircuitBreakerOpen logs when a circuit breaker opens
+func (e *FunctionExecutor) logCircuitBreakerOpen(functionKey string) {
+	cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
+	e.logger.Printf(cbMsg)
+	e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
+}
 
-	case <-ctx.Done():
-		err := e.handleContextCancellation(ctx, functionKey, cb)
-		return nil, err
+// logAndWrapError logs an error message and wraps it as an engine error
+func (e *FunctionExecutor) logAndWrapError(functionKey, operation string, err error) error {
+	errMsg := fmt.Sprintf("%s: %v", operation, err)
+	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
+	return WrapEngineError(operation, err)
+}
+
+// GetCircuitBreaker returns the circuit breaker for a function
+func (e *FunctionExecutor) GetCircuitBreaker(namespace, name string) CircuitBreaker {
+	functionKey := GetFunctionKey(namespace, name)
+	return e.circuitBreakers.GetCircuitBreaker(functionKey)
+}
+
+// ExecutionStats contains statistics about function execution
+type ExecutionStats struct {
+	LastExecution        time.Time
+	TotalExecutions      int64
+	SuccessfulExecutions int64
+	FailedExecutions     int64
+}
+
+// GetStats returns execution statistics for a function
+func (e *FunctionExecutor) GetStats(_, _ string) ExecutionStats {
+	// Currently we don't track these stats, so return empty values
+	// This is a placeholder for future implementation
+	return ExecutionStats{
+		LastExecution:        time.Time{},
+		TotalExecutions:      0,
+		SuccessfulExecutions: 0,
+		FailedExecutions:     0,
 	}
 }
 
-// handleResult processes the function execution result.
-func (e *FunctionExecutor) handleResult(
+// processResult handles both success and error cases from function execution
+func (e *FunctionExecutor) processResult(
 	functionKey string,
 	cb CircuitBreaker,
 	entrypoint string,
 	result callResult,
 	startTime time.Time,
 ) ([]byte, error) {
+	execTime := time.Since(startTime)
+
+	// Handle error case
 	if result.err != nil {
-		return e.handleExecutionError(functionKey, cb, result.err)
+		// Record failure in circuit breaker
+		isOpen := cb.RecordFailure()
+
+		// Log if circuit breaker opened
+		if isOpen {
+			e.logCircuitBreakerOpen(functionKey)
+		}
+
+		return nil, e.logAndWrapError(functionKey, "failed to call function", result.err)
 	}
 
 	// Handle success case
-	execTime := time.Since(startTime)
 	e.logStore.AddLog(functionKey, logging.LevelInfo,
 		fmt.Sprintf("Function executed successfully: %s (execution time: %v, response size: %d bytes)",
 			entrypoint, execTime, len(result.output)))
@@ -146,52 +183,29 @@ func (e *FunctionExecutor) handleResult(
 	return result.output, nil
 }
 
-// handleExecutionError handles errors that occur during function execution.
-func (e *FunctionExecutor) handleExecutionError(
-	functionKey string,
-	cb CircuitBreaker,
-	err error,
-) ([]byte, error) {
-	// Record the failure in the circuit breaker
-	isOpen := cb.RecordFailure()
-	errMsg := fmt.Sprintf("Failed to call function: %v", err)
-	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-
-	if isOpen {
-		cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
-		e.logger.Printf(cbMsg)
-		e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
-	}
-
-	return nil, WrapEngineError("failed to call function", err)
-}
-
-// handleContextCancellation handles the case where execution is cancelled or times out.
-func (e *FunctionExecutor) handleContextCancellation(
+// handleCancellation handles context cancellation and timeout cases
+func (e *FunctionExecutor) handleCancellation(
 	ctx context.Context,
 	functionKey string,
 	cb CircuitBreaker,
-) error {
+) ([]byte, error) {
 	// Record the failure in the circuit breaker
 	isOpen := cb.RecordFailure()
 
-	// Determine the specific error cause
-	var errMsg string
+	// Determine the specific error message based on cancellation reason
+	var operation string
 	if ctx.Err() == context.DeadlineExceeded {
-		errMsg = fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
+		operation = fmt.Sprintf("function execution timed out after %v", e.defaultTimeout)
 	} else {
-		errMsg = "Function execution was cancelled"
+		operation = "function execution was cancelled"
 	}
 
-	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-
+	// Log if circuit breaker opened
 	if isOpen {
-		cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
-		e.logger.Printf(cbMsg)
-		e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
+		e.logCircuitBreakerOpen(functionKey)
 	}
 
-	return WrapEngineError(errMsg, ctx.Err())
+	return nil, e.logAndWrapError(functionKey, operation, ctx.Err())
 }
 
 // Returns:
