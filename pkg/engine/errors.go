@@ -4,48 +4,37 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	domainerrors "github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 
-// Common engine errors.
+// Legacy error types - deprecated but maintained for backward compatibility
+// Use domain errors from errors/domain_errors.go instead.
 var (
+	// ErrEngineNotInitialized - use domainerrors.ErrEngineNotInitialized instead
 	ErrEngineNotInitialized = errors.New("engine is not initialized")
-	ErrFunctionNotLoaded    = errors.New("function is not loaded")
-	ErrFunctionNotFound     = errors.New("function not found")
+	// ErrFunctionNotLoaded - use domainerrors.ErrFunctionNotLoaded instead
+	ErrFunctionNotLoaded = errors.New("function is not loaded")
+	// ErrFunctionNotFound - use domainerrors.ErrFunctionNotFound instead
+	ErrFunctionNotFound = errors.New("function not found")
 )
 
-// Error represents an internal engine error.
-type Error struct {
-	message string
-	cause   error
-}
-
-// Error implements the error interface.
-func (e Error) Error() string {
-	if e.cause != nil {
-		return fmt.Sprintf("%s: %v", e.message, e.cause)
-	}
-	return e.message
-}
-
-// Unwrap implements errors.Unwrap for Go 1.13+ error wrapping.
-func (e Error) Unwrap() error {
-	return e.cause
-}
-
-// NewEngineError creates a new engine error with the given message.
+// NewEngineError creates a new domain error with the DomainEngine domain.
+// Deprecated: Use domainerrors.New() or predefined errors instead.
 func NewEngineError(message string) error {
-	return Error{message: message}
+	return domainerrors.New(domainerrors.DomainEngine, domainerrors.CodeInternalError, message)
 }
 
-// WrapEngineError wraps an error with an engine error.
+// WrapEngineError wraps an error with domain context.
+// Deprecated: Use domainerrors.Wrap() instead.
 func WrapEngineError(message string, err error) error {
-	return Error{message: message, cause: err}
+	return domainerrors.Wrap(domainerrors.DomainEngine, domainerrors.CodeInternalError, message, err)
 }
 
-// IsEngineError checks if an error is or wraps an engine error.
+// IsEngineError checks if an error is from the engine domain.
+// Deprecated: Use domainerrors.Is() instead.
 func IsEngineError(err error) bool {
-	var engineErr Error
-	return errors.As(err, &engineErr)
+	return domainerrors.IsDomain(err, domainerrors.DomainEngine)
 }
 
 // RequestError represents an HTTP error with status code.
@@ -155,9 +144,62 @@ func IsInternalServerError(err error) bool {
 
 // ErrorToStatusCode extracts the status code from an error or returns 500.
 func ErrorToStatusCode(err error) int {
+	// First check if it's a RequestError
 	var reqErr RequestError
 	if errors.As(err, &reqErr) {
 		return reqErr.StatusCode
 	}
+	
+	// Then check domain errors and map them to appropriate HTTP codes
+	var domainErr *domainerrors.DomainError
+	if errors.As(err, &domainErr) {
+		return DomainErrorToStatusCode(domainErr)
+	}
+	
 	return http.StatusInternalServerError
+}
+
+// DomainErrorToStatusCode maps domain errors to HTTP status codes.
+func DomainErrorToStatusCode(err *domainerrors.DomainError) int {
+	switch err.ErrDomain {
+	case domainerrors.DomainFunction:
+		switch err.ErrCode {
+		case domainerrors.CodeFunctionNotFound:
+			return http.StatusNotFound
+		case domainerrors.CodeFunctionNotLoaded:
+			return http.StatusServiceUnavailable
+		case domainerrors.CodeFunctionStopped:
+			return http.StatusServiceUnavailable
+		case domainerrors.CodeInvalidFunction:
+			return http.StatusBadRequest
+		}
+	case domainerrors.DomainExecution:
+		switch err.ErrCode {
+		case domainerrors.CodeExecutionTimeout:
+			return http.StatusGatewayTimeout
+		case domainerrors.CodeCircuitBreakerOpen:
+			return http.StatusServiceUnavailable
+		}
+	case domainerrors.DomainRegistry:
+		switch err.ErrCode {
+		case domainerrors.CodeRegistryNotFound:
+			return http.StatusNotFound
+		case domainerrors.CodeVersionNotFound:
+			return http.StatusNotFound
+		case domainerrors.CodeTagNotFound:
+			return http.StatusNotFound
+		}
+	}
+	
+	// Default to internal server error for unmatched codes
+	return http.StatusInternalServerError
+}
+
+// DomainErrorToRequestError converts a domain error to a request error.
+func DomainErrorToRequestError(err *domainerrors.DomainError) RequestError {
+	return RequestError{
+		Message:    err.Error(),
+		StatusCode: DomainErrorToStatusCode(err),
+		cause:      err,
+	}
 }

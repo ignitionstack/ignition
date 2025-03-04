@@ -157,6 +157,15 @@ func Is(err error, domain Domain, code Code) bool {
 	return false
 }
 
+// IsDomain checks if an error is from a specific domain, regardless of the code.
+func IsDomain(err error, domain Domain) bool {
+	var de *DomainError
+	if errors.As(err, &de) {
+		return de.ErrDomain == domain
+	}
+	return false
+}
+
 // Common engine errors.
 var (
 	ErrEngineNotInitialized = New(DomainEngine, CodeNotInitialized, "Engine not initialized")

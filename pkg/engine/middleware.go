@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+	
+	domainerrors "github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
@@ -43,31 +45,57 @@ func (h *Handlers) errorMiddleware() Middleware {
 			if err != nil {
 				var reqErr RequestError
 
-				var e RequestError
-				if errors.As(err, &e) {
-					reqErr = e
-				} else {
+				// Handle different error types with proper conversion logic
+				switch {
+				case errors.As(err, &reqErr): 
+					// Already a RequestError, use as is
+				
+				case isDomainError(err):
+					// Convert domain error to request error with appropriate status code
+					var domainErr *domainerrors.DomainError
+					errors.As(err, &domainErr)
+					reqErr = DomainErrorToRequestError(domainErr)
+					
+				default:
+					// Unknown error type, convert to internal server error
 					reqErr = RequestError{
 						Message:    err.Error(),
 						StatusCode: http.StatusInternalServerError,
 					}
 				}
 
-				h.logger.Errorf("Handler error: %v", err)
+				// Log the error with context about the request
+				h.logger.Errorf("Handler error (%s %s): %v", r.Method, r.URL.Path, err)
 
+				// Send the error response to the client
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(reqErr.StatusCode)
 
-				if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
+				// Build response with error details
+				response := map[string]interface{}{
 					"error":  reqErr.Message,
 					"status": reqErr.StatusCode,
-				}); encodeErr != nil {
+				}
+				
+				// Add domain and code if available for better debugging
+				if de, ok := err.(*domainerrors.DomainError); ok {
+					response["domain"] = string(de.ErrDomain)
+					response["code"] = string(de.ErrCode)
+				}
+
+				if encodeErr := json.NewEncoder(w).Encode(response); encodeErr != nil {
 					h.logger.Errorf("Failed to encode error response: %v", encodeErr)
 				}
 			}
 			return nil
 		}
 	}
+}
+
+// isDomainError checks if an error is a domain error
+func isDomainError(err error) bool {
+	var domainErr *domainerrors.DomainError
+	return errors.As(err, &domainErr)
 }
 
 func (h *Handlers) loggingMiddleware() Middleware {

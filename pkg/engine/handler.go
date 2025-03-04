@@ -13,6 +13,7 @@ import (
 	extism "github.com/extism/go-sdk"
 	"github.com/go-playground/validator/v10"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
+	domainerrors "github.com/ignitionstack/ignition/pkg/engine/errors"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	"github.com/ignitionstack/ignition/pkg/types"
@@ -321,14 +322,32 @@ func (h *Handlers) executeFunction(ctx context.Context, params *functionCallPara
 
 	// Handle different error cases
 	if err != nil {
-		if errors.Is(err, ErrFunctionNotLoaded) {
+		
+		// Try auto-reload if the function isn't loaded - check both old and new error types
+		if errors.Is(err, ErrFunctionNotLoaded) || 
+		   domainerrors.Is(err, domainerrors.DomainFunction, domainerrors.CodeFunctionNotLoaded) {
 			// Try auto-reload if the function isn't loaded
 			return h.handleFunctionAutoReload(ctx, params.namespace, params.name, params.entrypoint, payload)
 		}
 
 		// Check for context cancellation
 		if ctx.Err() != nil {
-			return nil, NewRequestError("Request cancelled by client", http.StatusRequestTimeout)
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, NewRequestError("Function execution timed out", http.StatusRequestTimeout)
+			}
+			return nil, NewRequestError("Request cancelled by client", http.StatusGatewayTimeout)
+		}
+		
+		// Check for circuit breaker open
+		if domainerrors.Is(err, domainerrors.DomainExecution, domainerrors.CodeCircuitBreakerOpen) {
+			return nil, NewRequestError("Function circuit breaker is open due to repeated failures", 
+				http.StatusServiceUnavailable)
+		}
+
+		// For domain errors, convert them to appropriate request errors
+		var domainErr *domainerrors.DomainError
+		if errors.As(err, &domainErr) {
+			return nil, DomainErrorToRequestError(domainErr)
 		}
 
 		// Return other errors unchanged
@@ -756,7 +775,7 @@ func (h *Handlers) handleFunctionLogs(w http.ResponseWriter, r *http.Request) er
 
 // getEngineLogs retrieves logs for a specific function from the engine's log store.
 func (h *Handlers) getEngineLogs(namespace, name string, since time.Time, tail int) []string {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	// Retrieve logs from the engine's log store
 	logs := h.engine.logStore.GetLogs(functionKey, since, tail)

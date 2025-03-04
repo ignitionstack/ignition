@@ -6,7 +6,6 @@ import (
 	"time"
 
 	extism "github.com/extism/go-sdk"
-	"github.com/ignitionstack/ignition/pkg/engine/components"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/engine/utils"
 )
@@ -43,7 +42,7 @@ func NewFunctionExecutor(pluginManager PluginManager, circuitBreakers CircuitBre
 //   - []byte: The output from the function call
 //   - error: Any error that occurred during execution
 func (e *FunctionExecutor) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	// Log the function call
 	e.logStore.AddLog(functionKey, logging.LevelInfo, fmt.Sprintf("Function call: %s with payload size %d bytes", entrypoint, len(payload)))
@@ -124,6 +123,32 @@ func (e *FunctionExecutor) logAndWrapError(functionKey, operation string, err er
 	errMsg := fmt.Sprintf("%s: %v", operation, err)
 	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
 	return WrapEngineError(operation, err)
+}
+
+// GetCircuitBreaker returns the circuit breaker for a function
+func (e *FunctionExecutor) GetCircuitBreaker(namespace, name string) CircuitBreaker {
+	functionKey := GetFunctionKey(namespace, name)
+	return e.circuitBreakers.GetCircuitBreaker(functionKey)
+}
+
+// ExecutionStats contains statistics about function execution
+type ExecutionStats struct {
+	LastExecution        time.Time
+	TotalExecutions      int64
+	SuccessfulExecutions int64
+	FailedExecutions     int64
+}
+
+// GetStats returns execution statistics for a function 
+func (e *FunctionExecutor) GetStats(namespace, name string) ExecutionStats {
+	// Currently we don't track these stats, so return empty values
+	// This is a placeholder for future implementation
+	return ExecutionStats{
+		LastExecution:        time.Time{},
+		TotalExecutions:      0,
+		SuccessfulExecutions: 0,
+		FailedExecutions:     0,
+	}
 }
 
 // processResult handles both success and error cases from function execution

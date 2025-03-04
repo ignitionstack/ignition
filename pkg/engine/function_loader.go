@@ -65,7 +65,7 @@ func (l *FunctionLoader) LoadFunction(ctx context.Context, namespace, name, iden
 //   - error: Any error that occurred during loading
 func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	l.logger.Printf("Loading function: %s/%s (identifier: %s, force: %v)", namespace, name, identifier, force)
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	// Validate loading permissions
 	if err := l.validateLoadPermissions(namespace, name, force); err != nil {
@@ -103,7 +103,7 @@ func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, n
 // validateLoadPermissions checks if a function can be loaded based on its stopped status.
 // Returns nil if the function can be loaded, error otherwise.
 func (l *FunctionLoader) validateLoadPermissions(namespace, name string, force bool) error {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	isStopped := l.IsStopped(namespace, name)
 	
 	// Function is not stopped or force is true - allow loading
@@ -227,7 +227,7 @@ func (l *FunctionLoader) createAndStorePlugin(
 //   - error: Any error that occurred during unloading
 func (l *FunctionLoader) UnloadFunction(namespace, name string) error {
 	l.logger.Printf("Unloading function: %s/%s", namespace, name)
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	l.logStore.AddLog(functionKey, logging.LevelInfo, "Unloading function")
 
@@ -282,7 +282,7 @@ func (l *FunctionLoader) performUnload(functionKey string) error {
 //   - error: Any error that occurred during stopping
 func (l *FunctionLoader) StopFunction(namespace, name string) error {
 	l.logger.Printf("Stopping function: %s/%s", namespace, name)
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 
 	l.logStore.AddLog(functionKey, logging.LevelInfo, "Stopping function")
 
@@ -328,19 +328,19 @@ func (l *FunctionLoader) performStop(functionKey string) error {
 
 // IsLoaded checks if a function is loaded.
 func (l *FunctionLoader) IsLoaded(namespace, name string) bool {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	return l.pluginManager.IsPluginLoaded(functionKey)
 }
 
 // WasPreviouslyLoaded checks if a function was previously loaded.
 func (l *FunctionLoader) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	return l.pluginManager.WasPreviouslyLoaded(functionKey)
 }
 
 // IsStopped checks if a function is stopped.
 func (l *FunctionLoader) IsStopped(namespace, name string) bool {
-	functionKey := components.GetFunctionKey(namespace, name)
+	functionKey := GetFunctionKey(namespace, name)
 	return l.pluginManager.IsFunctionStopped(functionKey)
 }
 
@@ -387,4 +387,10 @@ func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes 
 	}
 	
 	return plugin, err
+}
+
+// GetDigest returns the current digest of a function
+func (l *FunctionLoader) GetDigest(namespace, name string) (string, bool) {
+	functionKey := GetFunctionKey(namespace, name)
+	return l.pluginManager.GetPluginDigest(functionKey)
 }

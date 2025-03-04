@@ -59,14 +59,52 @@ func (m *FunctionManagerImpl) StopFunction(namespace, name string) error {
 
 // GetFunctionState returns the complete state information for a function
 func (m *FunctionManagerImpl) GetFunctionState(namespace, name string) FunctionState {
+	// Basic state
+	isLoaded := m.loader.IsLoaded(namespace, name)
+	isStopped := m.loader.IsStopped(namespace, name)
 	wasLoaded, config := m.loader.WasPreviouslyLoaded(namespace, name)
 	
-	return FunctionState{
-		Loaded:           m.loader.IsLoaded(namespace, name),
-		Stopped:          m.loader.IsStopped(namespace, name),
+	// Build the initial function state with core information
+	state := FunctionState{
+		Loaded:           isLoaded,
+		Stopped:          isStopped,
 		PreviouslyLoaded: wasLoaded,
 		Config:           config,
 	}
+	
+	// Only try to fetch additional information if we have a loaded function
+	// or previously loaded function to avoid unnecessary operations
+	if isLoaded || wasLoaded {
+		// Try to get circuit breaker state if the function is loaded
+		if isLoaded {
+			functionKey := GetFunctionKey(namespace, name)
+			cb := m.executor.circuitBreakers.GetCircuitBreaker(functionKey)
+			if cb != nil {
+				state.CircuitBreakerOpen = cb.IsOpen()
+				state.Running = isLoaded && !cb.IsOpen()
+			}
+		}
+		
+		// Try to get digest from loader
+		if digest, found := m.loader.GetDigest(namespace, name); found {
+			state.Digest = digest
+			
+			// Get tags by enumerating all versions that match the digest
+			metadata, err := m.registry.Get(namespace, name)
+			if err == nil && metadata != nil {
+				// Looking for all tags that point to this digest
+				var tags []string
+				for _, version := range metadata.Versions {
+					if version.FullDigest == state.Digest {
+						tags = append(tags, version.Tags...)
+					}
+				}
+				state.Tags = tags
+			}
+		}
+	}
+	
+	return state
 }
 
 // BuildFunction builds a function and stores it in the registry
