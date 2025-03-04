@@ -183,7 +183,7 @@ func LoadConfig(configPath string) (*Config, error) {
 					fmt.Fprintf(os.Stderr, "Warning: Could not marshal default config: %v\n", err)
 				} else {
 					// Write the default config file
-					if err := os.WriteFile(expandedPath, yamlData, 0644); err != nil {
+					if err := os.WriteFile(expandedPath, yamlData, 0600); err != nil {
 						fmt.Fprintf(os.Stderr, "Warning: Could not write default config to %s: %v\n", expandedPath, err)
 					} else {
 						fmt.Fprintf(os.Stdout, "Created default config file at %s\n", expandedPath)
