@@ -1,27 +1,27 @@
 package engine
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"time"
 
-	"github.com/ignitionstack/ignition/internal/di"
+	globalConfig "github.com/ignitionstack/ignition/internal/config"
 	"github.com/ignitionstack/ignition/pkg/engine"
+	"github.com/ignitionstack/ignition/pkg/engine/config"
+	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/spf13/cobra"
-	"go.uber.org/fx"
 )
 
 // NewEngineStartCommand creates a command to start the engine.
 func NewEngineStartCommand() *cobra.Command {
 	// Configuration options
-	var config struct {
-		socketPath  string
-		httpAddr    string
-		registryDir string
-		logFile     string
-		logLevel    string
+	var cmdConfig struct {
+		socketPath   string
+		httpAddr     string
+		registryDir  string
+		logFile      string
+		logLevel     string
+		showConfig   bool
+		defaultsOnly bool
 	}
 
 	cmd := &cobra.Command{
@@ -37,90 +37,121 @@ The engine server provides:
 * Circuit breaker patterns for resilience
 
 The engine must be running for other Ignition commands like function calls to work.
-The engine can be configured with various flags to customize its behavior.`,
+The engine can be configured with various flags, environment variables, or a YAML config file.`,
 		Example: `  # Start the engine with default settings
   ignition engine start
 
   # Start with a custom socket path and HTTP port
-  ignition engine start --socket /tmp/my-socket.sock --http :9090
+  ignition engine start --socket-path /tmp/my-socket.sock --http :9090
+
+  # Start with a custom config file
+  ignition engine start --config ~/.ignition/custom-config.yaml
 
   # Start with detailed logging
   ignition engine start --log-level debug --log-file /var/log/ignition.log`,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			// Setup registry directory
-			if config.registryDir == "" {
-				homeDir, err := os.UserHomeDir()
+			// If the user just wants to see the config, print it and exit
+			if cmdConfig.showConfig {
+				cfg, err := loadConfig(globalConfig.ConfigPath, cmdConfig.defaultsOnly)
 				if err != nil {
-					return fmt.Errorf("failed to get user home directory: %w", err)
+					return fmt.Errorf("failed to load configuration: %w", err)
 				}
-				config.registryDir = filepath.Join(homeDir, ".ignition")
+
+				fmt.Printf("Engine configuration:\n")
+				fmt.Printf("  Server:\n")
+				fmt.Printf("    SocketPath: %s\n", cfg.Server.SocketPath)
+				fmt.Printf("    HTTPAddr: %s\n", cfg.Server.HTTPAddr)
+				fmt.Printf("    RegistryDir: %s\n", cfg.Server.RegistryDir)
+				fmt.Printf("  Engine:\n")
+				fmt.Printf("    DefaultTimeout: %s\n", cfg.Engine.DefaultTimeout)
+				fmt.Printf("    LogStoreCapacity: %d\n", cfg.Engine.LogStoreCapacity)
+				fmt.Printf("    CircuitBreaker:\n")
+				fmt.Printf("      FailureThreshold: %d\n", cfg.Engine.CircuitBreaker.FailureThreshold)
+				fmt.Printf("      ResetTimeout: %s\n", cfg.Engine.CircuitBreaker.ResetTimeout)
+				fmt.Printf("    PluginManager:\n")
+				fmt.Printf("      TTL: %s\n", cfg.Engine.PluginManager.TTL)
+				fmt.Printf("      CleanupInterval: %s\n", cfg.Engine.PluginManager.CleanupInterval)
+
+				return nil
+			}
+
+			// Load configuration from file and environment variables
+			cfg, err := loadConfig(globalConfig.ConfigPath, cmdConfig.defaultsOnly)
+			if err != nil {
+				return fmt.Errorf("failed to load configuration: %w", err)
+			}
+
+			// Override config with command line flags if provided
+			if cmdConfig.socketPath != "" {
+				cfg.Server.SocketPath = cmdConfig.socketPath
+			}
+			if cmdConfig.httpAddr != "" {
+				cfg.Server.HTTPAddr = cmdConfig.httpAddr
+			}
+			if cmdConfig.registryDir != "" {
+				cfg.Server.RegistryDir = cmdConfig.registryDir
 			}
 
 			// Ensure registry directory exists
-			if err := ensureDirectoryExists(config.registryDir); err != nil {
+			if err := ensureDirectoryExists(cfg.Server.RegistryDir); err != nil {
 				return err
+			}
+
+			// Set up logger
+			var logger logging.Logger
+			if cmdConfig.logFile != "" {
+				logFile, err := os.OpenFile(cmdConfig.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+				if err != nil {
+					return fmt.Errorf("failed to open log file: %w", err)
+				}
+				logger = logging.NewStdLogger(logFile)
+			} else {
+				logger = logging.NewStdLogger(os.Stdout)
 			}
 
 			// Print startup message
 			fmt.Println("Starting Ignition Engine...")
 			fmt.Println("Press Ctrl+C to stop")
 
-			// Create app configuration for fx
-			appConfig := di.NewAppConfig(
-				config.socketPath,
-				config.httpAddr,
-				config.registryDir,
-			)
-
-			// Setup the fx app with our module
-			app := fx.New(
-				// Provide app configuration
-				fx.Supply(appConfig),
-
-				// Include all our dependency providers
-				di.Module,
-
-				// Register the engine start as an fx invocation
-				fx.Invoke(func(engine *engine.Engine) {
-					// The engine's Start method will block, which is what we want
-					if err := engine.Start(); err != nil {
-						// Log the error - we can't return it here because fx.Invoke doesn't
-						// propagate errors up to RunE
-						fmt.Fprintf(os.Stderr, "Engine server failed: %v\n", err)
-						os.Exit(1)
-					}
-				}),
-
-				// Configure fx options
-				fx.StartTimeout(30*time.Second),
-				fx.StopTimeout(30*time.Second),
-			)
-
-			// Start the application and wait for it to finish
-			if err := app.Start(context.Background()); err != nil {
-				return fmt.Errorf("failed to start engine: %w", err)
+			// Create the engine with our configuration
+			eng, err := engine.NewEngineWithConfig(cfg, logger)
+			if err != nil {
+				return fmt.Errorf("failed to create engine: %w", err)
 			}
 
-			// This allows for graceful shutdown on SIGINT/SIGTERM
-			<-app.Done()
-
-			// Handle shutdown
-			if err := app.Stop(context.Background()); err != nil {
-				return fmt.Errorf("error during shutdown: %w", err)
+			// Start the engine
+			if err := eng.Start(); err != nil {
+				return fmt.Errorf("engine server failed: %w", err)
 			}
 
 			return nil
 		},
 	}
 
+	// Get default socket path from global config
+	defaultSocketPath := globalConfig.DefaultSocket
+
 	// Register command flags
-	cmd.Flags().StringVarP(&config.socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
-	cmd.Flags().StringVarP(&config.httpAddr, "http", "H", ":8080", "HTTP server address")
-	cmd.Flags().StringVarP(&config.registryDir, "directory", "d", "", "Registry directory ($HOME/.ignition if empty)")
-	cmd.Flags().StringVarP(&config.logFile, "log-file", "l", "", "Log file path (logs to stdout if not specified)")
-	cmd.Flags().StringVarP(&config.logLevel, "log-level", "L", "info", "Log level (error, info, debug)")
+	// Use a different flag name and shorthand for socket to avoid conflicts with root command
+	cmd.Flags().StringVarP(&cmdConfig.socketPath, "socket-path", "S", defaultSocketPath, "Path to the Unix socket")
+	cmd.Flags().StringVarP(&cmdConfig.httpAddr, "http", "H", "", "HTTP server address")
+	cmd.Flags().StringVarP(&cmdConfig.registryDir, "directory", "d", "", "Registry directory")
+	cmd.Flags().StringVarP(&cmdConfig.logFile, "log-file", "l", "", "Log file path (logs to stdout if not specified)")
+	cmd.Flags().StringVarP(&cmdConfig.logLevel, "log-level", "L", "info", "Log level (error, info, debug)")
+	// Add config flag for the engine start command only
+	cmd.Flags().StringVarP(&globalConfig.ConfigPath, "config", "c", config.DefaultConfigPath, "Path to the configuration file")
+	cmd.Flags().BoolVarP(&cmdConfig.showConfig, "show-config", "C", false, "Show the configuration and exit")
+	cmd.Flags().BoolVar(&cmdConfig.defaultsOnly, "defaults-only", false, "Use only default configuration, ignore config file and env vars")
 
 	return cmd
+}
+
+// loadConfig loads the configuration from the specified path and environment variables.
+func loadConfig(configPath string, defaultsOnly bool) (*config.Config, error) {
+	if defaultsOnly {
+		return config.DefaultConfig(), nil
+	}
+	return config.LoadConfig(configPath)
 }
 
 // ensureDirectoryExists creates a directory if it doesn't exist.

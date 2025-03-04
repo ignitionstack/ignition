@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -127,7 +129,15 @@ The command requires a running engine to execute the function.`,
 
 	cmd.Flags().StringVarP(&entrypoint, "entrypoint", "e", "handler", "the entrypoint wasm function")
 	cmd.Flags().StringVarP(&payload, "payload", "p", "", "the payload to send to the entrypoint")
-	cmd.Flags().StringVarP(&callSocketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+
+	// Use the default socket path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	defaultSocketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
+
+	cmd.Flags().StringVarP(&callSocketPath, "socket", "s", defaultSocketPath, "Path to the Unix socket")
 	cmd.Flags().StringArrayVarP(&callConfigFlag, "config", "c", []string{}, "Configuration values to pass to the function (format: key=value)")
 
 	return cmd

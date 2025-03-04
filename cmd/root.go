@@ -1,14 +1,20 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
+	globalConfig "github.com/ignitionstack/ignition/internal/config"
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+)
+
+// Global flags
+var (
+	socketPath        string
+	defaultSocketPath string
 )
 
 var rootCmd = &cobra.Command{
@@ -39,17 +45,24 @@ Key capabilities:
 
   # List all functions
   ignition function list`,
-}
-
-// Container holds the dependency injection container.
-var Container = di.NewContainer()
-
-func Execute() {
-	// Add logo display to root command with pre-run hook
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
-		// Skip logo for help commands and plain output
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		// Skip for help commands
 		if cmd.Name() == "help" || cmd.Name() == "completion" {
-			return
+			return nil
+		}
+
+		// Skip for engine start command, as it handles configuration directly
+		if cmd.CommandPath() == "ignition engine start" {
+			return nil
+		}
+
+		// Setup engine client with socket path
+		_, err := setupEngineClient()
+		if err != nil {
+			// Don't return error, as some commands don't need the engine
+			// Just silently continue with default client
+			client := services.NewEngineClientWithDefaults()
+			Container.Register("engineClient", client)
 		}
 
 		// Check if any command in the hierarchy has a plain flag set to true
@@ -63,8 +76,15 @@ func Execute() {
 		if !plainFlag {
 			ui.PrintLogo()
 		}
-	}
 
+		return nil
+	},
+}
+
+// Container holds the dependency injection container.
+var Container = di.NewContainer()
+
+func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
@@ -72,17 +92,29 @@ func Execute() {
 }
 
 func init() {
-	// Register services in the container
+	// Set default socket path from global config
+	defaultSocketPath = globalConfig.DefaultSocket
 
-	// Register the function service
+	// Add global flags
+	rootCmd.PersistentFlags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the engine socket")
+
+	// Register services in the container
 	functionService := services.NewFunctionService()
 	Container.Register("functionService", functionService)
 
-	// Register the engine client with safe creation
-	engineClient, err := services.NewEngineClient("/tmp/ignition-engine.sock")
+	// Engine client will be initialized in setupEngineClient()
+	// We register a default one for now, it will be replaced in PersistentPreRunE
+	Container.Register("engineClient", services.NewEngineClientWithDefaults())
+}
+
+// setupEngineClient creates an engine client using the socket path
+func setupEngineClient() (*services.EngineClient, error) {
+	// Create client using the socket path
+	client, err := services.NewEngineClient(socketPath)
 	if err != nil {
-		fmt.Printf("Warning: Failed to create engine client: %v\n", err)
-		engineClient = services.NewEngineClientWithDefaults()
+		return nil, err
 	}
-	Container.Register("engineClient", engineClient)
+
+	Container.Register("engineClient", client)
+	return client, nil
 }

@@ -34,6 +34,52 @@ The engine powers the HTTP API and function execution environment:
 ignition engine start
 ```
 
+The engine can be configured using a YAML file, environment variables, or command-line flags:
+
+```bash
+# Start with a custom configuration file
+ignition engine start --config /path/to/config.yaml
+
+# Show the current configuration
+ignition engine start --show-config
+
+# Override specific settings
+ignition engine start --socket /tmp/custom-socket.sock --http :9090
+```
+
+#### Engine Configuration
+
+Ignition uses a flexible configuration system based on:
+
+1. **Configuration File**: Default location is `~/.ignition/config.yaml`
+2. **Environment Variables**: Use `IGNITION_` prefix (e.g., `IGNITION_ENGINE_DEFAULT_TIMEOUT=60s`)
+3. **Command-line Flags**: Take highest precedence
+
+Example configuration file:
+
+```yaml
+# Server configuration
+server:
+  socket_path: ~/.ignition/engine.sock
+  http_addr: :8080
+  registry_dir: ~/.ignition/registry
+
+# Engine configuration
+engine:
+  default_timeout: 30s
+  log_store_capacity: 1000
+  
+  circuit_breaker:
+    failure_threshold: 5
+    reset_timeout: 30s
+  
+  plugin_manager:
+    ttl: 10m
+    cleanup_interval: 1m
+```
+
+See the [example-config.yaml](example-config.yaml) file for a complete configuration template.
+
 ### 2. Create a New Function
 
 ```bash

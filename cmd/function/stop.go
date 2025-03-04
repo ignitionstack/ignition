@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,6 +108,13 @@ Stopped functions will still appear in 'ignition ps' but with a "stopped" status
 		},
 	}
 
-	cmd.Flags().StringVarP(&stopSocketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	// Use the default socket path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	defaultSocketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
+
+	cmd.Flags().StringVarP(&stopSocketPath, "socket", "s", defaultSocketPath, "Path to the Unix socket")
 	return cmd
 }

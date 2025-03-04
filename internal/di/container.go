@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/pkg/engine"
+	"github.com/ignitionstack/ignition/pkg/engine/config"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/registry"
 	localRegistry "github.com/ignitionstack/ignition/pkg/registry/local"
@@ -235,13 +237,34 @@ func NewRegistry(dbRepo repository.DBRepository, config AppConfig) registry.Regi
 }
 
 func NewEngine(params EngineParams) *engine.Engine {
-	options := engine.DefaultEngineOptions()
-	return engine.NewEngineWithDependencies(
-		params.Config.SocketPath,
-		params.Config.HTTPAddr,
-		params.Registry,
-		params.FunctionService,
-		params.Logger,
-		options,
-	)
+	// Create config object
+	cfg := &config.Config{
+		Engine: config.EngineConfig{
+			DefaultTimeout:   30 * time.Second,
+			LogStoreCapacity: 1000,
+			CircuitBreaker: config.CircuitBreakerConfig{
+				FailureThreshold: 5,
+				ResetTimeout:     30 * time.Second,
+			},
+			PluginManager: config.PluginManagerConfig{
+				TTL:             10 * time.Minute,
+				CleanupInterval: 1 * time.Minute,
+			},
+		},
+		Server: config.ServerConfig{
+			SocketPath:  params.Config.SocketPath,
+			HTTPAddr:    params.Config.HTTPAddr,
+			RegistryDir: params.Config.RegistryDir,
+		},
+	}
+
+	// Create engine with the config
+	engine, err := engine.NewEngineWithConfig(cfg, params.Logger)
+	if err != nil {
+		// In a production system, we'd handle this error better
+		// but in this DI context, panicking is acceptable
+		panic("failed to create engine: " + err.Error())
+	}
+
+	return engine
 }

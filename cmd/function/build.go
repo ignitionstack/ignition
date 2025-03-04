@@ -64,7 +64,14 @@ The build command requires a running engine to perform the compilation process.`
 		SilenceUsage:  true,
 	}
 
-	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	// Use the default socket path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	defaultSocketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
+
+	cmd.Flags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the Unix socket")
 	cmd.Flags().StringArrayP("tag", "t", []string{}, "Tags for the function (can be specified multiple times)")
 
 	return cmd

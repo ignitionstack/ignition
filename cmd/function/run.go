@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -118,7 +120,14 @@ func NewFunctionRunCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&runSocketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	// Use the default socket path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	defaultSocketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
+
+	cmd.Flags().StringVarP(&runSocketPath, "socket", "s", defaultSocketPath, "Path to the Unix socket")
 	cmd.Flags().StringArrayVarP(&runConfigFlag, "config", "c", []string{}, "Configuration values to pass to the function (format: key=value)")
 	return cmd
 }
