@@ -107,7 +107,7 @@ func (m *DefaultFunctionManager) BuildFunction(namespace, name, path, tag string
 		Name:      name,
 		Namespace: namespace,
 		Digest:    buildResult.Digest,
-		BuildTime: time.Since(buildStart),
+		BuildTime: time.Since(buildStart).String(),
 		Tag:       tag,
 	}, nil
 }

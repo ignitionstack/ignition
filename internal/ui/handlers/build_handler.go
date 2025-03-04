@@ -43,7 +43,7 @@ func (h *BuildHandler) BuildWithSpinner(
 		}
 
 		if result != nil {
-			result.BuildTime = time.Since(buildStart)
+			result.BuildTime = time.Since(buildStart).String()
 			program.Send(spinner.ResultMsg{Result: *result})
 		}
 	}()
@@ -79,5 +79,5 @@ func DisplayBuildResults(result types.BuildResult, tags []TagInfo) {
 	}
 	ui.PrintMetadata("Hash ›", result.Digest)
 	fmt.Println()
-	ui.PrintInfo("Build time", result.BuildTime.Round(time.Millisecond).String())
+	ui.PrintInfo("Build time", result.BuildTime)
 }
