@@ -88,13 +88,23 @@ type ListFunctionsResponse struct {
 // LogsResponse represents the response from a logs request
 type LogsResponse []string
 
-// ErrorResponse represents an error response from the engine
-type ErrorResponse struct {
+// ResponseError represents an error response from the engine API
+type ResponseError struct {
 	ErrorType string `json:"error"`
 	Message   string `json:"message"`
 	Code      int    `json:"code"`
 }
 
-func (e ErrorResponse) Error() string {
+func (e ResponseError) Error() string {
 	return e.Message
 }
+
+// APIResponseError is deprecated, use ResponseError instead
+//
+//nolint:revive // maintained for backwards compatibility
+type APIResponseError = ResponseError
+
+// ErrorResponse is deprecated, use ResponseError instead
+//
+//nolint:errname // maintained for backwards compatibility
+type ErrorResponse = ResponseError

@@ -124,83 +124,69 @@ func isDomainError(err error) bool {
 	return errors.As(err, &de)
 }
 
+// errorCodeStatusMap maps domain and error codes to HTTP status codes
+var errorCodeStatusMap = map[domainerrors.Domain]map[domainerrors.Code]int{
+	domainerrors.DomainEngine: {
+		domainerrors.CodeNotInitialized: http.StatusServiceUnavailable,
+		domainerrors.CodeInvalidState:   http.StatusInternalServerError,
+		domainerrors.CodeAlreadyRunning: http.StatusConflict,
+		domainerrors.CodeShutdown:       http.StatusServiceUnavailable,
+		domainerrors.CodeNotImplemented: http.StatusNotImplemented,
+		domainerrors.CodeInternalError:  http.StatusInternalServerError,
+	},
+	domainerrors.DomainFunction: {
+		domainerrors.CodeFunctionNotFound:      http.StatusNotFound,
+		domainerrors.CodeFunctionNotLoaded:     http.StatusServiceUnavailable,
+		domainerrors.CodeFunctionAlreadyLoaded: http.StatusConflict,
+		domainerrors.CodeFunctionStopped:       http.StatusServiceUnavailable,
+		domainerrors.CodeInvalidFunction:       http.StatusBadRequest,
+		domainerrors.CodeInvalidConfig:         http.StatusBadRequest,
+	},
+	domainerrors.DomainExecution: {
+		domainerrors.CodeExecutionTimeout:   http.StatusGatewayTimeout,
+		domainerrors.CodeExecutionCancelled: http.StatusRequestTimeout,
+		domainerrors.CodeCircuitBreakerOpen: http.StatusServiceUnavailable,
+		domainerrors.CodeExecutionFailed:    http.StatusInternalServerError,
+	},
+	domainerrors.DomainRegistry: {
+		domainerrors.CodeRegistryNotFound: http.StatusNotFound,
+		domainerrors.CodeVersionNotFound:  http.StatusNotFound,
+		domainerrors.CodeTagNotFound:      http.StatusNotFound,
+		domainerrors.CodeRegistryError:    http.StatusInternalServerError,
+	},
+	domainerrors.DomainPlugin: {
+		domainerrors.CodePluginCreationFailed: http.StatusInternalServerError,
+		domainerrors.CodePluginNotFound:       http.StatusNotFound,
+		domainerrors.CodePluginAlreadyExists:  http.StatusConflict,
+	},
+}
+
+// defaultStatusCodes for each domain when a specific code mapping is not found
+var defaultStatusCodes = map[domainerrors.Domain]int{
+	domainerrors.DomainEngine:    http.StatusInternalServerError,
+	domainerrors.DomainFunction:  http.StatusInternalServerError,
+	domainerrors.DomainExecution: http.StatusInternalServerError,
+	domainerrors.DomainRegistry:  http.StatusInternalServerError,
+	domainerrors.DomainPlugin:    http.StatusInternalServerError,
+}
+
 // DomainErrorToStatusCode maps domain errors to HTTP status codes.
 func DomainErrorToStatusCode(err *domainerrors.DomainError) int {
-	switch err.ErrDomain {
-	case domainerrors.DomainEngine:
-		switch err.ErrCode {
-		case domainerrors.CodeNotInitialized:
-			return http.StatusServiceUnavailable
-		case domainerrors.CodeInvalidState:
-			return http.StatusInternalServerError
-		case domainerrors.CodeAlreadyRunning:
-			return http.StatusConflict
-		case domainerrors.CodeShutdown:
-			return http.StatusServiceUnavailable
-		case domainerrors.CodeNotImplemented:
-			return http.StatusNotImplemented
-		case domainerrors.CodeInternalError:
-			return http.StatusInternalServerError
-		default:
-			return http.StatusInternalServerError
+	// Get the map for this domain
+	if codeMap, ok := errorCodeStatusMap[err.ErrDomain]; ok {
+		// Look up the status code for this error code
+		if statusCode, ok := codeMap[err.ErrCode]; ok {
+			return statusCode
 		}
-	case domainerrors.DomainFunction:
-		switch err.ErrCode {
-		case domainerrors.CodeFunctionNotFound:
-			return http.StatusNotFound
-		case domainerrors.CodeFunctionNotLoaded:
-			return http.StatusServiceUnavailable
-		case domainerrors.CodeFunctionStopped:
-			return http.StatusServiceUnavailable
-		case domainerrors.CodeInvalidFunction:
-			return http.StatusBadRequest
-		case domainerrors.CodeFunctionAlreadyLoaded:
-			return http.StatusConflict
-		case domainerrors.CodeInvalidConfig:
-			return http.StatusBadRequest
-		default:
-			return http.StatusInternalServerError
+
+		// If no specific mapping, use the default for this domain
+		if defaultCode, ok := defaultStatusCodes[err.ErrDomain]; ok {
+			return defaultCode
 		}
-	case domainerrors.DomainExecution:
-		switch err.ErrCode {
-		case domainerrors.CodeExecutionTimeout:
-			return http.StatusGatewayTimeout
-		case domainerrors.CodeCircuitBreakerOpen:
-			return http.StatusServiceUnavailable
-		case domainerrors.CodeExecutionCancelled:
-			return http.StatusRequestTimeout
-		case domainerrors.CodeExecutionFailed:
-			return http.StatusInternalServerError
-		default:
-			return http.StatusInternalServerError
-		}
-	case domainerrors.DomainRegistry:
-		switch err.ErrCode {
-		case domainerrors.CodeRegistryNotFound:
-			return http.StatusNotFound
-		case domainerrors.CodeVersionNotFound:
-			return http.StatusNotFound
-		case domainerrors.CodeTagNotFound:
-			return http.StatusNotFound
-		case domainerrors.CodeRegistryError:
-			return http.StatusInternalServerError
-		default:
-			return http.StatusInternalServerError
-		}
-	case domainerrors.DomainPlugin:
-		switch err.ErrCode {
-		case domainerrors.CodePluginCreationFailed:
-			return http.StatusInternalServerError
-		case domainerrors.CodePluginNotFound:
-			return http.StatusNotFound
-		case domainerrors.CodePluginAlreadyExists:
-			return http.StatusConflict
-		default:
-			return http.StatusInternalServerError
-		}
-	default:
-		return http.StatusInternalServerError
 	}
+
+	// Fallback default if domain is not recognized
+	return http.StatusInternalServerError
 }
 
 // DomainErrorToRequestError converts a domain error to a request error.

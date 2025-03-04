@@ -267,10 +267,15 @@ func (c *clientImpl) GetFunctionLogs(ctx context.Context, namespace, name string
 	return logs, nil
 }
 
-// UnloadFunctions unloads multiple functions at once
-func (c *clientImpl) UnloadFunctions(ctx context.Context, functions []FunctionReference) error {
-	var unloadErrs []string
-	var unloadErrsMu sync.Mutex
+// batchFunctionOperation applies an operation to multiple functions concurrently
+func (c *clientImpl) batchFunctionOperation(
+	ctx context.Context,
+	functions []FunctionReference,
+	operationName string,
+	operation func(context.Context, string, string) error,
+) error {
+	var errs []string
+	var errsMu sync.Mutex
 	var wg sync.WaitGroup
 
 	for _, function := range functions {
@@ -278,71 +283,51 @@ func (c *clientImpl) UnloadFunctions(ctx context.Context, functions []FunctionRe
 		go func(namespace, name, serviceName string) {
 			defer wg.Done()
 
-			req := UnloadRequest{
-				BaseRequest: BaseRequest{
-					Namespace: namespace,
-					Name:      name,
-				},
-			}
-
-			err := c.UnloadFunction(ctx, req)
+			err := operation(ctx, namespace, name)
 			if err != nil {
-				unloadErrsMu.Lock()
-				unloadErrs = append(unloadErrs, fmt.Sprintf("failed to unload function '%s/%s' for service '%s': %v",
-					namespace, name, serviceName, err))
-				unloadErrsMu.Unlock()
+				errsMu.Lock()
+				errs = append(errs, fmt.Sprintf("failed to %s function '%s/%s' for service '%s': %v",
+					operationName, namespace, name, serviceName, err))
+				errsMu.Unlock()
 			}
 		}(function.Namespace, function.Name, function.Service)
 	}
 
-	// Wait for all unload operations to complete
+	// Wait for all operations to complete
 	wg.Wait()
 
 	// Check for errors
-	if len(unloadErrs) > 0 {
-		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to %s some functions:\n%s", operationName, strings.Join(errs, "\n"))
 	}
 
 	return nil
 }
 
+// UnloadFunctions unloads multiple functions at once
+func (c *clientImpl) UnloadFunctions(ctx context.Context, functions []FunctionReference) error {
+	return c.batchFunctionOperation(ctx, functions, "unload", func(ctx context.Context, namespace, name string) error {
+		req := UnloadRequest{
+			BaseRequest: BaseRequest{
+				Namespace: namespace,
+				Name:      name,
+			},
+		}
+		return c.UnloadFunction(ctx, req)
+	})
+}
+
 // StopFunctions stops multiple functions at once
 func (c *clientImpl) StopFunctions(ctx context.Context, functions []FunctionReference) error {
-	var stopErrs []string
-	var stopErrsMu sync.Mutex
-	var wg sync.WaitGroup
-
-	for _, function := range functions {
-		wg.Add(1)
-		go func(namespace, name, serviceName string) {
-			defer wg.Done()
-
-			req := StopRequest{
-				BaseRequest: BaseRequest{
-					Namespace: namespace,
-					Name:      name,
-				},
-			}
-
-			err := c.StopFunction(ctx, req)
-			if err != nil {
-				stopErrsMu.Lock()
-				stopErrs = append(stopErrs, fmt.Sprintf("failed to stop function '%s/%s' for service '%s': %v",
-					namespace, name, serviceName, err))
-				stopErrsMu.Unlock()
-			}
-		}(function.Namespace, function.Name, function.Service)
-	}
-
-	// Wait for all stop operations to complete
-	wg.Wait()
-
-	// Check for errors
-	if len(stopErrs) > 0 {
-		return fmt.Errorf("failed to stop some functions:\n%s", strings.Join(stopErrs, "\n"))
-	}
-
-	return nil
+	return c.batchFunctionOperation(ctx, functions, "stop", func(ctx context.Context, namespace, name string) error {
+		req := StopRequest{
+			BaseRequest: BaseRequest{
+				Namespace: namespace,
+				Name:      name,
+			},
+		}
+		return c.StopFunction(ctx, req)
+	})
 }
 
 // sendRequest is a helper function to send a request to the engine
