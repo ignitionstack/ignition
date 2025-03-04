@@ -32,9 +32,26 @@ func NewServer(socketPath, httpAddr string, handlers *Handlers, logger logging.L
 }
 
 func (s *Server) Start() error {
-	// Set up graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	// Set up graceful shutdown with buffered channel to prevent missing signals
+	// This helps avoid race conditions during shutdown process
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		signal.Stop(signalChan) // Stop signal handling when done
+		cancel()                // Make sure context is canceled
+	}()
+
+	// Run signal handler in a separate goroutine
+	go func() {
+		select {
+		case <-signalChan:
+			s.logger.Printf("Received shutdown signal, gracefully shutting down...")
+			cancel() // Cancel context to trigger shutdown
+		case <-ctx.Done():
+			// Context was canceled elsewhere, nothing to do
+		}
+	}()
 
 	// Check if socket is already in use before removing
 	if _, err := os.Stat(s.socketPath); err == nil {
@@ -103,7 +120,7 @@ func (s *Server) Start() error {
 	// Handle shutdown signal or server error
 	select {
 	case <-ctx.Done():
-		s.logger.Printf("Received shutdown signal, gracefully shutting down...")
+		// Context was canceled by our signal handler or externally
 		return s.shutdown()
 	case err := <-errChan:
 		return err
@@ -140,9 +157,20 @@ func (s *Server) shutdown() error {
 
 	// Clean up the socket file
 	if s.socketPath != "" {
-		fileErr = os.Remove(s.socketPath)
-		if fileErr != nil && !os.IsNotExist(fileErr) {
-			s.logger.Errorf("Error removing socket file: %v", fileErr)
+		// Check if the file still exists before trying to remove it
+		if _, err := os.Stat(s.socketPath); err == nil {
+			fileErr = os.Remove(s.socketPath)
+			if fileErr != nil {
+				s.logger.Errorf("Error removing socket file: %v", fileErr)
+			}
+		} else if os.IsNotExist(err) {
+			// File already gone, this is fine, log it for debugging
+			s.logger.Printf("Socket file already removed, skipping cleanup")
+			fileErr = nil
+		} else {
+			// Some other error during stat
+			s.logger.Errorf("Error checking socket file status: %v", err)
+			fileErr = err
 		}
 	}
 
