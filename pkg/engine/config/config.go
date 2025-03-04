@@ -106,6 +106,7 @@ func DefaultConfig() *Config {
 }
 
 // LoadConfig loads configuration from the specified path and environment variables
+// If the config file doesn't exist, a default one will be created at the specified path.
 func LoadConfig(configPath string) (*Config, error) {
 	k := koanf.New(".")
 
@@ -126,7 +127,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	// Try to load from config file (if it exists)
+	configFileExists := false
 	if _, err := os.Stat(expandedPath); err == nil {
+		configFileExists = true
 		if err := k.Load(file.Provider(expandedPath), yaml.Parser()); err != nil {
 			return nil, fmt.Errorf("failed to load config file: %w", err)
 		}
@@ -153,6 +156,41 @@ func LoadConfig(configPath string) (*Config, error) {
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// If the config file doesn't exist, create it with the default settings
+	if !configFileExists {
+		// Ensure the directory exists
+		configDir := filepath.Dir(expandedPath)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			// Log but don't fail if we can't create the config file
+			fmt.Fprintf(os.Stderr, "Warning: Could not create config directory %s: %v\n", configDir, err)
+		} else {
+			// Marshal the default config to YAML
+			// First convert the config struct to a map that the YAML parser can handle
+			configMap := make(map[string]interface{})
+			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+				TagName: "koanf",
+				Result:  &configMap,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Could not create decoder for default config: %v\n", err)
+			} else if err := decoder.Decode(defaultConfig); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Could not decode default config: %v\n", err)
+			} else {
+				yamlData, err := yaml.Parser().Marshal(configMap)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Could not marshal default config: %v\n", err)
+				} else {
+					// Write the default config file
+					if err := os.WriteFile(expandedPath, yamlData, 0644); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: Could not write default config to %s: %v\n", expandedPath, err)
+					} else {
+						fmt.Fprintf(os.Stdout, "Created default config file at %s\n", expandedPath)
+					}
+				}
+			}
+		}
 	}
 
 	return &config, nil
