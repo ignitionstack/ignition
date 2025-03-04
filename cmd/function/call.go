@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/ignitionstack/ignition/pkg/engine/api"
 	"github.com/ignitionstack/ignition/pkg/engine/client"
@@ -124,32 +123,4 @@ The command requires a running engine to execute the function.`,
 func isJSON(data []byte) bool {
 	var js interface{}
 	return json.Unmarshal(data, &js) == nil
-}
-
-// parseNamespaceAndName parses a string in the format namespace/name:tag
-func parseNamespaceAndName(input string) (namespace, name, tag string, err error) {
-	// Split namespace and name/tag
-	parts := strings.Split(input, "/")
-	if len(parts) != 2 {
-		return "", "", "", fmt.Errorf("invalid format: %s (expected namespace/name:tag)", input)
-	}
-	
-	namespace = parts[0]
-	nameRef := parts[1]
-	
-	// Split name and reference
-	parts = strings.Split(nameRef, ":")
-	if len(parts) != 2 {
-		return "", "", "", fmt.Errorf("invalid format: %s (expected namespace/name:tag)", input)
-	}
-	
-	name = parts[0]
-	tag = parts[1]
-	
-	// Validate all parts are non-empty
-	if namespace == "" || name == "" || tag == "" {
-		return "", "", "", fmt.Errorf("invalid format: %s (all parts must be non-empty)", input)
-	}
-	
-	return namespace, name, tag, nil
 }

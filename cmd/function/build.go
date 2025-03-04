@@ -236,12 +236,12 @@ func parseTags(cmd *cobra.Command, absPath string) ([]TagInfo, error) {
 	return tags, nil
 }
 
-// parseTag parses a tag in the format namespace/name:tag
+// parseTag parses a tag in the format namespace/name:tag or namespace/name (defaults to :latest)
 func parseTag(tag string) (namespace, name, tagValue string, err error) {
 	// Split namespace and name from tag
 	parts := strings.Split(tag, "/")
 	if len(parts) != 2 {
-		return "", "", "", fmt.Errorf("invalid tag format: %s (expected namespace/name:tag)", tag)
+		return "", "", "", fmt.Errorf("invalid tag format: %s (expected namespace/name or namespace/name:tag)", tag)
 	}
 
 	namespace = parts[0]
@@ -249,12 +249,17 @@ func parseTag(tag string) (namespace, name, tagValue string, err error) {
 
 	// Split name from tag
 	parts = strings.Split(nameTag, ":")
-	if len(parts) != 2 {
-		return "", "", "", fmt.Errorf("invalid tag format: %s (expected namespace/name:tag)", tag)
+	if len(parts) == 1 {
+		// No tag provided, use "latest" as default
+		name = parts[0]
+		tagValue = "latest"
+	} else if len(parts) == 2 {
+		// Tag provided
+		name = parts[0]
+		tagValue = parts[1]
+	} else {
+		return "", "", "", fmt.Errorf("invalid tag format: %s (expected namespace/name or namespace/name:tag)", tag)
 	}
-
-	name = parts[0]
-	tagValue = parts[1]
 
 	// Check that all parts are non-empty
 	if namespace == "" || name == "" || tagValue == "" {
