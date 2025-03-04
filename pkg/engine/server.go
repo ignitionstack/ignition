@@ -114,7 +114,6 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	// Log that servers are started and ready
 	s.logger.Printf("Engine servers started successfully and ready to accept connections")
 
 	// Handle shutdown signal or server error
@@ -145,7 +144,6 @@ func (s *Server) shutdown() error {
 		}
 	}
 
-	// Shutdown socket server
 	if s.socketServer != nil {
 		socketErr = s.socketServer.Shutdown(ctx)
 		if socketErr != nil {
@@ -155,7 +153,6 @@ func (s *Server) shutdown() error {
 		}
 	}
 
-	// Clean up the socket file
 	if s.socketPath != "" {
 		// Check if the file still exists before trying to remove it
 		if _, err := os.Stat(s.socketPath); err == nil {

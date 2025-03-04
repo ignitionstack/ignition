@@ -55,7 +55,6 @@ type Engine struct {
 	config  *config.Config
 }
 
-// NewEngine creates a new engine instance with default logger and options.
 func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
 	logger := logging.NewStdLogger(os.Stdout)
 	options := DefaultEngineOptions()
@@ -159,7 +158,6 @@ func NewEngineWithDependencies(
 	}
 }
 
-// setupRegistry initializes the registry with a badger database.
 func setupRegistry(registryDir string) (registry.Registry, error) {
 	opts := badger.DefaultOptions(filepath.Join(registryDir, "registry.db"))
 	opts.Logger = nil
@@ -173,13 +171,10 @@ func setupRegistry(registryDir string) (registry.Registry, error) {
 	return localRegistry.NewLocalRegistry(registryDir, dbRepo), nil
 }
 
-// GetConfig returns the engine's configuration.
 func (e *Engine) GetConfig() *config.Config {
 	return e.config
 }
 
-// Start initializes the engine components and starts the HTTP server.
-//
 // The server will continue running until terminated or an error occurs.
 //
 // Returns:
@@ -201,7 +196,6 @@ func (e *Engine) Start() error {
 	return e.startServer()
 }
 
-// validateState ensures the engine is properly initialized.
 func (e *Engine) validateState() error {
 	if !e.initialized {
 		return ErrEngineNotInitialized
@@ -209,13 +203,11 @@ func (e *Engine) validateState() error {
 	return nil
 }
 
-// initializeComponents starts all background processes and cleanup routines.
 func (e *Engine) initializeComponents(ctx context.Context) {
 	// Start the plugin manager's cleanup routine
 	e.pluginManager.StartCleanup(ctx)
 }
 
-// startServer creates and starts the HTTP server.
 func (e *Engine) startServer() error {
 	handlers := NewHandlers(e, e.logger)
 	server := NewServer(e.socketPath, e.httpAddr, handlers, e.logger)
@@ -366,8 +358,6 @@ func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 
 // RegistryOperator interface implementation
 
-// GetRegistry returns the registry instance used by the engine.
-//
 // Returns:
 //   - registry.Registry: The registry instance
 func (e *Engine) GetRegistry() registry.Registry {
