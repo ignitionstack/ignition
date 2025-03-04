@@ -111,9 +111,10 @@ func (c *EngineClient) Ping(ctx context.Context) error {
 func (c *EngineClient) LoadFunction(ctx context.Context, namespace, name, tag string, config map[string]string) error {
 	// Create HTTP request body
 	reqBody := map[string]interface{}{
-		"namespace": namespace,
-		"name":      name,
-		"digest":    tag,
+		"namespace":  namespace,
+		"name":       name,
+		"digest":     tag,
+		"force_load": true,
 	}
 
 	// Add config if provided
@@ -335,6 +336,38 @@ func (c *EngineClient) UnloadFunctions(ctx context.Context, functions []Function
 	// Check for errors
 	if len(unloadErrs) > 0 {
 		return fmt.Errorf("failed to unload some functions:\n%s", strings.Join(unloadErrs, "\n"))
+	}
+
+	return nil
+}
+
+// UnloadFunctions unloads all functions in the provided list.
+func (c *EngineClient) StopFunctions(ctx context.Context, functions []FunctionReference) error {
+	var stopErrs []string
+	var stopErrsMu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, function := range functions {
+		wg.Add(1)
+		go func(namespace, name, serviceName string) {
+			defer wg.Done()
+
+			err := c.StopFunction(ctx, namespace, name)
+			if err != nil {
+				stopErrsMu.Lock()
+				stopErrs = append(stopErrs, fmt.Sprintf("failed to stop function '%s/%s' for service '%s': %v",
+					namespace, name, serviceName, err))
+				stopErrsMu.Unlock()
+			}
+		}(function.Namespace, function.Name, function.Service)
+	}
+
+	// Wait for all unload operations to complete
+	wg.Wait()
+
+	// Check for errors
+	if len(stopErrs) > 0 {
+		return fmt.Errorf("failed to stop some functions:\n%s", strings.Join(stopErrs, "\n"))
 	}
 
 	return nil
