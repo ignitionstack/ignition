@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ignitionstack/ignition/internal/config"
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
@@ -39,8 +40,9 @@ type FunctionReference struct {
 }
 
 func NewEngineClientWithDefaults() *EngineClient {
+	// Use shared default socket path from global config
 	return &EngineClient{
-		socketPath: "/tmp/ignition-engine.sock",
+		socketPath: config.DefaultSocket,
 		httpClient: &http.Client{},
 	}
 }

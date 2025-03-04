@@ -11,6 +11,7 @@ import (
 	"github.com/ignitionstack/ignition/internal/repository"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
+	"github.com/ignitionstack/ignition/pkg/engine/config"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 	"github.com/ignitionstack/ignition/pkg/manifest"
 	"github.com/ignitionstack/ignition/pkg/registry"
@@ -51,6 +52,7 @@ type Engine struct {
 
 	// Configuration
 	options *Options
+	config  *config.Config
 }
 
 // NewEngine creates a new engine instance with default logger and options.
@@ -83,6 +85,33 @@ func NewEngineWithOptions(socketPath, httpAddr string, registryDir string, logge
 		logger,
 		options,
 	), nil
+}
+
+// NewEngineWithConfig creates a new engine instance using the provided configuration.
+func NewEngineWithConfig(cfg *config.Config, logger logging.Logger) (*Engine, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("configuration cannot be nil")
+	}
+
+	registry, err := setupRegistry(cfg.Server.RegistryDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup registry: %w", err)
+	}
+
+	functionService := services.NewFunctionService()
+	options := OptionsFromConfig(cfg)
+
+	engine := NewEngineWithDependencies(
+		cfg.Server.SocketPath,
+		cfg.Server.HTTPAddr,
+		registry,
+		functionService,
+		logger,
+		options,
+	)
+
+	engine.config = cfg
+	return engine, nil
 }
 
 // NewEngineWithDependencies creates a new engine with custom dependencies.
@@ -142,6 +171,11 @@ func setupRegistry(registryDir string) (registry.Registry, error) {
 
 	dbRepo := repository.NewBadgerDBRepository(db)
 	return localRegistry.NewLocalRegistry(registryDir, dbRepo), nil
+}
+
+// GetConfig returns the engine's configuration.
+func (e *Engine) GetConfig() *config.Config {
+	return e.config
 }
 
 // Start initializes the engine components and starts the HTTP server.

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -70,8 +72,15 @@ func NewFunctionTagCommand() *cobra.Command {
 		},
 	}
 
+	// Use the default socket path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	defaultSocketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
+
 	// Add the socket path flag
-	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	cmd.Flags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the Unix socket")
 
 	return cmd
 }

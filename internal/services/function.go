@@ -63,7 +63,12 @@ type functionService struct {
 }
 
 func NewFunctionService() FunctionService {
-	socketPath := "/tmp/ignition-engine.sock"
+	// Use the default socket path from global config
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	socketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
 
 	// Create an HTTP client that connects to the Unix socket
 	httpClient := &http.Client{

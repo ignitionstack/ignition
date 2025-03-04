@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ignitionstack/ignition/pkg/engine/components"
+	"github.com/ignitionstack/ignition/pkg/engine/config"
 )
 
 // Options defines configurable options for the engine.
@@ -33,6 +34,22 @@ func DefaultEngineOptions() *Options {
 		PluginManagerSettings: components.PluginManagerSettings{
 			TTL:             10 * time.Minute,
 			CleanupInterval: 1 * time.Minute,
+		},
+	}
+}
+
+// OptionsFromConfig creates engine options from the provided configuration
+func OptionsFromConfig(cfg *config.Config) *Options {
+	return &Options{
+		DefaultTimeout:   cfg.Engine.DefaultTimeout,
+		LogStoreCapacity: cfg.Engine.LogStoreCapacity,
+		CircuitBreakerSettings: components.CircuitBreakerSettings{
+			FailureThreshold: cfg.Engine.CircuitBreaker.FailureThreshold,
+			ResetTimeout:     cfg.Engine.CircuitBreaker.ResetTimeout,
+		},
+		PluginManagerSettings: components.PluginManagerSettings{
+			TTL:             cfg.Engine.PluginManager.TTL,
+			CleanupInterval: cfg.Engine.PluginManager.CleanupInterval,
 		},
 	}
 }

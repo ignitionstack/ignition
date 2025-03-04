@@ -1,14 +1,23 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
+	globalConfig "github.com/ignitionstack/ignition/internal/config"
 	"github.com/ignitionstack/ignition/internal/di"
 	"github.com/ignitionstack/ignition/internal/services"
 	"github.com/ignitionstack/ignition/internal/ui"
+	"github.com/ignitionstack/ignition/pkg/engine/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+)
+
+// Global flags
+var (
+	socketPath        string
+	engineClient      *services.EngineClient
+	defaultSocketPath string
 )
 
 var rootCmd = &cobra.Command{
@@ -38,18 +47,27 @@ Key capabilities:
   ignition run ./my-function.wasm
 
   # List all functions
-  ignition function list`,
-}
+  ignition function list
 
-// Container holds the dependency injection container.
-var Container = di.NewContainer()
-
-func Execute() {
-	// Add logo display to root command with pre-run hook
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
-		// Skip logo for help commands and plain output
+  # Use a custom config file
+  ignition --config ~/.ignition/custom-config.yaml function list`,
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		// Skip for help commands
 		if cmd.Name() == "help" || cmd.Name() == "completion" {
-			return
+			return nil
+		}
+
+		// Skip loading config for engine start command, as it handles config directly
+		if cmd.CommandPath() == "ignition engine start" {
+			return nil
+		}
+
+		// Setup engine client from config
+		err := setupEngineClient()
+		if err != nil {
+			// Don't return error, as some commands don't need the engine
+			// Just silently continue with default client
+			engineClient = services.NewEngineClientWithDefaults()
 		}
 
 		// Check if any command in the hierarchy has a plain flag set to true
@@ -63,8 +81,15 @@ func Execute() {
 		if !plainFlag {
 			ui.PrintLogo()
 		}
-	}
 
+		return nil
+	},
+}
+
+// Container holds the dependency injection container.
+var Container = di.NewContainer()
+
+func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
@@ -72,17 +97,70 @@ func Execute() {
 }
 
 func init() {
-	// Register services in the container
+	// Set default socket path from global config
+	defaultSocketPath = globalConfig.DefaultSocket
 
-	// Register the function service
+	// Add global flags
+	rootCmd.PersistentFlags().StringVarP(&globalConfig.ConfigPath, "config", "c", config.DefaultConfigPath, "Path to the configuration file")
+	rootCmd.PersistentFlags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the engine socket (overrides config)")
+
+	// Register services in the container
 	functionService := services.NewFunctionService()
 	Container.Register("functionService", functionService)
 
-	// Register the engine client with safe creation
-	engineClient, err := services.NewEngineClient("/tmp/ignition-engine.sock")
-	if err != nil {
-		fmt.Printf("Warning: Failed to create engine client: %v\n", err)
-		engineClient = services.NewEngineClientWithDefaults()
+	// Engine client will be initialized in setupEngineClient()
+	// We register a default one for now, it will be replaced in PersistentPreRunE
+	Container.Register("engineClient", services.NewEngineClientWithDefaults())
+}
+
+// setupEngineClient creates an engine client using the config file or command line flags
+func setupEngineClient() error {
+	// If socket path is explicitly provided, use it directly
+	if socketPath != "" {
+		client, err := services.NewEngineClient(socketPath)
+		if err != nil {
+			return err
+		}
+
+		engineClient = client
+		Container.Register("engineClient", client)
+		return nil
 	}
-	Container.Register("engineClient", engineClient)
+
+	// Try to load from config file
+	cfg, err := loadEngineConfig()
+	if err != nil {
+		return err
+	}
+
+	// Create client using socket path from config
+	client, err := services.NewEngineClient(cfg.Server.SocketPath)
+	if err != nil {
+		return err
+	}
+
+	engineClient = client
+	Container.Register("engineClient", client)
+	return nil
+}
+
+// loadEngineConfig loads the engine configuration from the specified path
+func loadEngineConfig() (*config.Config, error) {
+	// Expand tilde in config path if needed
+	expandedPath := globalConfig.ConfigPath
+	if len(globalConfig.ConfigPath) > 0 && globalConfig.ConfigPath[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			expandedPath = filepath.Join(homeDir, globalConfig.ConfigPath[1:])
+		}
+	}
+
+	// Try to load config
+	cfg, err := config.LoadConfig(expandedPath)
+	if err != nil {
+		// Fall back to default config
+		return config.DefaultConfig(), nil
+	}
+
+	return cfg, nil
 }

@@ -1,0 +1,37 @@
+# Ignition Engine Configuration Example
+# Save this file to ~/.ignition/config.yaml or specify with --config
+
+# Server configuration
+server:
+  # Socket path for Unix socket
+  socket_path: ~/.ignition/engine.sock
+  
+  # HTTP address to listen on
+  http_addr: :8080
+  
+  # Registry directory path
+  registry_dir: ~/.ignition/registry
+
+# Engine configuration
+engine:
+  # Default timeout for function operations (in Go duration format)
+  default_timeout: 30s
+  
+  # Capacity of the log store
+  log_store_capacity: 1000
+  
+  # Circuit breaker settings
+  circuit_breaker:
+    # Failure threshold before circuit opens
+    failure_threshold: 5
+    
+    # Reset timeout after which to try again (in Go duration format)
+    reset_timeout: 30s
+  
+  # Plugin manager settings
+  plugin_manager:
+    # How long to keep unused plugins loaded (in Go duration format)
+    ttl: 10m
+    
+    # How often to run the cleanup routine (in Go duration format)
+    cleanup_interval: 1m

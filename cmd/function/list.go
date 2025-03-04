@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -113,7 +115,14 @@ command allows you to explore what's available to run.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&socketPath, "socket", "s", "/tmp/ignition-engine.sock", "Path to the Unix socket")
+	// Use the default socket path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	defaultSocketPath := filepath.Join(homeDir, ".ignition", "engine.sock")
+
+	cmd.Flags().StringVarP(&socketPath, "socket", "s", defaultSocketPath, "Path to the Unix socket")
 	cmd.Flags().Bool("plain", false, "Output in plain, machine-readable format (useful for piping to other commands)")
 	return cmd
 }
