@@ -218,7 +218,7 @@ func (e *Engine) startServer() error {
 // Returns:
 //   - error: Any error that occurred during loading
 func (e *Engine) LoadFunctionWithContext(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
-	return e.functionManager.LoadFunction(ctx, namespace, name, identifier, config)
+	return e.functionManager.LoadFunction(ctx, namespace, name, identifier, config, false)
 }
 
 // LoadFunctionWithForce loads a function with the option to force loading even if stopped.
@@ -234,7 +234,7 @@ func (e *Engine) LoadFunctionWithContext(ctx context.Context, namespace, name, i
 // Returns:
 //   - error: Any error that occurred during loading
 func (e *Engine) LoadFunctionWithForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
-	return e.functionManager.LoadFunctionWithForce(ctx, namespace, name, identifier, config, force)
+	return e.functionManager.LoadFunction(ctx, namespace, name, identifier, config, force)
 }
 
 // CallFunctionWithContext calls a function with the specified parameters.
@@ -286,7 +286,8 @@ func (e *Engine) StopFunction(namespace, name string) error {
 // Returns:
 //   - bool: True if the function is loaded, false otherwise
 func (e *Engine) IsLoaded(namespace, name string) bool {
-	return e.functionManager.IsLoaded(namespace, name)
+	state := e.functionManager.GetFunctionState(namespace, name)
+	return state.Loaded
 }
 
 // WasPreviouslyLoaded checks if a function was previously loaded and returns its config.
@@ -299,7 +300,8 @@ func (e *Engine) IsLoaded(namespace, name string) bool {
 //   - bool: True if the function was previously loaded
 //   - map[string]string: The function's last known configuration
 func (e *Engine) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
-	return e.functionManager.WasPreviouslyLoaded(namespace, name)
+	state := e.functionManager.GetFunctionState(namespace, name)
+	return state.PreviouslyLoaded, state.Config
 }
 
 // IsFunctionStopped checks if a function is explicitly stopped.
@@ -311,7 +313,8 @@ func (e *Engine) WasPreviouslyLoaded(namespace, name string) (bool, map[string]s
 // Returns:
 //   - bool: True if the function is stopped, false otherwise
 func (e *Engine) IsFunctionStopped(namespace, name string) bool {
-	return e.functionManager.IsStopped(namespace, name)
+	state := e.functionManager.GetFunctionState(namespace, name)
+	return state.Stopped
 }
 
 // BuildFunction builds a function and stores it in the registry.
@@ -344,8 +347,9 @@ func (e *Engine) ReassignTag(namespace, name, tag, newDigest string) error {
 	return e.functionManager.ReassignTag(namespace, name, tag, newDigest)
 }
 
-// RegistryOperator interface implementation
-
+// GetRegistry returns the registry instance.
+// This is a convenience method for direct access when needed.
+//
 // Returns:
 //   - registry.Registry: The registry instance
 func (e *Engine) GetRegistry() registry.Registry {

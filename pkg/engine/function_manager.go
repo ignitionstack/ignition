@@ -34,15 +34,11 @@ func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, regi
 	}
 }
 
-// Core function lifecycle operations
+// Core function operations
 
-// LoadFunction delegates to the loader
-func (m *FunctionManagerImpl) LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
-	return m.loader.LoadFunction(ctx, namespace, name, identifier, config)
-}
-
-// LoadFunctionWithForce delegates to the loader
-func (m *FunctionManagerImpl) LoadFunctionWithForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
+// LoadFunction loads a function with the specified identifier and configuration.
+// If force is true, it will load even if the function is marked as stopped.
+func (m *FunctionManagerImpl) LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	return m.loader.LoadFunctionWithForce(ctx, namespace, name, identifier, config, force)
 }
 
@@ -61,21 +57,16 @@ func (m *FunctionManagerImpl) StopFunction(namespace, name string) error {
 	return m.loader.StopFunction(namespace, name)
 }
 
-// Function state operations
-
-// IsLoaded delegates to the loader
-func (m *FunctionManagerImpl) IsLoaded(namespace, name string) bool {
-	return m.loader.IsLoaded(namespace, name)
-}
-
-// WasPreviouslyLoaded delegates to the loader
-func (m *FunctionManagerImpl) WasPreviouslyLoaded(namespace, name string) (bool, map[string]string) {
-	return m.loader.WasPreviouslyLoaded(namespace, name)
-}
-
-// IsStopped delegates to the loader
-func (m *FunctionManagerImpl) IsStopped(namespace, name string) bool {
-	return m.loader.IsStopped(namespace, name)
+// GetFunctionState returns the complete state information for a function
+func (m *FunctionManagerImpl) GetFunctionState(namespace, name string) FunctionState {
+	wasLoaded, config := m.loader.WasPreviouslyLoaded(namespace, name)
+	
+	return FunctionState{
+		Loaded:           m.loader.IsLoaded(namespace, name),
+		Stopped:          m.loader.IsStopped(namespace, name),
+		PreviouslyLoaded: wasLoaded,
+		Config:           config,
+	}
 }
 
 // BuildFunction builds a function and stores it in the registry

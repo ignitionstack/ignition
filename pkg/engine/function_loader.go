@@ -8,6 +8,7 @@ import (
 	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
+	"github.com/ignitionstack/ignition/pkg/engine/utils"
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
@@ -34,6 +35,7 @@ func NewFunctionLoader(registry registry.Registry, pluginManager PluginManager,
 }
 
 // LoadFunction loads a function with the specified identifier and configuration.
+// This is a convenience method that calls LoadFunctionWithForce with force=false.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout
@@ -131,12 +133,18 @@ func (l *FunctionLoader) copyConfig(config map[string]string) map[string]string 
 	return configCopy
 }
 
-// handlePullError logs and wraps errors from pulling a function from the registry.
-func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
-	errMsg := fmt.Sprintf("Failed to fetch WASM file from registry: %v", err)
+// logAndWrapError logs an error and wraps it with an EngineError.
+// This centralizes error handling to ensure consistent logging and wrapping.
+func (l *FunctionLoader) logAndWrapError(functionKey, operation string, err error) error {
+	errMsg := fmt.Sprintf("%s: %v", operation, err)
 	l.logger.Errorf(errMsg)
 	l.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-	return WrapEngineError("failed to fetch WASM file from registry", err)
+	return WrapEngineError(operation, err)
+}
+
+// handlePullError logs and wraps errors from pulling a function from the registry.
+func (l *FunctionLoader) handlePullError(functionKey string, err error) error {
+	return l.logAndWrapError(functionKey, "failed to fetch WASM file from registry", err)
 }
 
 // handleExistingFunction checks if a function needs to be reloaded based on changes.
@@ -191,18 +199,17 @@ func (l *FunctionLoader) createAndStorePlugin(
 	initStart := time.Now()
 	plugin, err := l.createPluginWithContext(ctx, wasm, vi, cfg)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to initialize plugin: %v", err)
-		l.logger.Errorf(errMsg)
-		l.logStore.AddLog(key, logging.LevelError, errMsg)
-		return WrapEngineError("failed to initialize plugin", err)
+		return l.logAndWrapError(key, "failed to initialize plugin", err)
 	}
 
+	// Log successful initialization
 	l.logStore.AddLog(key, logging.LevelInfo,
 		fmt.Sprintf("Plugin initialized successfully (time: %v)", time.Since(initStart)))
 
 	// Store the plugin in the plugin manager
 	l.pluginManager.StorePlugin(key, plugin, dg, cfg)
 
+	// Log success
 	successMsg := fmt.Sprintf("Function loaded successfully: %s", key)
 	l.logger.Printf(successMsg)
 	l.logStore.AddLog(key, logging.LevelInfo, successMsg)
@@ -341,81 +348,43 @@ func (l *FunctionLoader) IsStopped(namespace, name string) bool {
 
 // pullWithContext fetches a WASM module with cancellation support
 func (l *FunctionLoader) pullWithContext(ctx context.Context, namespace, name, identifier string) ([]byte, *registry.VersionInfo, error) {
-	// Create a done channel to ensure goroutine cleanup
-	done := make(chan struct{})
-	defer close(done)
-	
-	// Create a buffered result channel
-	resultCh := make(chan struct {
+	type pullResult struct {
 		bytes []byte
 		info  *registry.VersionInfo
-		err   error
-	}, 1)
-	
-	// Start the pull operation in a goroutine
-	go func() {
-		bytes, info, err := l.registry.Pull(namespace, name, identifier)
-		
-		// Try to send the result, but don't block if the parent function has returned
-		select {
-		case resultCh <- struct {
-			bytes []byte
-			info  *registry.VersionInfo
-			err   error
-		}{bytes, info, err}:
-		case <-done:
-			// Parent function has returned, clean up if needed
-		}
-	}()
-	
-	// Wait for either the result or context cancellation
-	select {
-	case result := <-resultCh:
-		return result.bytes, result.info, result.err
-	case <-ctx.Done():
-		// Context was cancelled
-		return nil, nil, ctx.Err()
 	}
+	
+	// Create a wrapper function to use the shared utility
+	wrapper := func() (pullResult, error) {
+		bytes, info, err := l.registry.Pull(namespace, name, identifier)
+		return pullResult{bytes, info}, err
+	}
+	
+	// Execute with context handling
+	result, err := utils.ExecuteWithContext(ctx, wrapper)
+	if err != nil {
+		return nil, nil, err
+	}
+	
+	return result.bytes, result.info, nil
 }
 
 // createPluginWithContext creates a plugin with cancellation support
 func (l *FunctionLoader) createPluginWithContext(ctx context.Context, wasmBytes []byte, 
                                                versionInfo *registry.VersionInfo, 
                                                config map[string]string) (*extism.Plugin, error) {
-	// Create a done channel to ensure goroutine cleanup
-	done := make(chan struct{})
-	defer close(done)
 	
-	// Create a buffered result channel
-	resultCh := make(chan struct {
-		plugin *extism.Plugin
-		err    error
-	}, 1)
-	
-	// Start plugin creation in a goroutine
-	go func() {
-		plugin, err := components.CreatePlugin(wasmBytes, versionInfo, config)
-		
-		// Clean up on cancellation
-		select {
-		case resultCh <- struct {
-			plugin *extism.Plugin
-			err    error
-		}{plugin, err}:
-		case <-done:
-			// Parent function has returned, clean up resources
-			if plugin != nil && err == nil {
-				plugin.Close(context.Background())
-			}
-		}
-	}()
-	
-	// Wait for either the result or context cancellation
-	select {
-	case result := <-resultCh:
-		return result.plugin, result.err
-	case <-ctx.Done():
-		// Context was cancelled
-		return nil, ctx.Err()
+	// Create a wrapper function to use the shared utility
+	wrapper := func() (*extism.Plugin, error) {
+		return components.CreatePlugin(wasmBytes, versionInfo, config)
 	}
+	
+	// Execute with context cancellation handling
+	plugin, err := utils.ExecuteWithContext(ctx, wrapper)
+	
+	// Clean up resources on error
+	if err != nil && plugin != nil {
+		plugin.Close(context.Background())
+	}
+	
+	return plugin, err
 }

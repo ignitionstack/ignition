@@ -8,6 +8,7 @@ import (
 	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/pkg/engine/components"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
+	"github.com/ignitionstack/ignition/pkg/engine/utils"
 )
 
 type FunctionExecutor struct {
@@ -93,33 +94,36 @@ func (e *FunctionExecutor) executeFunction(
 ) ([]byte, error) {
 	startTime := time.Now()
 	
-	// Create a done channel to ensure goroutine cleanup
-	done := make(chan struct{})
-	defer close(done)
+	// Create a wrapper function for the shared utility
+	wrapper := func() (callResult, error) {
+		_, output, callErr := plugin.Call(entrypoint, payload)
+		return callResult{output, callErr}, nil
+	}
 	
-	// Create a buffered result channel
-	resultCh := make(chan callResult, 1)
+	// Execute with context cancellation handling
+	result, _ := utils.ExecuteWithContext(ctx, wrapper)
 	
-	// Execute the plugin call in a goroutine
-	go func() {
-		_, output, err := plugin.Call(entrypoint, payload)
-		
-		// Try to send the result, but don't block if the parent function has returned
-		select {
-		case resultCh <- callResult{output, err}:
-			// Result sent successfully
-		case <-done:
-			// Parent function has returned, nothing to do
-		}
-	}()
-	
-	// Wait for the result or context cancellation
-	select {
-	case result := <-resultCh:
-		return e.processResult(functionKey, cb, entrypoint, result, startTime)
-	case <-ctx.Done():
+	// If the context was cancelled, handle it specially
+	if ctx.Err() != nil {
 		return e.handleCancellation(ctx, functionKey, cb)
 	}
+	
+	// Otherwise process the result with the actual call result
+	return e.processResult(functionKey, cb, entrypoint, result, startTime)
+}
+
+// logCircuitBreakerOpen logs when a circuit breaker opens
+func (e *FunctionExecutor) logCircuitBreakerOpen(functionKey string) {
+	cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
+	e.logger.Printf(cbMsg)
+	e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
+}
+
+// logAndWrapError logs an error message and wraps it as an engine error
+func (e *FunctionExecutor) logAndWrapError(functionKey, operation string, err error) error {
+	errMsg := fmt.Sprintf("%s: %v", operation, err)
+	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
+	return WrapEngineError(operation, err)
 }
 
 // processResult handles both success and error cases from function execution
@@ -137,18 +141,12 @@ func (e *FunctionExecutor) processResult(
 		// Record failure in circuit breaker
 		isOpen := cb.RecordFailure()
 		
-		// Log the error
-		errMsg := fmt.Sprintf("Failed to call function: %v", result.err)
-		e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
-		
 		// Log if circuit breaker opened
 		if isOpen {
-			cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
-			e.logger.Printf(cbMsg)
-			e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
+			e.logCircuitBreakerOpen(functionKey)
 		}
 		
-		return nil, WrapEngineError("failed to call function", result.err)
+		return nil, e.logAndWrapError(functionKey, "failed to call function", result.err)
 	}
 	
 	// Handle success case
@@ -170,24 +168,19 @@ func (e *FunctionExecutor) handleCancellation(
 	isOpen := cb.RecordFailure()
 	
 	// Determine the specific error message based on cancellation reason
-	var errMsg string
+	var operation string
 	if ctx.Err() == context.DeadlineExceeded {
-		errMsg = fmt.Sprintf("Function execution timed out after %v", e.defaultTimeout)
+		operation = fmt.Sprintf("function execution timed out after %v", e.defaultTimeout)
 	} else {
-		errMsg = "Function execution was cancelled"
+		operation = "function execution was cancelled"
 	}
-	
-	// Log the error
-	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
 	
 	// Log if circuit breaker opened
 	if isOpen {
-		cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
-		e.logger.Printf(cbMsg)
-		e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
+		e.logCircuitBreakerOpen(functionKey)
 	}
 	
-	return nil, WrapEngineError(errMsg, ctx.Err())
+	return nil, e.logAndWrapError(functionKey, operation, ctx.Err())
 }
 
 // Returns:
