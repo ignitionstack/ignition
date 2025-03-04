@@ -10,7 +10,6 @@ import (
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 )
 
-// FunctionExecutor is responsible for executing functions and managing circuit breakers.
 type FunctionExecutor struct {
 	pluginManager   PluginManager
 	circuitBreakers CircuitBreakerManager
@@ -19,7 +18,6 @@ type FunctionExecutor struct {
 	defaultTimeout  time.Duration
 }
 
-// NewFunctionExecutor creates a new function executor.
 func NewFunctionExecutor(pluginManager PluginManager, circuitBreakers CircuitBreakerManager,
 	logStore *logging.FunctionLogStore, logger logging.Logger, defaultTimeout time.Duration) *FunctionExecutor {
 	return &FunctionExecutor{
@@ -79,7 +77,6 @@ func (e *FunctionExecutor) prepareExecution(functionKey string) (CircuitBreaker,
 	return cb, plugin, nil
 }
 
-// callResult represents the result of a function call.
 type callResult struct {
 	output []byte
 	err    error
@@ -197,8 +194,6 @@ func (e *FunctionExecutor) handleContextCancellation(
 	return WrapEngineError(errMsg, ctx.Err())
 }
 
-// DefaultTimeout returns the default timeout for function calls.
-//
 // Returns:
 //   - time.Duration: The configured default timeout for function execution
 func (e *FunctionExecutor) DefaultTimeout() time.Duration {
