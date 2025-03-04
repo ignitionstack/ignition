@@ -15,17 +15,14 @@ type RequestError struct {
 	cause      error
 }
 
-// Error implements the error interface.
 func (e RequestError) Error() string {
 	return e.Message
 }
 
-// Unwrap returns the underlying cause of the error.
 func (e RequestError) Unwrap() error {
 	return e.cause
 }
 
-// NewRequestError creates a new RequestError.
 func NewRequestError(message string, statusCode int) RequestError {
 	return RequestError{
 		Message:    message,
@@ -33,7 +30,6 @@ func NewRequestError(message string, statusCode int) RequestError {
 	}
 }
 
-// NewRequestErrorWithCause creates a new RequestError with a cause.
 func NewRequestErrorWithCause(message string, statusCode int, cause error) RequestError {
 	return RequestError{
 		Message:    message,

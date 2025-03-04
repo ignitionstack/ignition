@@ -13,7 +13,6 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// FunctionManagerImpl implements the FunctionManager interface.
 type FunctionManagerImpl struct {
 	loader         *FunctionLoader
 	executor       *FunctionExecutor
@@ -22,7 +21,6 @@ type FunctionManagerImpl struct {
 	defaultTimeout time.Duration
 }
 
-// NewFunctionManager creates a new function manager.
 func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, registry registry.Registry,
 	functionSvc services.FunctionService, defaultTimeout time.Duration) *FunctionManagerImpl {
 	return &FunctionManagerImpl{
@@ -34,25 +32,20 @@ func NewFunctionManager(loader *FunctionLoader, executor *FunctionExecutor, regi
 	}
 }
 
-// Core function operations
-
 // LoadFunction loads a function with the specified identifier and configuration.
 // If force is true, it will load even if the function is marked as stopped.
 func (m *FunctionManagerImpl) LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	return m.loader.LoadFunctionWithForce(ctx, namespace, name, identifier, config, force)
 }
 
-// CallFunction delegates to the executor
 func (m *FunctionManagerImpl) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	return m.executor.CallFunction(ctx, namespace, name, entrypoint, payload)
 }
 
-// UnloadFunction delegates to the loader
 func (m *FunctionManagerImpl) UnloadFunction(namespace, name string) error {
 	return m.loader.UnloadFunction(namespace, name)
 }
 
-// StopFunction delegates to the loader
 func (m *FunctionManagerImpl) StopFunction(namespace, name string) error {
 	return m.loader.StopFunction(namespace, name)
 }

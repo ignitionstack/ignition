@@ -12,7 +12,6 @@ import (
 	"github.com/ignitionstack/ignition/pkg/registry"
 )
 
-// FunctionLoader is responsible for loading, unloading, and managing function state.
 type FunctionLoader struct {
 	registry        registry.Registry
 	pluginManager   PluginManager
@@ -21,7 +20,6 @@ type FunctionLoader struct {
 	logger          logging.Logger
 }
 
-// NewFunctionLoader creates a new function loader.
 func NewFunctionLoader(registry registry.Registry, pluginManager PluginManager,
 	circuitBreakers CircuitBreakerManager, logStore *logging.FunctionLogStore,
 	logger logging.Logger) *FunctionLoader {
@@ -36,33 +34,12 @@ func NewFunctionLoader(registry registry.Registry, pluginManager PluginManager,
 
 // LoadFunction loads a function with the specified identifier and configuration.
 // This is a convenience method that calls LoadFunctionWithForce with force=false.
-//
-// Parameters:
-//   - ctx: Context for cancellation and timeout
-//   - namespace: The function namespace
-//   - name: The function name
-//   - identifier: The function identifier (digest or tag)
-//   - config: Configuration values for the function
-//
-// Returns:
-//   - error: Any error that occurred during loading
 func (l *FunctionLoader) LoadFunction(ctx context.Context, namespace, name, identifier string, config map[string]string) error {
 	return l.LoadFunctionWithForce(ctx, namespace, name, identifier, config, false)
 }
 
 // LoadFunctionWithForce loads a function with the specified identifier and configuration,
 // with the option to force loading even if the function is marked as stopped.
-//
-// Parameters:
-//   - ctx: Context for cancellation and timeout
-//   - namespace: The function namespace
-//   - name: The function name
-//   - identifier: The function identifier (digest or tag)
-//   - config: Configuration values for the function
-//   - force: Whether to force loading even if the function is marked as stopped
-//
-// Returns:
-//   - error: Any error that occurred during loading
 func (l *FunctionLoader) LoadFunctionWithForce(ctx context.Context, namespace, name, identifier string, config map[string]string, force bool) error {
 	l.logger.Printf("Loading function: %s/%s (identifier: %s, force: %v)", namespace, name, identifier, force)
 	functionKey := GetFunctionKey(namespace, name)
