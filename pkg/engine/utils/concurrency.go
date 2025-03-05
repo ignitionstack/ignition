@@ -12,7 +12,6 @@ type Result[T any] struct {
 	Err   error
 }
 
-// If the context is cancelled, a cancellation error is returned.
 func ExecuteWithContext[T any](ctx context.Context, operation func() (T, error)) (T, error) {
 	var zero T
 
