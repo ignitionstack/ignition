@@ -8,7 +8,6 @@ import (
 	domainerrors "github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 
-// RequestError represents a client-facing HTTP error.
 type RequestError struct {
 	Message    string
 	StatusCode int
@@ -38,13 +37,11 @@ func NewRequestErrorWithCause(message string, statusCode int, cause error) Reque
 	}
 }
 
-// FunctionNotFoundError is returned when a function is not found.
 func FunctionNotFoundError(functionKey string) error {
 	message := fmt.Sprintf("Function not found: %s", functionKey)
 	return NewRequestError(message, http.StatusNotFound)
 }
 
-// IsNotFoundError checks if an error is a 404 Not Found error.
 func IsNotFoundError(err error) bool {
 	var reqErr RequestError
 	if errors.As(err, &reqErr) {

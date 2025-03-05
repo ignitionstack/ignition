@@ -29,18 +29,6 @@ func NewFunctionExecutor(pluginManager PluginManager, circuitBreakers CircuitBre
 	}
 }
 
-// CallFunction calls a function with the specified parameters.
-//
-// Parameters:
-//   - ctx: Context for cancellation and timeout
-//   - namespace: The function namespace
-//   - name: The function name
-//   - entrypoint: The entry point function to call
-//   - payload: The input payload for the function
-//
-// Returns:
-//   - []byte: The output from the function call
-//   - error: Any error that occurred during execution
 func (e *FunctionExecutor) CallFunction(ctx context.Context, namespace, name, entrypoint string, payload []byte) ([]byte, error) {
 	functionKey := GetFunctionKey(namespace, name)
 
@@ -111,21 +99,18 @@ func (e *FunctionExecutor) executeFunction(
 	return e.processResult(functionKey, cb, entrypoint, result, startTime)
 }
 
-// logCircuitBreakerOpen logs when a circuit breaker opens
 func (e *FunctionExecutor) logCircuitBreakerOpen(functionKey string) {
 	cbMsg := fmt.Sprintf("Circuit breaker opened for function %s", functionKey)
 	e.logger.Printf(cbMsg)
 	e.logStore.AddLog(functionKey, logging.LevelError, cbMsg)
 }
 
-// logAndWrapError logs an error message and wraps it as an engine error
 func (e *FunctionExecutor) logAndWrapError(functionKey, operation string, err error) error {
 	errMsg := fmt.Sprintf("%s: %v", operation, err)
 	e.logStore.AddLog(functionKey, logging.LevelError, errMsg)
 	return WrapEngineError(operation, err)
 }
 
-// GetCircuitBreaker returns the circuit breaker for a function
 func (e *FunctionExecutor) GetCircuitBreaker(namespace, name string) CircuitBreaker {
 	functionKey := GetFunctionKey(namespace, name)
 	return e.circuitBreakers.GetCircuitBreaker(functionKey)
@@ -139,7 +124,6 @@ type ExecutionStats struct {
 	FailedExecutions     int64
 }
 
-// GetStats returns execution statistics for a function
 func (e *FunctionExecutor) GetStats(_, _ string) ExecutionStats {
 	// Currently we don't track these stats, so return empty values
 	// This is a placeholder for future implementation
@@ -151,7 +135,6 @@ func (e *FunctionExecutor) GetStats(_, _ string) ExecutionStats {
 	}
 }
 
-// processResult handles both success and error cases from function execution
 func (e *FunctionExecutor) processResult(
 	functionKey string,
 	cb CircuitBreaker,
@@ -208,8 +191,6 @@ func (e *FunctionExecutor) handleCancellation(
 	return nil, e.logAndWrapError(functionKey, operation, ctx.Err())
 }
 
-// Returns:
-//   - time.Duration: The configured default timeout for function execution
 func (e *FunctionExecutor) DefaultTimeout() time.Duration {
 	return e.defaultTimeout
 }

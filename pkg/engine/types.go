@@ -12,20 +12,12 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// FunctionManager defines all function operations supported by the engine.
-// It's split into logical operation groups for better organization.
 type FunctionManager interface {
-	// Runtime operations - core function lifecycle management
 	RuntimeOperations
-
-	// Build operations - function building and registry management
 	BuildOperations
-
-	// State operations - function state queries
 	StateOperations
 }
 
-// RuntimeOperations defines the core runtime operations for functions.
 type RuntimeOperations interface {
 	// LoadFunction loads a function with the specified identifier and configuration.
 	// If force is true, it will load even if the function is marked as stopped.
@@ -41,7 +33,6 @@ type RuntimeOperations interface {
 	StopFunction(namespace, name string) error
 }
 
-// BuildOperations defines operations for building and tagging functions.
 type BuildOperations interface {
 	// BuildFunction builds a function from source and adds it to the registry.
 	BuildFunction(namespace, name, path, tag string, config manifest.FunctionManifest) (*types.BuildResult, error)
@@ -50,14 +41,12 @@ type BuildOperations interface {
 	ReassignTag(namespace, name, tag, newDigest string) error
 }
 
-// StateOperations defines operations for querying function state.
 type StateOperations interface {
 	// GetFunctionState returns the current state of a function.
 	GetFunctionState(namespace, name string) FunctionState
 }
 
 // FunctionState contains the complete state information for a function.
-// It provides a unified view of a function's current status.
 type FunctionState struct {
 	// Basic state
 	Loaded           bool // Whether the function is currently loaded
@@ -82,7 +71,6 @@ type FunctionState struct {
 	Tags   []string // Tags associated with this function
 }
 
-// GetFunctionKey returns a unique key for a function based on namespace and name.
 func GetFunctionKey(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }

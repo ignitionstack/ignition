@@ -93,8 +93,6 @@ func (h *Handlers) errorMiddleware() Middleware {
 	}
 }
 
-// We use the isDomainError function from errors.go
-
 func (h *Handlers) loggingMiddleware() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
