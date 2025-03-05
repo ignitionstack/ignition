@@ -157,7 +157,6 @@ func Is(err error, domain Domain, code Code) bool {
 	return false
 }
 
-
 // Common engine errors.
 var (
 	ErrEngineNotInitialized = New(DomainEngine, CodeNotInitialized, "Engine not initialized")

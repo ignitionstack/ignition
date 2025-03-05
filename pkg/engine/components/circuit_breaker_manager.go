@@ -39,7 +39,6 @@ type defaultCircuitBreakerManager struct {
 	resetTimeout     time.Duration
 }
 
-
 // NewCircuitBreakerManagerWithOptions creates a new circuit breaker manager with custom settings.
 func NewCircuitBreakerManagerWithOptions(settings CircuitBreakerSettings) CircuitBreakerManager {
 	return &defaultCircuitBreakerManager{

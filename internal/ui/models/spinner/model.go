@@ -64,7 +64,6 @@ func (m Model) HasResult() bool {
 	return m.result != nil
 }
 
-
 // GetResult returns the spinner result.
 func (m Model) GetResult() interface{} {
 	return m.result
@@ -74,9 +73,6 @@ func (m Model) GetResult() interface{} {
 func (m Model) GetError() error {
 	return m.err
 }
-
-
-
 
 // NewSpinnerModel creates a default spinner model.
 func NewSpinnerModel() Model {

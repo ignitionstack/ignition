@@ -12,8 +12,6 @@ type FunctionID struct {
 	Name      string
 }
 
-
-
 // PluginManager defines all plugin management capabilities
 type PluginManager interface {
 	// Plugin operations

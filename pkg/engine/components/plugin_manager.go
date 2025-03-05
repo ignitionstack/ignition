@@ -412,4 +412,3 @@ func (pm *defaultPluginManager) GetLoadedFunctionCount() int {
 
 	return len(pm.plugins)
 }
-

@@ -122,7 +122,6 @@ type AppConfig struct {
 	RegistryDir string
 }
 
-
 type EngineParams struct {
 	fx.In
 

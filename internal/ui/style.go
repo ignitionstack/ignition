@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Modern, consistent color scheme inspired by developer tools.
 var (
 	// Primary colors.
 	PrimaryColor   = "#7C3AED" // Vibrant purple
@@ -40,10 +39,6 @@ var (
 	BackgroundAccent   = "#111827" // Near black with blue tint
 	AlternatingRowDark = "#1F2937" // Slightly lighter than background
 )
-
-// NOTE: Terminal color capability detection is available if needed
-// Currently not used but kept here for reference
-// Example: termenv.ColorProfile() != termenv.Ascii
 
 // Style definitions.
 var (
@@ -136,7 +131,6 @@ func TerminalWidth() int {
 	return width
 }
 
-
 // Center text on the terminal line.
 func CenterText(text string) string {
 	width := TerminalWidth()
@@ -147,4 +141,3 @@ func CenterText(text string) string {
 	}
 	return fmt.Sprintf("%s%s", strings.Repeat(" ", padding), text)
 }
-

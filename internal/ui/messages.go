@@ -104,15 +104,10 @@ func PrintMetadata(label, value string) {
 	}
 }
 
-
 // PrintHighlight prints highlighted text.
 func PrintHighlight(text string) {
 	fmt.Println(TitleStyle.Render(text))
 }
-
-
-
-
 
 // Table represents a formatted table with headers and rows.
 type Table struct {
@@ -149,7 +144,6 @@ func (t *Table) AddRow(values ...string) {
 
 	t.Rows = append(t.Rows, values)
 }
-
 
 // StyleServiceName styles a service name for log output.
 func StyleServiceName(serviceName string) string {
@@ -258,11 +252,6 @@ type ResultDisplayModel struct {
 	copied     bool
 	quit       bool
 }
-
-
-
-
-
 
 // Note: StyleServiceName is defined earlier in this file
 
