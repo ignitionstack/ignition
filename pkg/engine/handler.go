@@ -19,14 +19,12 @@ import (
 	"github.com/ignitionstack/ignition/pkg/types"
 )
 
-// Handlers contains HTTP handlers for engine endpoints.
 type Handlers struct {
 	engine    *Engine // The engine instance that provides all functionality
 	logger    logging.Logger
 	validator *validator.Validate
 }
 
-// NewHandlers creates a new Handlers instance.
 func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	return &Handlers{
 		engine:    engine,
@@ -35,7 +33,6 @@ func NewHandlers(engine *Engine, logger logging.Logger) *Handlers {
 	}
 }
 
-// UnixSocketHandler returns a HTTP handler for unix socket endpoints.
 func (h *Handlers) UnixSocketHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -68,7 +65,6 @@ func (h *Handlers) UnixSocketHandler() http.Handler {
 	return mux
 }
 
-// HTTPHandler returns a HTTP handler for public endpoints.
 func (h *Handlers) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -98,7 +94,6 @@ func (h *Handlers) decodeJSONRequest(r *http.Request, v interface{}) error {
 	return nil
 }
 
-// decodeAndValidate decodes and validates a request.
 func (h *Handlers) decodeAndValidate(r *http.Request, v interface{}) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return NewBadRequestError("Invalid request body")

@@ -32,17 +32,13 @@ func NewServer(socketPath, httpAddr string, handlers *Handlers, logger logging.L
 }
 
 func (s *Server) Start() error {
-	// Set up graceful shutdown with buffered channel to prevent missing signals
-	// This helps avoid race conditions during shutdown process
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
-		signal.Stop(signalChan) // Stop signal handling when done
-		cancel()                // Make sure context is canceled
+		signal.Stop(signalChan)
+		cancel()
 	}()
-
-	// Run signal handler in a separate goroutine
 	go func() {
 		select {
 		case <-signalChan:
@@ -98,7 +94,6 @@ func (s *Server) Start() error {
 
 	errChan := make(chan error, 2)
 
-	// Start Unix socket server
 	go func() {
 		s.logger.Printf("Unix socket server listening on %s", s.socketPath)
 		if err := s.socketServer.Serve(socketListener); err != nil && err != http.ErrServerClosed {
@@ -106,7 +101,6 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	// Start HTTP server
 	go func() {
 		s.logger.Printf("HTTP server listening on %s", s.httpAddr)
 		if err := s.httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
@@ -116,7 +110,6 @@ func (s *Server) Start() error {
 
 	s.logger.Printf("Engine servers started successfully and ready to accept connections")
 
-	// Handle shutdown signal or server error
 	select {
 	case <-ctx.Done():
 		// Context was canceled by our signal handler or externally
