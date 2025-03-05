@@ -28,6 +28,7 @@ const (
 	Gigabyte             = Megabyte * 1024
 
 	// Default resource limits
+
 	DefaultMemoryLimit        = 128 * Megabyte
 	DefaultMaxExecutionTime   = 30 * time.Second
 	DefaultMaxConcurrentCalls = 100

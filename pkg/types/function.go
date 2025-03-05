@@ -52,12 +52,12 @@ type LoadRequest struct {
 	ForceLoad bool              `json:"force_load,omitempty"`
 }
 
-// OneOffCallRequest represents a request to call a function once..
+// OneOffCallRequest represents a request to call a function once.
 type OneOffCallRequest struct {
 	FunctionRequest
 	Reference  string            `json:"reference" validate:"required"`
 	Entrypoint string            `json:"entrypoint" validate:"required"`
-	Payload    string            `json:"payload"`
+	Payload    string            `json:"payload,omitempty"`
 	Config     map[string]string `json:"config,omitempty"`
 }
 

@@ -33,7 +33,7 @@ type StopRequest struct {
 type CallRequest struct {
 	BaseRequest
 	Entrypoint string            `json:"entrypoint"`
-	Payload    string            `json:"payload"`
+	Payload    string            `json:"payload,omitempty"`
 	Config     map[string]string `json:"config,omitempty"`
 }
 
@@ -42,7 +42,7 @@ type OneOffCallRequest struct {
 	BaseRequest
 	Reference  string            `json:"reference"`
 	Entrypoint string            `json:"entrypoint"`
-	Payload    string            `json:"payload"`
+	Payload    string            `json:"payload,omitempty"`
 	Config     map[string]string `json:"config,omitempty"`
 }
 

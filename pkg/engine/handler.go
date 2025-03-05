@@ -280,28 +280,29 @@ type functionCallParams struct {
 	entrypoint string
 }
 
-// parseFunctionCallRequest parses the HTTP request for a function call.
 func (h *Handlers) parseFunctionCallRequest(r *http.Request) (*functionCallParams, string, error) {
-	// Parse path: /namespace/name/entrypoint
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	if len(pathParts) != 3 {
 		return nil, "", NewBadRequestError("Invalid URL format: expected /namespace/name/entrypoint")
 	}
 
-	// Parse payload from request body
-	var req struct {
-		Payload string `json:"payload"`
-	}
-	if err := h.decodeJSONRequest(r, &req); err != nil {
-		return nil, "", err
+	payload := ""
+
+	if r.ContentLength > 0 {
+		var req struct {
+			Payload string `json:"payload,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return nil, "", NewBadRequestError("Invalid JSON request body")
+		}
+		payload = req.Payload
 	}
 
-	// Return the parsed parameters
 	return &functionCallParams{
 		namespace:  pathParts[0],
 		name:       pathParts[1],
 		entrypoint: pathParts[2],
-	}, req.Payload, nil
+	}, payload, nil
 }
 
 // executeFunction attempts to call a function, trying auto-reload if needed.
@@ -482,31 +483,32 @@ func (h *Handlers) handleOneOffCall(w http.ResponseWriter, r *http.Request) erro
 	return err
 }
 
-// parseOneOffCallRequest parses and validates the one-off call request.
 func (h *Handlers) parseOneOffCallRequest(r *http.Request) (*types.OneOffCallRequest, error) {
 	var req types.OneOffCallRequest
-	if err := h.decodeAndValidate(r, &req); err != nil {
-		return nil, err
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, NewBadRequestError("Invalid request body")
 	}
+
+	if req.Namespace == "" || req.Name == "" || req.Reference == "" || req.Entrypoint == "" {
+		return nil, NewBadRequestError("Missing required fields")
+	}
+
 	return &req, nil
 }
 
-// 3. Call the function.
 func (h *Handlers) executeOneOffCall(ctx context.Context, req *types.OneOffCallRequest) ([]byte, error) {
-	// Stage 1: Pull the function
 	wasmBytes, versionInfo, err := h.pullFunction(ctx, req.Namespace, req.Name, req.Reference)
 	if err != nil {
 		return nil, err
 	}
 
-	// Stage 2: Create plugin
 	plugin, err := h.createPlugin(ctx, wasmBytes, versionInfo, req.Config)
 	if err != nil {
 		return nil, err
 	}
 	defer plugin.Close(context.Background())
 
-	// Stage 3: Call the function
 	return h.callFunction(ctx, plugin, req.Entrypoint, req.Payload)
 }
 
