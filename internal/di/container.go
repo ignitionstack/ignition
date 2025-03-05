@@ -122,13 +122,6 @@ type AppConfig struct {
 	RegistryDir string
 }
 
-func NewAppConfig(socketPath, httpAddr, registryDir string) AppConfig {
-	return AppConfig{
-		SocketPath:  socketPath,
-		HTTPAddr:    httpAddr,
-		RegistryDir: registryDir,
-	}
-}
 
 type EngineParams struct {
 	fx.In

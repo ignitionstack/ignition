@@ -413,8 +413,3 @@ func (pm *defaultPluginManager) GetLoadedFunctionCount() int {
 	return len(pm.plugins)
 }
 
-// This is kept for backward compatibility, consider using FunctionID directly.
-func GetFunctionKey(namespace, name string) string {
-	id := FunctionID{Namespace: namespace, Name: name}
-	return id.String()
-}

@@ -53,11 +53,6 @@ type Engine struct {
 	config  *config.Config
 }
 
-// NewEngine creates a new engine instance with default settings.
-func NewEngine(socketPath, httpAddr string, registryDir string) (*Engine, error) {
-	return NewEngineWithOptions(socketPath, httpAddr, registryDir, nil, nil)
-}
-
 // NewEngineWithOptions creates a new engine instance with custom settings.
 // Accepts optional logger and options parameters (nil values use defaults).
 func NewEngineWithOptions(socketPath, httpAddr string, registryDir string,
