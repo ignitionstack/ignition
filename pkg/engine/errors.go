@@ -42,7 +42,6 @@ func NewBadRequestError(message string) error {
 	return NewRequestError(message, http.StatusBadRequest)
 }
 
-// These functions are still needed despite deadcode marking them as unreachable
 func IsNotFoundError(err error) bool {
 	var reqErr RequestError
 	if errors.As(err, &reqErr) {
@@ -68,10 +67,7 @@ func NewInternalServerError(message string, err ...error) error {
 
 // EngineError base errors
 var (
-	ErrFunctionNotFound     = errors.New("function not found")
 	ErrFunctionNotLoaded    = errors.New("function not loaded")
-	ErrInvalidRequest       = errors.New("invalid request")
-	ErrTimeout              = errors.New("execution timed out")
 	ErrEngineNotInitialized = errors.New("engine not initialized")
 )
 

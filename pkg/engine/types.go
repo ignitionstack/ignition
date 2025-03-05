@@ -75,37 +75,7 @@ func GetFunctionKey(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }
 
-// Type aliases for component interfaces.
 type PluginManager = components.PluginManager
 type PluginManagerSettings = components.PluginManagerSettings
 type CircuitBreaker = components.CircuitBreaker
 type CircuitBreakerManager = components.CircuitBreakerManager
-
-// ExecutionContext represents a function execution context.
-type ExecutionContext struct {
-	// Context for cancellation and timeout
-	Context context.Context
-
-	// Function identification
-	Namespace string
-	Name      string
-
-	// Execution details
-	Entrypoint string
-	Payload    []byte
-
-	// Configuration
-	Config map[string]string
-}
-
-// ExecutionResult represents the result of a function execution.
-type ExecutionResult struct {
-	// Execution output
-	Output []byte
-
-	// Execution stats
-	ExecutionTime time.Duration
-
-	// Error, if any
-	Error error
-}
