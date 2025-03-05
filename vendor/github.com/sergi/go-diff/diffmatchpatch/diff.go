@@ -157,9 +157,9 @@ func (dmp *DiffMatchPatch) diffCompute(text1, text2 []rune, checklines bool, dea
 		}
 		// Shorter text is inside the longer text (speedup).
 		return []Diff{
-			Diff{op, string(longtext[:i])},
-			Diff{DiffEqual, string(shorttext)},
-			Diff{op, string(longtext[i+len(shorttext):])},
+			{op, string(longtext[:i])},
+			{DiffEqual, string(shorttext)},
+			{op, string(longtext[i+len(shorttext):])},
 		}
 	} else if len(shorttext) == 1 {
 		// Single character string.
