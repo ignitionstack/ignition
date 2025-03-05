@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+
 	"github.com/ignitionstack/ignition/pkg/engine/errors"
 )
 

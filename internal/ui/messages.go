@@ -245,14 +245,3 @@ func toInterfaceSlice(ss []string) []interface{} {
 	}
 	return is
 }
-
-// ResultDisplayModel handles displaying JSON results with copy functionality.
-type ResultDisplayModel struct {
-	resultJSON string
-	copied     bool
-	quit       bool
-}
-
-// Note: StyleServiceName is defined earlier in this file
-
-// PrintEmptyState shows a message when no data is available.

@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+
 	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
 )
