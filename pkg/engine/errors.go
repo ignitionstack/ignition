@@ -37,11 +37,12 @@ func NewRequestErrorWithCause(message string, statusCode int, cause error) Reque
 	}
 }
 
-func FunctionNotFoundError(functionKey string) error {
-	message := fmt.Sprintf("Function not found: %s", functionKey)
-	return NewRequestError(message, http.StatusNotFound)
+// NewBadRequestError is returned for invalid requests with the given message.
+func NewBadRequestError(message string) error {
+	return NewRequestError(message, http.StatusBadRequest)
 }
 
+// These functions are still needed despite deadcode marking them as unreachable
 func IsNotFoundError(err error) bool {
 	var reqErr RequestError
 	if errors.As(err, &reqErr) {
@@ -50,48 +51,19 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-// FunctionNotLoadedError is returned when a function is not loaded.
-func FunctionNotLoadedError(functionKey string) error {
-	message := fmt.Sprintf("Function not loaded: %s", functionKey)
-	return NewRequestError(message, http.StatusServiceUnavailable)
+func NewNotFoundError(message string) error {
+	return NewRequestError(message, http.StatusNotFound)
 }
 
-// InvalidRequestError is returned for invalid requests.
-func InvalidRequestError(message string) error {
-	return NewRequestError(message, http.StatusBadRequest)
-}
-
-// NewBadRequestError is returned for invalid requests with the given message.
-func NewBadRequestError(message string) error {
-	return NewRequestError(message, http.StatusBadRequest)
-}
-
-// MethodNotAllowedError is returned for unsupported HTTP methods.
-func MethodNotAllowedError(method string) error {
-	message := fmt.Sprintf("Method not allowed: %s", method)
-	return NewRequestError(message, http.StatusMethodNotAllowed)
-}
-
-// InternalServerError is returned for internal server errors.
-func InternalServerError(message string, err error) error {
-	if message == "" {
-		message = "Internal server error"
-	}
-	return NewRequestErrorWithCause(message, http.StatusInternalServerError, err)
-}
-
-// NewInternalServerError is returned for internal server errors with the given message.
 func NewInternalServerError(message string, err ...error) error {
 	var actualErr error
 	if len(err) > 0 {
 		actualErr = err[0]
 	}
-	return InternalServerError(message, actualErr)
-}
-
-// NewNotFoundError is returned when a resource is not found.
-func NewNotFoundError(message string) error {
-	return NewRequestError(message, http.StatusNotFound)
+	if message == "" {
+		message = "Internal server error"
+	}
+	return NewRequestErrorWithCause(message, http.StatusInternalServerError, actualErr)
 }
 
 // EngineError base errors
@@ -103,7 +75,6 @@ var (
 	ErrEngineNotInitialized = errors.New("engine not initialized")
 )
 
-// WrapEngineError wraps an error with context.
 func WrapEngineError(message string, err error) error {
 	if err == nil {
 		return errors.New(message)
@@ -111,13 +82,11 @@ func WrapEngineError(message string, err error) error {
 	return fmt.Errorf("%s: %w", message, err)
 }
 
-// isDomainError checks if an error is a DomainError.
 func isDomainError(err error) bool {
 	var de *domainerrors.DomainError
 	return errors.As(err, &de)
 }
 
-// errorCodeStatusMap maps domain and error codes to HTTP status codes
 var errorCodeStatusMap = map[domainerrors.Domain]map[domainerrors.Code]int{
 	domainerrors.DomainEngine: {
 		domainerrors.CodeNotInitialized: http.StatusServiceUnavailable,
@@ -163,7 +132,6 @@ var defaultStatusCodes = map[domainerrors.Domain]int{
 	domainerrors.DomainPlugin:    http.StatusInternalServerError,
 }
 
-// DomainErrorToStatusCode maps domain errors to HTTP status codes.
 func DomainErrorToStatusCode(err *domainerrors.DomainError) int {
 	// Get the map for this domain
 	if codeMap, ok := errorCodeStatusMap[err.ErrDomain]; ok {
@@ -182,7 +150,6 @@ func DomainErrorToStatusCode(err *domainerrors.DomainError) int {
 	return http.StatusInternalServerError
 }
 
-// DomainErrorToRequestError converts a domain error to a request error.
 func DomainErrorToRequestError(err *domainerrors.DomainError) RequestError {
 	return RequestError{
 		Message:    err.Error(),

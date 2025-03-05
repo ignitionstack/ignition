@@ -64,11 +64,6 @@ func (m Model) HasResult() bool {
 	return m.result != nil
 }
 
-// Note: This should only be used outside of tea.Model Update cycle.
-func SetResult(m *Model, result interface{}) {
-	m.result = result
-}
-
 // GetResult returns the spinner result.
 func (m Model) GetResult() interface{} {
 	return m.result
@@ -77,23 +72,6 @@ func (m Model) GetResult() interface{} {
 // GetError returns the spinner error.
 func (m Model) GetError() error {
 	return m.err
-}
-
-// Note: This should only be used outside of tea.Model Update cycle.
-func AddStep(m *Model, step string) {
-	m.steps = append(m.steps, step)
-}
-
-// Note: This should only be used outside of tea.Model Update cycle.
-func SetProgress(m *Model, value, progressMax int) {
-	m.progressValue = value
-	m.progressMax = progressMax
-	m.showProgress = true
-}
-
-// Note: This should only be used outside of tea.Model Update cycle.
-func SetDone(m *Model) {
-	m.done = true
 }
 
 // NewSpinnerModel creates a default spinner model.

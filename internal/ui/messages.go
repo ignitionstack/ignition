@@ -3,11 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/alecthomas/chroma/v2/quick"
-	"github.com/atotto/clipboard"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -108,62 +104,9 @@ func PrintMetadata(label, value string) {
 	}
 }
 
-// PrintStep prints a step in a multi-step process.
-func PrintStep(stepNumber int, totalSteps int, description string) {
-	progress := fmt.Sprintf("[%d/%d]", stepNumber, totalSteps)
-	fmt.Printf("%s %s %s\n",
-		InfoStyle.Render(progress),
-		TitleStyle.Render(ArrowRightSymbol),
-		HeaderStyle.Render(description))
-}
-
 // PrintHighlight prints highlighted text.
 func PrintHighlight(text string) {
 	fmt.Println(TitleStyle.Render(text))
-}
-
-// PrintJSON prints formatted and syntax-highlighted JSON.
-func PrintJSON(jsonStr string) {
-	// Use box styling to make JSON output stand out
-	jsonBox := BoxStyle.
-		BorderForeground(lipgloss.Color(InfoColor)).
-		Render(HighlightJSON(jsonStr))
-
-	fmt.Println(jsonBox)
-
-	// Add helpful message about copying
-	fmt.Println(DimStyle.Render("Tip: Use 'command | jq' to process this output"))
-}
-
-// PrintCommand shows a command that could be run.
-func PrintCommand(command string) {
-	prompt := DimStyle.Render(CommandPrompt + " ")
-	fmt.Printf("%s%s\n", prompt, LinkStyle.Render(command))
-}
-
-// PrintTimestamp shows when an operation completed.
-func PrintTimestamp(operation string, duration time.Duration) {
-	timestamp := time.Now().Format("15:04:05")
-	durationStr := ""
-	if duration > 0 {
-		durationStr = fmt.Sprintf(" (took %s)", duration.Round(time.Millisecond))
-	}
-
-	fmt.Printf("%s %s%s\n",
-		DimStyle.Render(timestamp),
-		operation,
-		DimStyle.Render(durationStr))
-}
-
-// PrintSeparator prints a horizontal separator line.
-func PrintSeparator() {
-	width := TerminalWidth()
-	if width <= 0 {
-		width = 80
-	}
-
-	separator := strings.Repeat("─", width)
-	fmt.Println(DimStyle.Render(separator))
 }
 
 // Table represents a formatted table with headers and rows.
@@ -200,25 +143,6 @@ func (t *Table) AddRow(values ...string) {
 	}
 
 	t.Rows = append(t.Rows, values)
-}
-
-// AddRowWithStyles adds a row with styled values.
-func (t *Table) AddRowWithStyles(values []string, styles []lipgloss.Style) []string {
-	if len(values) != len(t.Headers) {
-		panic(fmt.Sprintf("Row has %d values, expected %d", len(values), len(t.Headers)))
-	}
-
-	styledValues := make([]string, len(values))
-	for i, v := range values {
-		if i < len(styles) {
-			styledValues[i] = styles[i].Render(v)
-		} else {
-			styledValues[i] = v
-		}
-	}
-
-	t.Rows = append(t.Rows, styledValues)
-	return styledValues
 }
 
 // StyleServiceName styles a service name for log output.
@@ -320,79 +244,4 @@ func toInterfaceSlice(ss []string) []interface{} {
 		is[i] = s
 	}
 	return is
-}
-
-// ResultDisplayModel handles displaying JSON results with copy functionality.
-type ResultDisplayModel struct {
-	resultJSON string
-	copied     bool
-	quit       bool
-}
-
-// NewResultDisplayModel creates a new result display model.
-func NewResultDisplayModel(resultJSON string) ResultDisplayModel {
-	return ResultDisplayModel{resultJSON: resultJSON}
-}
-
-// Init initializes the result display model.
-func (m ResultDisplayModel) Init() tea.Cmd {
-	return nil
-}
-
-// Update handles messages for the result display model.
-func (m ResultDisplayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "q":
-			m.quit = true
-			return m, tea.Quit
-		case "c":
-			err := clipboard.WriteAll(m.resultJSON)
-			m.copied = err == nil
-		}
-	}
-	return m, nil
-}
-
-// View renders the result display model with enhanced styling.
-func (m ResultDisplayModel) View() string {
-	var message string
-	if m.copied {
-		message = SuccessStyle.Render(SuccessSymbol + " Copied to clipboard!")
-	} else {
-		message = InfoStyle.Render("Press 'c' to copy, 'q' to quit")
-	}
-
-	highlightedJSON := HighlightJSON(m.resultJSON)
-
-	// Add a border around the JSON for better visibility
-	jsonWithBorder := BoxStyle.
-		BorderForeground(lipgloss.Color(InfoColor)).
-		Render(highlightedJSON)
-
-	return fmt.Sprintf("%s\n\n%s", jsonWithBorder, message)
-}
-
-// HighlightJSON formats and highlights JSON string.
-func HighlightJSON(jsonStr string) string {
-	var builder strings.Builder
-	err := quick.Highlight(&builder, jsonStr, "json", "terminal", "monokai")
-	if err != nil {
-		return fmt.Sprintf("Error rendering JSON: %v", err)
-	}
-	return builder.String()
-}
-
-// Note: StyleServiceName is defined earlier in this file
-
-// PrintEmptyState shows a message when no data is available.
-func PrintEmptyState(message string) {
-	box := BoxStyle.
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(DimTextColor)).
-		Align(lipgloss.Center).
-		Width(40).
-		Render(DimStyle.Render(message))
-
-	fmt.Println(CenterText(box))
 }

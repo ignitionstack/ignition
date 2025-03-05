@@ -36,15 +36,6 @@ github.com/ProtonMail/go-crypto/openpgp/packet
 github.com/ProtonMail/go-crypto/openpgp/s2k
 github.com/ProtonMail/go-crypto/openpgp/x25519
 github.com/ProtonMail/go-crypto/openpgp/x448
-# github.com/alecthomas/chroma/v2 v2.15.0
-## explicit; go 1.19
-github.com/alecthomas/chroma/v2
-github.com/alecthomas/chroma/v2/formatters
-github.com/alecthomas/chroma/v2/formatters/html
-github.com/alecthomas/chroma/v2/formatters/svg
-github.com/alecthomas/chroma/v2/lexers
-github.com/alecthomas/chroma/v2/quick
-github.com/alecthomas/chroma/v2/styles
 # github.com/atotto/clipboard v0.1.4
 ## explicit
 github.com/atotto/clipboard
@@ -126,10 +117,6 @@ github.com/dgraph-io/badger/v4/y
 github.com/dgraph-io/ristretto/v2
 github.com/dgraph-io/ristretto/v2/z
 github.com/dgraph-io/ristretto/v2/z/simd
-# github.com/dlclark/regexp2 v1.11.5
-## explicit; go 1.13
-github.com/dlclark/regexp2
-github.com/dlclark/regexp2/syntax
 # github.com/dustin/go-humanize v1.0.1
 ## explicit; go 1.16
 github.com/dustin/go-humanize
@@ -352,8 +339,6 @@ github.com/pmezard/go-difflib/difflib
 # github.com/rivo/uniseg v0.4.7
 ## explicit; go 1.18
 github.com/rivo/uniseg
-# github.com/rogpeppe/go-internal v1.14.1
-## explicit; go 1.23
 # github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 ## explicit; go 1.13
 github.com/sergi/go-diff/diffmatchpatch
@@ -417,8 +402,6 @@ github.com/tetratelabs/wazero/sys
 # github.com/xanzy/ssh-agent v0.3.3
 ## explicit; go 1.16
 github.com/xanzy/ssh-agent
-# go.opencensus.io v0.24.0
-## explicit; go 1.13
 # go.opentelemetry.io/auto/sdk v1.1.0
 ## explicit; go 1.22.0
 go.opentelemetry.io/auto/sdk

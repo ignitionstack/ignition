@@ -2,13 +2,11 @@ package ui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Modern, consistent color scheme inspired by developer tools.
 var (
 	// Primary colors.
 	PrimaryColor   = "#7C3AED" // Vibrant purple
@@ -41,10 +39,6 @@ var (
 	BackgroundAccent   = "#111827" // Near black with blue tint
 	AlternatingRowDark = "#1F2937" // Slightly lighter than background
 )
-
-// NOTE: Terminal color capability detection is available if needed
-// Currently not used but kept here for reference
-// Example: termenv.ColorProfile() != termenv.Ascii
 
 // Style definitions.
 var (
@@ -137,11 +131,6 @@ func TerminalWidth() int {
 	return width
 }
 
-// Check if we're in a CI environment.
-func IsCI() bool {
-	return os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" || os.Getenv("TRAVIS") != ""
-}
-
 // Center text on the terminal line.
 func CenterText(text string) string {
 	width := TerminalWidth()
@@ -151,15 +140,4 @@ func CenterText(text string) string {
 		padding = 0
 	}
 	return fmt.Sprintf("%s%s", strings.Repeat(" ", padding), text)
-}
-
-// Truncate a string to fit the given width with ellipsis.
-func TruncateWithEllipsis(s string, width int) string {
-	if len(s) <= width {
-		return s
-	}
-	if width <= 3 {
-		return s[:width]
-	}
-	return s[:width-3] + "..."
 }

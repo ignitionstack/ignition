@@ -52,17 +52,6 @@ type defaultCircuitBreaker struct {
 	resetTimeout     time.Duration
 }
 
-// NewCircuitBreaker creates a new circuit breaker with default settings.
-func NewCircuitBreaker() CircuitBreaker {
-	return &defaultCircuitBreaker{
-		state:            StateClosed,
-		failures:         0,
-		lastFailure:      time.Now(),
-		failureThreshold: 5,
-		resetTimeout:     30 * time.Second,
-	}
-}
-
 // NewCircuitBreakerWithOptions creates a new circuit breaker with custom settings.
 func NewCircuitBreakerWithOptions(failureThreshold int, resetTimeout time.Duration) CircuitBreaker {
 	return &defaultCircuitBreaker{

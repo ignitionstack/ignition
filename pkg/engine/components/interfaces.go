@@ -2,8 +2,6 @@ package components
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	extism "github.com/extism/go-sdk"
 	"github.com/ignitionstack/ignition/pkg/engine/logging"
@@ -13,23 +11,6 @@ import (
 type FunctionID struct {
 	Namespace string
 	Name      string
-}
-
-// String returns the string representation of a function ID.
-func (id FunctionID) String() string {
-	return fmt.Sprintf("%s/%s", id.Namespace, id.Name)
-}
-
-// FunctionIDFromKey creates a FunctionID from a string key.
-func FunctionIDFromKey(key string) FunctionID {
-	parts := strings.Split(key, "/")
-	if len(parts) != 2 {
-		return FunctionID{}
-	}
-	return FunctionID{
-		Namespace: parts[0],
-		Name:      parts[1],
-	}
 }
 
 // PluginManager defines all plugin management capabilities

@@ -27,3 +27,4 @@ go.work.sum
 # custom
 ignition
 .DS_STORE
+.idea
