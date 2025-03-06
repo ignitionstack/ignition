@@ -68,11 +68,11 @@ server:
 engine:
   default_timeout: 30s
   log_store_capacity: 1000
-  
+
   circuit_breaker:
     failure_threshold: 5
     reset_timeout: 30s
-  
+
   plugin_manager:
     ttl: 10m
     cleanup_interval: 1m
@@ -126,7 +126,7 @@ function:
   settings:
     enable_wasi: true  # Enable WASI capabilities
     allowed_urls:      # External URLs the function can access
-      - "https://api.example.com"
+      - "api.example.com"
 ```
 
 ### Function Configuration
@@ -172,7 +172,7 @@ Each template includes project structure, dependencies, and example code.
 
 ```bash
 # List all functions in a namespace
-ignition function ls my_namespace/my_function
+ignition ls my_namespace/my_function
 
 # List all running functions
 ignition ps
@@ -210,7 +210,6 @@ services:
   api:
     function: my_namespace/api_service:latest
     config:
-      debug: "true"
       greeting: "hallo"
   processor:
     function: my_namespace/processor:v1.2.0
